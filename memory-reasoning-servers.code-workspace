@@ -1,0 +1,132 @@
+{
+  "folders": [
+    {
+      "name": "Adaptive Reasoning Server",
+      "path": "."
+    },
+    {
+      "name": "Memory Data (.memory)",
+      "path": "./.memory"
+    },
+    {
+      "name": "Examples",
+      "path": "./examples"
+    }
+  ],
+  "settings": {
+    "typescript.preferences.includePackageJsonAutoImports": "auto",
+    "typescript.suggest.autoImports": true,
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/.git": true,
+      "**/.DS_Store": true,
+      "**/npm-debug.log*": true,
+      "**/.npm": true,
+      "**/.eslintcache": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/package-lock.json": true
+    },
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/dist/**": true,
+      "**/.git/objects/**": true,
+      "**/.git/subtree-cache/**": true
+    },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+      "package.json": "package-lock.json, npm-shrinkwrap.json, yarn.lock",
+      "tsconfig.json": "tsconfig.*.json",
+      "*.ts": "${capture}.js, ${capture}.d.ts, ${capture}.js.map",
+      "README.md": "*.md",
+      ".gitignore": ".gitattributes, .gitmodules, .gitmessage, .mailmap, .git-blame*",
+      "Dockerfile": "Dockerfile*, docker-compose*, .dockerignore"
+    },
+    "files.associations": {
+      "*.yml": "yaml",
+      "*.yaml": "yaml",
+      ".github/workflows/*.yml": "github-actions",
+      ".github/workflows/*.yaml": "github-actions"
+    },
+    "yaml.schemas": {
+      "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+    },
+    "npm.packageManager": "npm",
+    "typescript.preferences.useAliasesForRenames": false,
+    "git.ignoreLimitWarning": true,
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "terminal.integrated.defaultProfile.osx": "zsh",
+    "workbench.tree.indent": 20,
+    "workbench.tree.renderIndentGuides": "always"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build Memory Server",
+        "type": "npm",
+        "script": "build",
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        },
+        "problemMatcher": ["$tsc"]
+      },
+      {
+        "label": "Watch Mode",
+        "type": "npm",
+        "script": "watch",
+        "group": "build",
+        "isBackground": true,
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug Memory Server",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/dist/index.js",
+        "env": {
+          "MEMORY_PATH": "${workspaceFolder}/test-memory"
+        },
+        "console": "integratedTerminal",
+        "internalConsoleOptions": "neverOpen"
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.vscode-typescript-next",
+      "esbenp.prettier-vscode",
+      "ms-vscode.vscode-json",
+      "redhat.vscode-yaml",
+      "github.vscode-github-actions",
+      "ms-vscode.vscode-eslint",
+      "bierner.markdown-mermaid",
+      "yzhang.markdown-all-in-one"
+    ]
+  }
+}
