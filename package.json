@@ -1,0 +1,56 @@
+{
+  "name": "@prism.enterprises/adaptive-reasoning-server",
+  "version": "1.0.0",
+  "description": "Adaptive Reasoning Server: AI-friendly memory and knowledge management system for persistent reasoning across conversations",
+  "license": "MIT",
+  "author": "Kai Wyborny - Based on original by Anthropic, PBC",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/PrismAero/adaptive-reasoning-server/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PrismAero/adaptive-reasoning-server.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "knowledge-graph",
+    "ai",
+    "assistant",
+    "reasoning",
+    "adaptive",
+    "persistent-memory"
+  ],
+  "type": "module",
+  "bin": {
+    "adaptive-reasoning-server": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "debug": "node debug-server.js",
+    "test": "npm run build && node test-adaptive-reasoning.js",
+    "test:quick": "node test-adaptive-reasoning.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.18.0",
+    "natural": "^8.1.0",
+    "sentence-similarity": "^3.1.0",
+    "sqlite3": "^5.1.7",
+    "tiktoken": "^1.0.22"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.1",
+    "@types/sqlite3": "^3.1.11",
+    "shx": "^0.4.0",
+    "typescript": "^5.9.2"
+  }
+}
