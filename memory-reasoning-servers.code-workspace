@@ -3,14 +3,6 @@
     {
       "name": "Adaptive Reasoning Server",
       "path": "."
-    },
-    {
-      "name": "Memory Data (.memory)",
-      "path": "./.memory"
-    },
-    {
-      "name": "Examples",
-      "path": "./examples"
     }
   ],
   "settings": {

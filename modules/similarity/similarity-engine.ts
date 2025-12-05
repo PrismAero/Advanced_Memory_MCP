@@ -1,44 +1,53 @@
 import { Entity } from "../../memory-types.js";
 import { logger } from "../logger.js";
-import { RelationshipDetector } from "./relationship-detector.js";
-import { TextProcessor } from "./text-processor.js";
+import { TensorFlowModelManager } from "./tensorflow-model-manager.js";
 
 /**
- * Modern Similarity Engine - Replaces StatisticalSimilarityEngine
- * Uses sentence-similarity and natural packages for superior offline detection
+ * TensorFlow.js Similarity Engine - Complete replacement with semantic embeddings
+ * Uses TensorFlow.js Universal Sentence Encoder for superior semantic understanding
  *
  * Key improvements over the old engine:
- * - Lower similarity thresholds (0.65 vs 0.78)
- * - Better text processing with natural NLP
- * - Enhanced pattern detection for software entities
+ * - Deep semantic understanding using embeddings
+ * - Contextual similarity detection
+ * - Optimized for software development entities
+ * - Local-only operation with cached models
  */
 export class ModernSimilarityEngine {
-  private textProcessor: TextProcessor;
-  private relationshipDetector: RelationshipDetector;
+  private modelManager: TensorFlowModelManager;
+  private embeddingCache: Map<string, number[]> = new Map();
   private initialized = false;
 
+  // Thresholds optimized for embedding-based similarity
+  private readonly SIMILARITY_THRESHOLD = 0.6; // Slightly higher for embeddings
+  private readonly HIGH_CONFIDENCE_THRESHOLD = 0.85;
+  private readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.75;
+
   constructor() {
-    this.textProcessor = new TextProcessor();
-    this.relationshipDetector = new RelationshipDetector();
+    this.modelManager = new TensorFlowModelManager();
   }
 
   /**
-   * Initialize the similarity engine
+   * Initialize the TensorFlow.js similarity engine
    */
   async initialize(): Promise<void> {
     try {
-      logger.info(
-        "Initialized modern similarity engine with sentence-similarity + natural"
-      );
+      logger.info("Initializing TensorFlow.js similarity engine...");
+      await this.modelManager.initialize();
       this.initialized = true;
+      logger.info(
+        "[SUCCESS] TensorFlow.js similarity engine ready with semantic embeddings"
+      );
     } catch (error) {
-      logger.error("Failed to initialize modern similarity engine:", error);
+      logger.error(
+        "Failed to initialize TensorFlow.js similarity engine:",
+        error
+      );
       throw error;
     }
   }
 
   /**
-   * Detect similar entities - main interface method
+   * Detect similar entities using TensorFlow.js semantic embeddings
    */
   async detectSimilarEntities(
     targetEntity: Entity,
@@ -53,7 +62,9 @@ export class ModernSimilarityEngine {
     }>
   > {
     if (!this.initialized) {
-      logger.warn("Similarity engine not initialized, initializing now...");
+      logger.warn(
+        "TensorFlow.js similarity engine not initialized, initializing now..."
+      );
       await this.initialize();
     }
 
@@ -63,10 +74,11 @@ export class ModernSimilarityEngine {
 
     try {
       logger.debug(
-        `Modern similarity engine analyzing ${candidateEntities.length} candidates for "${targetEntity.name}"`
+        `TensorFlow.js similarity engine analyzing ${candidateEntities.length} candidates for "${targetEntity.name}"`
       );
 
-      const results = await this.relationshipDetector.detectSimilarEntities(
+      // Get semantic similarity using embeddings
+      const results = await this.calculateSemanticSimilarities(
         targetEntity,
         candidateEntities
       );
@@ -86,30 +98,46 @@ export class ModernSimilarityEngine {
 
       return results;
     } catch (error) {
-      logger.error("Error in similarity detection:", error);
+      logger.error("Error in TensorFlow.js similarity detection:", error);
       return [];
     }
   }
 
   /**
-   * Quick similarity check between two entities (utility method)
+   * Quick similarity check between two entities using embeddings
    */
   async calculateSimilarity(entity1: Entity, entity2: Entity): Promise<number> {
     if (!this.initialized) {
       await this.initialize();
     }
 
-    // Use the relationship detector's internal method
-    const results = await this.relationshipDetector.detectSimilarEntities(
-      entity1,
-      [entity2]
-    );
+    try {
+      // Get embeddings for both entities
+      const embedding1 = await this.getEntityEmbedding(entity1);
+      const embedding2 = await this.getEntityEmbedding(entity2);
 
-    return results.length > 0 ? results[0].similarity : 0;
+      // Calculate cosine similarity
+      const similarity = this.modelManager.calculateCosineSimilarity(
+        embedding1,
+        embedding2
+      );
+
+      // Apply entity type compatibility boost/penalty
+      const typeCompatibility = this.calculateTypeCompatibility(
+        entity1,
+        entity2
+      );
+      const adjustedSimilarity = similarity * 0.8 + typeCompatibility * 0.2;
+
+      return Math.min(adjustedSimilarity, 1.0);
+    } catch (error) {
+      logger.error("Error calculating entity similarity:", error);
+      return 0;
+    }
   }
 
   /**
-   * Batch similarity calculation for performance
+   * Batch similarity calculation using TensorFlow.js embeddings
    */
   async calculateBatchSimilarity(
     entities: Entity[]
@@ -123,24 +151,323 @@ export class ModernSimilarityEngine {
       Array<{ entity: Entity; similarity: number }>
     >();
 
-    for (const entity of entities) {
-      const otherEntities = entities.filter((e) => e.name !== entity.name);
-      const similarities =
-        await this.relationshipDetector.detectSimilarEntities(
-          entity,
-          otherEntities
+    try {
+      // Pre-compute embeddings for all entities for efficiency
+      logger.debug(`Computing embeddings for ${entities.length} entities...`);
+      const embeddings = new Map<string, number[]>();
+
+      for (const entity of entities) {
+        embeddings.set(entity.name, await this.getEntityEmbedding(entity));
+      }
+
+      // Calculate pairwise similarities
+      for (const entity of entities) {
+        const entityEmbedding = embeddings.get(entity.name)!;
+        const similarities: Array<{ entity: Entity; similarity: number }> = [];
+
+        for (const otherEntity of entities) {
+          if (entity.name === otherEntity.name) continue;
+
+          const otherEmbedding = embeddings.get(otherEntity.name)!;
+          const semanticSimilarity =
+            this.modelManager.calculateCosineSimilarity(
+              entityEmbedding,
+              otherEmbedding
+            );
+
+          // Apply type compatibility
+          const typeCompatibility = this.calculateTypeCompatibility(
+            entity,
+            otherEntity
+          );
+          const finalSimilarity =
+            semanticSimilarity * 0.8 + typeCompatibility * 0.2;
+
+          if (finalSimilarity > this.SIMILARITY_THRESHOLD) {
+            similarities.push({
+              entity: otherEntity,
+              similarity: finalSimilarity,
+            });
+          }
+        }
+
+        // Sort by similarity
+        similarities.sort((a, b) => b.similarity - a.similarity);
+        results.set(entity.name, similarities);
+      }
+
+      logger.debug(
+        `Batch similarity calculation completed for ${entities.length} entities`
+      );
+      return results;
+    } catch (error) {
+      logger.error("Error in batch similarity calculation:", error);
+      return new Map();
+    }
+  }
+
+  /**
+   * Calculate semantic similarities using TensorFlow.js embeddings
+   */
+  private async calculateSemanticSimilarities(
+    targetEntity: Entity,
+    candidateEntities: Entity[]
+  ): Promise<
+    Array<{
+      entity: Entity;
+      similarity: number;
+      confidence: "high" | "medium" | "low";
+      suggestedRelationType: string;
+      reasoning: string;
+    }>
+  > {
+    const results: Array<{
+      entity: Entity;
+      similarity: number;
+      confidence: "high" | "medium" | "low";
+      suggestedRelationType: string;
+      reasoning: string;
+    }> = [];
+
+    // Get target entity embedding
+    const targetEmbedding = await this.getEntityEmbedding(targetEntity);
+
+    for (const candidate of candidateEntities) {
+      if (candidate.name === targetEntity.name) continue;
+
+      // Get candidate embedding
+      const candidateEmbedding = await this.getEntityEmbedding(candidate);
+
+      // Calculate semantic similarity
+      const semanticSimilarity = this.modelManager.calculateCosineSimilarity(
+        targetEmbedding,
+        candidateEmbedding
+      );
+
+      // Apply type compatibility
+      const typeCompatibility = this.calculateTypeCompatibility(
+        targetEntity,
+        candidate
+      );
+      const finalSimilarity =
+        semanticSimilarity * 0.8 + typeCompatibility * 0.2;
+
+      if (finalSimilarity > this.SIMILARITY_THRESHOLD) {
+        const confidence = this.determineConfidence(finalSimilarity);
+        const { relationType, reasoning } = this.inferRelationshipType(
+          targetEntity,
+          candidate,
+          finalSimilarity,
+          semanticSimilarity
         );
 
-      results.set(
-        entity.name,
-        similarities.map((s) => ({
-          entity: s.entity,
-          similarity: s.similarity,
-        }))
-      );
+        results.push({
+          entity: candidate,
+          similarity: finalSimilarity,
+          confidence,
+          suggestedRelationType: relationType,
+          reasoning,
+        });
+      }
     }
 
-    return results;
+    // Sort by similarity and limit results
+    return results.sort((a, b) => b.similarity - a.similarity).slice(0, 8);
+  }
+
+  /**
+   * Get or compute entity embedding with caching
+   */
+  private async getEntityEmbedding(entity: Entity): Promise<number[]> {
+    // Create cache key from entity content
+    const cacheKey = this.createEntityCacheKey(entity);
+
+    // Check cache first
+    if (this.embeddingCache.has(cacheKey)) {
+      return this.embeddingCache.get(cacheKey)!;
+    }
+
+    // Compute new embedding
+    const entityText = this.entityToText(entity);
+    const embeddings = await this.modelManager.generateEmbeddings([entityText]);
+    const embedding = embeddings[0];
+
+    // Cache the result
+    this.embeddingCache.set(cacheKey, embedding);
+
+    // Limit cache size to prevent memory issues
+    if (this.embeddingCache.size > 1000) {
+      const firstKey = this.embeddingCache.keys().next().value;
+      if (firstKey) {
+        this.embeddingCache.delete(firstKey);
+      }
+    }
+
+    return embedding;
+  }
+
+  /**
+   * Calculate type compatibility between entities
+   */
+  private calculateTypeCompatibility(entity1: Entity, entity2: Entity): number {
+    if (entity1.entityType === entity2.entityType) {
+      return 1.0; // Perfect compatibility for same types
+    }
+
+    // Define type compatibility matrix for software entities
+    const typeCompatibilityMap: { [key: string]: { [key: string]: number } } = {
+      component: { service: 0.7, module: 0.8, class: 0.6 },
+      service: { component: 0.7, api: 0.8, module: 0.5 },
+      module: { component: 0.8, service: 0.5, class: 0.6 },
+      class: { component: 0.6, module: 0.6, interface: 0.8 },
+      interface: { class: 0.8, component: 0.5, api: 0.7 },
+      api: { service: 0.8, interface: 0.7, endpoint: 0.9 },
+      endpoint: { api: 0.9, service: 0.6 },
+      decision: { requirement: 0.6, blocker: 0.4 },
+      requirement: { decision: 0.6, specification: 0.8 },
+      blocker: { decision: 0.4, issue: 0.8 },
+    };
+
+    const type1 = entity1.entityType.toLowerCase();
+    const type2 = entity2.entityType.toLowerCase();
+
+    return (
+      typeCompatibilityMap[type1]?.[type2] ||
+      typeCompatibilityMap[type2]?.[type1] ||
+      0.3
+    ); // Default compatibility for unrelated types
+  }
+
+  /**
+   * Convert entity to text for embedding generation
+   */
+  private entityToText(entity: Entity): string {
+    const parts: string[] = [];
+
+    // Add entity name and type
+    parts.push(`${entity.entityType}: ${entity.name}`);
+
+    // Add content if available
+    if (entity.content) {
+      parts.push(entity.content);
+    }
+
+    // Add observations
+    if (entity.observations && entity.observations.length > 0) {
+      parts.push(entity.observations.join(". "));
+    }
+
+    return parts.join(". ").trim();
+  }
+
+  /**
+   * Create cache key for entity
+   */
+  private createEntityCacheKey(entity: Entity): string {
+    // Include key entity properties that affect embedding
+    const keyProperties = {
+      name: entity.name,
+      type: entity.entityType,
+      content: entity.content || "",
+      observations: entity.observations || [],
+    };
+
+    return JSON.stringify(keyProperties);
+  }
+
+  /**
+   * Determine confidence level based on similarity score
+   */
+  private determineConfidence(similarity: number): "high" | "medium" | "low" {
+    if (similarity >= this.HIGH_CONFIDENCE_THRESHOLD) {
+      return "high";
+    } else if (similarity >= this.MEDIUM_CONFIDENCE_THRESHOLD) {
+      return "medium";
+    } else {
+      return "low";
+    }
+  }
+
+  /**
+   * Infer relationship type based on entity analysis and embeddings
+   */
+  private inferRelationshipType(
+    entity1: Entity,
+    entity2: Entity,
+    finalSimilarity: number,
+    semanticSimilarity: number
+  ): {
+    relationType: string;
+    reasoning: string;
+  } {
+    const type1 = entity1.entityType.toLowerCase();
+    const type2 = entity2.entityType.toLowerCase();
+    const name1 = entity1.name.toLowerCase();
+    const name2 = entity2.name.toLowerCase();
+
+    // High semantic similarity relationships
+    if (semanticSimilarity > 0.9) {
+      return {
+        relationType: "semantically_similar",
+        reasoning: `Very high semantic similarity (${(
+          semanticSimilarity * 100
+        ).toFixed(1)}%) detected by TensorFlow.js embeddings`,
+      };
+    }
+
+    // Same type relationships with good similarity
+    if (type1 === type2 && finalSimilarity > 0.8) {
+      return {
+        relationType: "similar_to",
+        reasoning: `High similarity between same-type entities (${(
+          finalSimilarity * 100
+        ).toFixed(1)}%)`,
+      };
+    }
+
+    // Containment relationships based on names
+    if (name1.includes(name2) || name2.includes(name1)) {
+      const isParent = name1.length > name2.length;
+      return {
+        relationType: isParent ? "contains" : "part_of",
+        reasoning: `Name containment detected with semantic confirmation (${(
+          finalSimilarity * 100
+        ).toFixed(1)}% similarity)`,
+      };
+    }
+
+    // Type-specific relationships
+    if (
+      (type1 === "decision" && type2 === "requirement") ||
+      (type1 === "requirement" && type2 === "decision")
+    ) {
+      return {
+        relationType: "addresses",
+        reasoning: `Decision-requirement relationship with semantic similarity (${(
+          finalSimilarity * 100
+        ).toFixed(1)}%)`,
+      };
+    }
+
+    if (
+      (type1 === "component" && type2 === "service") ||
+      (type1 === "service" && type2 === "component")
+    ) {
+      return {
+        relationType: "uses",
+        reasoning: `Component-service relationship with semantic similarity (${(
+          finalSimilarity * 100
+        ).toFixed(1)}%)`,
+      };
+    }
+
+    // Default semantic relationship
+    return {
+      relationType: "related_to",
+      reasoning: `Semantic relationship detected by TensorFlow.js (${(
+        finalSimilarity * 100
+      ).toFixed(1)}% similarity)`,
+    };
   }
 
   /**
@@ -155,21 +482,39 @@ export class ModernSimilarityEngine {
       highConfidence: number;
       mediumConfidence: number;
     };
+    modelInfo?: {
+      modelId: string | null;
+      isLoaded: boolean;
+      memoryUsage: number;
+    };
+    cacheStats?: {
+      embeddingsCached: number;
+    };
   } {
+    const modelInfo = this.modelManager.getModelInfo();
     return {
-      engine: "ModernSimilarityEngine",
-      version: "1.0.0",
+      engine: "TensorFlowSimilarityEngine",
+      version: "2.0.0",
       features: [
-        "sentence-similarity",
-        "natural-nlp",
-        "pattern-detection",
-        "multi-modal-scoring",
-        "software-aware",
+        "tensorflow-js-embeddings",
+        "universal-sentence-encoder",
+        "semantic-similarity",
+        "embedding-cache",
+        "type-compatibility",
+        "local-only-inference",
       ],
       thresholds: {
-        similarity: 0.5,
-        highConfidence: 0.85,
-        mediumConfidence: 0.75,
+        similarity: this.SIMILARITY_THRESHOLD,
+        highConfidence: this.HIGH_CONFIDENCE_THRESHOLD,
+        mediumConfidence: this.MEDIUM_CONFIDENCE_THRESHOLD,
+      },
+      modelInfo: {
+        modelId: modelInfo.modelId,
+        isLoaded: modelInfo.isLoaded,
+        memoryUsage: modelInfo.memoryUsage,
+      },
+      cacheStats: {
+        embeddingsCached: this.embeddingCache.size,
       },
     };
   }
@@ -246,7 +591,7 @@ export class ModernSimilarityEngine {
       });
 
       logger.info(
-        `${passed ? "✅" : "❌"} [TEST] ${testCase.test}: ${(
+        `${passed ? "[SUCCESS]" : "[ERROR]"} [TEST] ${testCase.test}: ${(
           similarity * 100
         ).toFixed(1)}%`
       );
@@ -261,7 +606,7 @@ export class ModernSimilarityEngine {
   }
 
   /**
-   * Health check for monitoring
+   * Health check for TensorFlow.js model and embedding system
    */
   async healthCheck(): Promise<{
     status: "healthy" | "degraded" | "unhealthy";
@@ -272,29 +617,53 @@ export class ModernSimilarityEngine {
       if (!this.initialized) {
         return {
           status: "unhealthy",
-          message: "Engine not initialized",
+          message: "TensorFlow.js similarity engine not initialized",
           timestamp: new Date().toISOString(),
         };
       }
 
-      // Quick functionality test
+      if (!this.modelManager.isReady()) {
+        return {
+          status: "unhealthy",
+          message: "TensorFlow.js model not loaded",
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Quick functionality test with embeddings
       const testEntity: Entity = {
-        name: "Test Entity",
+        name: "Health Check Test Entity",
         entityType: "test",
-        observations: ["Test observation"],
+        observations: ["Testing TensorFlow.js embedding generation"],
       };
 
-      await this.calculateSimilarity(testEntity, testEntity);
+      const similarity = await this.calculateSimilarity(testEntity, testEntity);
 
+      // Self-similarity should be very high (close to 1.0)
+      if (similarity < 0.95) {
+        return {
+          status: "degraded",
+          message: `TensorFlow.js model producing unexpected results (self-similarity: ${similarity.toFixed(
+            3
+          )})`,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      const modelInfo = this.modelManager.getModelInfo();
       return {
         status: "healthy",
-        message: "All systems operational",
+        message: `TensorFlow.js similarity engine operational (Model: ${
+          modelInfo.modelId
+        }, Memory: ${modelInfo.memoryUsage.toFixed(1)}MB, Cache: ${
+          this.embeddingCache.size
+        } embeddings)`,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
       return {
         status: "unhealthy",
-        message: `Error: ${
+        message: `TensorFlow.js engine error: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
         timestamp: new Date().toISOString(),

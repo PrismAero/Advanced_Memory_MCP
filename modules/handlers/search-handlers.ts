@@ -32,20 +32,29 @@ export class SearchHandlers {
       ? undefined
       : (args.branch_name as string);
 
+    // AI-optimized search options
+    const includeContext = args.include_context !== false; // Default true for AI workflows
+    const workingContextOnly = args.working_context_only === true;
+    const includeConfidenceScores = args.include_confidence_scores !== false; // Default true for AI
+
     logger.info(
-      `Smart search ${
+      `AI-optimized smart search ${
         searchAllBranches
           ? "across all branches"
           : `isolated to branch: "${args.branch_name}"`
-      }`
+      } (context: ${includeContext}, working_only: ${workingContextOnly})`
     );
 
-    // Search specific branch with smart context expansion
-    const searchResults = await this.memoryManager.searchNodes(
+    // AI-optimized search with enhanced context awareness
+    const searchResults = await this.memoryManager.searchEntities(
       args.query as string,
       branchToSearch,
       args.include_statuses as EntityStatus[],
-      true // Always enable auto cross context for smart search
+      {
+        includeContext,
+        workingContextOnly,
+        includeConfidenceScores,
+      }
     );
 
     // Enhance with similarity engine for related entity detection
@@ -138,15 +147,21 @@ export class SearchHandlers {
               branch_searched: args.branch_name,
               query: args.query,
               context_depth: contextDepth,
-              search_type: "smart_search",
+              search_type: "ai_optimized_smart_search",
               branch_isolation: searchAllBranches ? "none" : "enforced",
-              summary: `Smart search found ${
+              ai_features: {
+                context_expansion: includeContext,
+                working_context_filter: workingContextOnly,
+                confidence_scoring: includeConfidenceScores,
+              },
+              confidence_scores: searchResults.confidence_scores || [],
+              summary: `AI-optimized search found ${
                 searchResults.entities.length
               } entities and ${searchResults.relations.length} relations in ${
                 searchAllBranches
                   ? "all branches"
                   : `branch "${args.branch_name}"`
-              }`,
+              }${workingContextOnly ? " (working context only)" : ""}`,
             },
             null,
             2

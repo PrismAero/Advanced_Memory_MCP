@@ -7,6 +7,7 @@ import {
 } from "../../memory-types.js";
 import { logger } from "../logger.js";
 import { IMemoryOperations } from "../memory-core.js";
+import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
 import { SQLiteBranchOperations } from "./sqlite-branch-operations.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
 import { SQLiteEntityOperations } from "./sqlite-entity-operations.js";
@@ -24,7 +25,7 @@ export class ModularSQLiteOperations implements IMemoryOperations {
   private branchOps: SQLiteBranchOperations;
   private searchOps: SQLiteSearchOperations;
 
-  constructor(basePath: string) {
+  constructor(basePath: string, similarityEngine?: ModernSimilarityEngine) {
     this.connection = new SQLiteConnection(basePath);
     this.entityOps = new SQLiteEntityOperations(this.connection);
     this.relationOps = new SQLiteRelationOperations(this.connection);
@@ -32,7 +33,8 @@ export class ModularSQLiteOperations implements IMemoryOperations {
     this.searchOps = new SQLiteSearchOperations(
       this.connection,
       this.entityOps,
-      this.relationOps
+      this.relationOps,
+      similarityEngine
     );
   }
 
