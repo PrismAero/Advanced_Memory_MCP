@@ -187,7 +187,7 @@ export const SMART_MEMORY_TOOLS: Tool[] = [
   {
     name: "smart_search",
     description:
-      "Intelligent search that automatically includes related entities, cross-references, and contextual relationships.",
+      "AI-optimized intelligent search with relevance scoring, working context awareness, and automatic relationship expansion. Designed for AI agent workflows.",
     inputSchema: {
       type: "object",
       properties: {
@@ -209,6 +209,21 @@ export const SMART_MEMORY_TOOLS: Tool[] = [
           },
           description:
             "Entity statuses to include in results. Defaults to ['active'] only.",
+        },
+        include_context: {
+          type: "boolean",
+          description:
+            "Automatically expand results with related entities and context (default: true). Helps AI agents get complete context.",
+        },
+        working_context_only: {
+          type: "boolean",
+          description:
+            "Only return entities marked as part of current working context (default: false). Useful for focusing on active work.",
+        },
+        include_confidence_scores: {
+          type: "boolean",
+          description:
+            "Include relevance scores and confidence metrics in response (default: true). Helps AI agents prioritize results.",
         },
         context_depth: {
           type: "integer",
@@ -248,6 +263,792 @@ export const SMART_MEMORY_TOOLS: Tool[] = [
             "Whether to automatically include related entities from other branches (default: true)",
         },
       },
+    },
+  },
+
+  // AI CONTEXT RETRIEVAL TOOLS
+  {
+    name: "recall_working_context",
+    description:
+      "Get all entities currently marked as working context plus automatically related entities. Perfect for AI agents resuming work or getting current project state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        branch_name: {
+          type: "string",
+          description:
+            "Memory branch to get working context from. Defaults to 'main'.",
+        },
+        include_related: {
+          type: "boolean",
+          description:
+            "Automatically include entities related to working context (default: true). Provides comprehensive context for AI reasoning.",
+        },
+        max_related: {
+          type: "integer",
+          description:
+            "Maximum number of related entities to include (default: 10). Controls context size for AI processing.",
+          minimum: 1,
+          maximum: 50,
+        },
+      },
+    },
+  },
+
+  {
+    name: "get_project_status",
+    description:
+      "Get structured summary of current project state across all branches. Shows active work areas, recent decisions, and project phase information optimized for AI understanding.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        include_inactive: {
+          type: "boolean",
+          description:
+            "Include branches not currently in focus (default: false). Useful for comprehensive project overview.",
+        },
+        detail_level: {
+          type: "string",
+          enum: ["summary", "detailed", "comprehensive"],
+          description:
+            "Amount of detail to include (default: 'summary'). Controls information density for AI processing.",
+        },
+      },
+    },
+  },
+
+  {
+    name: "find_dependencies",
+    description:
+      "Find entities that current work or specific entities depend on. Helps AI agents understand prerequisites and related context before making changes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entity_names: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Entity names to find dependencies for. If not provided, finds dependencies for all working context entities.",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch to search in. Defaults to 'main'.",
+        },
+        dependency_depth: {
+          type: "integer",
+          description:
+            "How many levels deep to trace dependencies (1-3, default: 2). Higher values show indirect dependencies.",
+          minimum: 1,
+          maximum: 3,
+        },
+      },
+    },
+  },
+
+  {
+    name: "trace_decision_chain",
+    description:
+      "Follow the chain of decisions leading to current state. Shows decision history and rationale for AI agents to understand project evolution and avoid repeating mistakes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entity_name: {
+          type: "string",
+          description:
+            "Entity to trace decision history for. If not provided, shows recent decisions across working context.",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch to search in. Defaults to 'main'.",
+        },
+        max_decisions: {
+          type: "integer",
+          description:
+            "Maximum number of decisions to include (default: 10). Controls response size for AI processing.",
+          minimum: 1,
+          maximum: 25,
+        },
+        time_window_days: {
+          type: "integer",
+          description:
+            "Only include decisions from the last N days (default: 30). Focuses on recent project history.",
+          minimum: 1,
+          maximum: 365,
+        },
+      },
+    },
+  },
+
+  // AI WORKFLOW MANAGEMENT TOOLS
+  {
+    name: "capture_decision",
+    description:
+      "Specialized tool for capturing decisions with full context, rationale, and impact analysis. Automatically creates structured decision entities optimized for AI reasoning.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        decision_title: {
+          type: "string",
+          description: "Clear, descriptive title for the decision",
+        },
+        decision_rationale: {
+          type: "string",
+          description:
+            "Detailed rationale explaining why this decision was made",
+        },
+        alternatives_considered: {
+          type: "array",
+          items: { type: "string" },
+          description: "Alternative options that were considered but rejected",
+        },
+        impact_areas: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Areas of the project that will be affected by this decision",
+        },
+        decision_maker: {
+          type: "string",
+          description: "Who made this decision (defaults to 'AI Agent')",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch to store the decision in. Defaults to 'main'.",
+        },
+        related_entities: {
+          type: "array",
+          items: { type: "string" },
+          description: "Names of entities this decision relates to or affects",
+        },
+      },
+      required: ["decision_title", "decision_rationale"],
+    },
+  },
+
+  {
+    name: "mark_current_work",
+    description:
+      "Set what the AI agent is actively focusing on. Updates working context flags and relevance scores to help with context management.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        focus_entities: {
+          type: "array",
+          items: { type: "string" },
+          description: "Entity names to mark as current working focus",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch containing the entities. Defaults to 'main'.",
+        },
+        focus_description: {
+          type: "string",
+          description:
+            "Optional description of what you're working on for context",
+        },
+        clear_previous: {
+          type: "boolean",
+          description:
+            "Whether to clear previous working context flags (default: true)",
+        },
+      },
+      required: ["focus_entities"],
+    },
+  },
+
+  {
+    name: "update_project_status",
+    description:
+      "Update project phase and status across branches. Helps AI agents understand project lifecycle and adjust behavior accordingly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        branch_name: {
+          type: "string",
+          description: "Branch to update. Use '*' for all branches.",
+        },
+        project_phase: {
+          type: "string",
+          enum: ["planning", "active-development", "maintenance", "reference"],
+          description: "New project phase for the branch",
+        },
+        status_updates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              entity_pattern: { type: "string" },
+              new_status: {
+                type: "string",
+                enum: ["active", "deprecated", "archived", "draft"],
+              },
+              reason: { type: "string" },
+            },
+            required: ["entity_pattern", "new_status"],
+          },
+          description: "Batch status updates for entities matching patterns",
+        },
+      },
+      required: ["branch_name", "project_phase"],
+    },
+  },
+
+  {
+    name: "archive_completed_work",
+    description:
+      "Archive completed work while preserving relationships and decision history. Moves entities to archived status but maintains links for future reference.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entity_names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Entities to archive as completed work",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch containing the entities. Defaults to 'main'.",
+        },
+        completion_summary: {
+          type: "string",
+          description: "Summary of what was completed for future reference",
+        },
+        preserve_relationships: {
+          type: "boolean",
+          description:
+            "Keep relationships intact for historical context (default: true)",
+        },
+      },
+      required: ["entity_names"],
+    },
+  },
+
+  {
+    name: "suggest_related_context",
+    description:
+      "Analyze current query or work area and recommend related entities that might be helpful. Provides AI agents with proactive context suggestions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        current_focus: {
+          type: "string",
+          description:
+            "Description of what you're currently working on or thinking about",
+        },
+        entity_names: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Specific entities to find related context for. If not provided, uses working context.",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch to search in. Defaults to 'main'.",
+        },
+        suggestion_types: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: [
+              "similar",
+              "dependencies",
+              "decisions",
+              "blockers",
+              "related_work",
+            ],
+          },
+          description: "Types of suggestions to provide (default: all types)",
+        },
+        max_suggestions: {
+          type: "integer",
+          description: "Maximum number of suggestions to return (default: 10)",
+          minimum: 1,
+          maximum: 25,
+        },
+      },
+      required: ["current_focus"],
+    },
+  },
+
+  {
+    name: "check_missing_dependencies",
+    description:
+      "Analyze current work and warn about missing context or dependencies. Helps AI agents avoid working on incomplete information.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        work_description: {
+          type: "string",
+          description: "Description of the work you're planning to do",
+        },
+        entity_names: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Entities involved in the work. If not provided, uses working context.",
+        },
+        branch_name: {
+          type: "string",
+          description: "Branch to analyze. Defaults to 'main'.",
+        },
+        check_depth: {
+          type: "integer",
+          description: "How deep to check for dependencies (1-3, default: 2)",
+          minimum: 1,
+          maximum: 3,
+        },
+      },
+      required: ["work_description"],
+    },
+  },
+
+  {
+    name: "get_continuation_context",
+    description:
+      "Perfect for resuming interrupted work. Gets all context needed to continue where you left off, including recent decisions, current status, and next steps.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        work_session_id: {
+          type: "string",
+          description:
+            "Optional identifier for the work session to resume. If not provided, gets general continuation context.",
+        },
+        branch_name: {
+          type: "string",
+          description:
+            "Branch to get continuation context from. Defaults to 'main'.",
+        },
+        time_window_hours: {
+          type: "integer",
+          description: "Hours to look back for recent activity (default: 24)",
+          minimum: 1,
+          maximum: 168,
+        },
+        include_blockers: {
+          type: "boolean",
+          description: "Include current blockers and issues (default: true)",
+        },
+      },
+    },
+  },
+
+  // WORKSPACE INTEGRATION TOOLS
+  {
+    name: "sync_with_workspace",
+    description:
+      "Relate memory entities to current workspace files and folders. Helps AI agents understand project structure and connect memory to actual codebase.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspace_path: {
+          type: "string",
+          description:
+            "Path to workspace root. If not provided, uses MEMORY_PATH environment variable.",
+        },
+        file_patterns: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "File patterns to analyze (e.g., '*.ts', '*.md'). Defaults to common development files.",
+        },
+        branch_name: {
+          type: "string",
+          description:
+            "Branch to store workspace-related entities. Defaults to 'main'.",
+        },
+        create_structure_entities: {
+          type: "boolean",
+          description:
+            "Create entities for major folders and important files (default: true).",
+        },
+        link_existing_entities: {
+          type: "boolean",
+          description:
+            "Try to link existing entities to workspace files (default: true).",
+        },
+      },
+    },
+  },
+
+  {
+    name: "workspace_context_bridge",
+    description:
+      "Connect memory entities with current IDE context. Helps AI agents understand which entities relate to files you're currently working on.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        current_files: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "List of files currently open or being worked on in the IDE.",
+        },
+        branch_name: {
+          type: "string",
+          description:
+            "Branch to search for related entities. Defaults to 'main'.",
+        },
+        context_radius: {
+          type: "integer",
+          description:
+            "How broadly to search for related context (1-3, default: 2)",
+          minimum: 1,
+          maximum: 3,
+        },
+      },
+      required: ["current_files"],
+    },
+  },
+
+  {
+    name: "detect_project_patterns",
+    description:
+      "Analyze workspace structure to suggest how to organize memory entities. Identifies project patterns and recommends memory branch structure.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspace_path: {
+          type: "string",
+          description:
+            "Path to workspace root. If not provided, uses MEMORY_PATH environment variable.",
+        },
+        analysis_depth: {
+          type: "integer",
+          description: "How deep to analyze folder structure (1-3, default: 2)",
+          minimum: 1,
+          maximum: 3,
+        },
+        suggest_branches: {
+          type: "boolean",
+          description:
+            "Suggest memory branch organization based on project structure (default: true).",
+        },
+        create_suggested_branches: {
+          type: "boolean",
+          description:
+            "Automatically create suggested branches (default: false).",
+        },
+      },
+    },
+  },
+
+  // ML-BASED PROJECT ANALYSIS TOOLS FOR IDE AGENTS
+
+  {
+    name: "analyze_project_structure",
+    description:
+      "Perform comprehensive analysis of project structure, interfaces, and dependencies using ML-based semantic understanding. Optimized for IDE agent context comprehension.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_path: {
+          type: "string",
+          description: "Path to the project root directory to analyze",
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to store analysis results",
+        },
+        include_interfaces: {
+          type: "boolean",
+          description:
+            "Whether to include detailed TypeScript/JavaScript interface analysis",
+          default: true,
+        },
+        include_dependencies: {
+          type: "boolean",
+          description:
+            "Whether to analyze project dependencies and import/export relationships",
+          default: true,
+        },
+        analysis_depth: {
+          type: "string",
+          enum: ["basic", "detailed", "comprehensive"],
+          description: "Depth of semantic analysis to perform",
+          default: "detailed",
+        },
+      },
+      required: ["project_path"],
+    },
+  },
+
+  {
+    name: "find_interface_usage",
+    description:
+      "Locate all usages of specific interfaces or types across the project using semantic code analysis. Finds implementations, extensions, and references. Optimized for IDE agent code comprehension.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        interface_name: {
+          type: "string",
+          description: "Name of the interface or type to search for",
+        },
+        search_scope: {
+          type: "string",
+          enum: ["current_file", "current_module", "entire_project"],
+          description: "Scope of the semantic search",
+          default: "entire_project",
+        },
+        include_implementations: {
+          type: "boolean",
+          description:
+            "Include classes/components that implement the interface",
+          default: true,
+        },
+        include_related_interfaces: {
+          type: "boolean",
+          description: "Include interfaces that extend or use this interface",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within",
+        },
+      },
+      required: ["interface_name"],
+    },
+  },
+
+  {
+    name: "suggest_project_context",
+    description:
+      "Get intelligent context suggestions for current development work using ML semantic analysis. Proactively suggests related interfaces, imports, and code patterns. Designed for optimal IDE agent integration.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        current_file: {
+          type: "string",
+          description: "Path to the file currently being worked on",
+        },
+        search_query: {
+          type: "string",
+          description: "Current search query or task description",
+        },
+        active_interfaces: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of interfaces currently being worked with",
+        },
+        working_entities: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of entity names from current working context",
+        },
+        suggestion_types: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: [
+              "interface_context",
+              "import_suggestion",
+              "dependency_prediction",
+              "related_component",
+              "monorepo_module",
+              "api_integration",
+            ],
+          },
+          description: "Types of semantic suggestions to generate",
+        },
+        session_id: {
+          type: "string",
+          description: "Session ID for context tracking",
+        },
+      },
+    },
+  },
+
+  {
+    name: "navigate_codebase",
+    description:
+      "Intelligent codebase navigation based on feature requirements and context. Uses TensorFlow.js embeddings and semantic similarity to understand code relationships and suggest relevant files for IDE agents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        feature_description: {
+          type: "string",
+          description: "Description of the feature or requirement to work on",
+        },
+        navigation_goal: {
+          type: "string",
+          enum: [
+            "find_related_files",
+            "locate_interfaces",
+            "find_implementations",
+            "trace_dependencies",
+            "find_examples",
+          ],
+          description: "Goal of the semantic navigation",
+        },
+        starting_point: {
+          type: "string",
+          description: "File path or entity name to start navigation from",
+        },
+        max_results: {
+          type: "number",
+          description: "Maximum number of navigation results to return",
+          default: 20,
+        },
+        include_confidence_scores: {
+          type: "boolean",
+          description:
+            "Include ML confidence scores for navigation suggestions",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within",
+        },
+      },
+      required: ["feature_description", "navigation_goal"],
+    },
+  },
+
+  {
+    name: "train_project_model",
+    description:
+      "Trigger incremental training of the project-specific TensorFlow.js model. Improves semantic understanding of your specific codebase patterns for better IDE agent context retrieval.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        training_trigger: {
+          type: "string",
+          enum: [
+            "manual",
+            "scheduled",
+            "threshold_reached",
+            "new_data_available",
+          ],
+          description: "Reason for triggering training",
+          default: "manual",
+        },
+        training_config: {
+          type: "object",
+          properties: {
+            epochs: {
+              type: "number",
+              description: "Number of training epochs",
+              default: 10,
+            },
+            learning_rate: {
+              type: "number",
+              description: "Learning rate for training",
+              default: 0.001,
+            },
+            batch_size: {
+              type: "number",
+              description: "Training batch size",
+              default: 16,
+            },
+          },
+        },
+        include_recent_data: {
+          type: "boolean",
+          description: "Include recently collected training data",
+          default: true,
+        },
+        validation_split: {
+          type: "number",
+          description: "Fraction of data to use for validation",
+          default: 0.2,
+        },
+      },
+    },
+  },
+
+  {
+    name: "generate_interface_embedding",
+    description:
+      "Generate enhanced embeddings for interfaces using project-specific TensorFlow.js models. Creates vector representations optimized for IDE agent semantic understanding and code relationship detection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        interface_names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Names of interfaces to generate embeddings for",
+        },
+        include_context: {
+          type: "boolean",
+          description:
+            "Include surrounding code context in embedding generation",
+          default: true,
+        },
+        semantic_type: {
+          type: "string",
+          enum: [
+            "interface_definition",
+            "api_endpoint",
+            "component_props",
+            "state_interface",
+            "data_model",
+          ],
+          description: "Semantic type of the interface for optimized embedding",
+        },
+        update_database: {
+          type: "boolean",
+          description: "Store generated embeddings in the database",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to work within",
+        },
+      },
+      required: ["interface_names"],
+    },
+  },
+
+  {
+    name: "find_similar_code",
+    description:
+      "Find similar code patterns using TensorFlow.js semantic analysis. Uses ML embeddings to understand code similarity beyond text matching, optimized for IDE agent code comprehension and pattern recognition.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        code_snippet: {
+          type: "string",
+          description: "Code snippet to find similar patterns for",
+        },
+        search_type: {
+          type: "string",
+          enum: [
+            "interface",
+            "function",
+            "component",
+            "pattern",
+            "implementation",
+          ],
+          description: "Type of code element to search for",
+        },
+        similarity_threshold: {
+          type: "number",
+          description: "Minimum ML similarity score (0-1)",
+          default: 0.7,
+        },
+        max_results: {
+          type: "number",
+          description: "Maximum number of similar code patterns to return",
+          default: 10,
+        },
+        include_reasoning: {
+          type: "boolean",
+          description:
+            "Include ML reasoning for why code is considered similar",
+          default: true,
+        },
+        search_scope: {
+          type: "string",
+          enum: ["current_project", "similar_projects", "code_examples"],
+          description: "Scope of semantic similarity search",
+          default: "current_project",
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within",
+        },
+      },
+      required: ["code_snippet", "search_type"],
     },
   },
 ];

@@ -1,8 +1,8 @@
 /**
  * Modular Enhanced Memory Manager
- * Lightweight orchestrator that delegates to focused modules
+ * Lightweight orchestrator using SQLite storage with optimization
  *
- * modular architecture where each module has a single responsibility.
+ * Modular architecture where each module has a single responsibility.
  */
 
 import {
@@ -13,25 +13,26 @@ import {
   Relation,
 } from "./memory-types.js";
 import { HybridMemoryManager } from "./modules/hybrid-memory-manager.js";
+import { ModernSimilarityEngine } from "./modules/similarity/similarity-engine.js";
 
 /**
- * Enhanced Memory Manager - Now just a thin wrapper around the hybrid manager
+ * Enhanced Memory Manager - Thin wrapper around the SQLite memory manager
  * Maintains API compatibility while providing cleaner internal architecture
  */
 export class EnhancedMemoryManager {
-  private hybridManager: HybridMemoryManager;
+  private sqliteManager: HybridMemoryManager;
 
-  constructor() {
-    this.hybridManager = new HybridMemoryManager();
+  constructor(similarityEngine?: ModernSimilarityEngine) {
+    this.sqliteManager = new HybridMemoryManager(undefined, similarityEngine);
   }
 
   // Core operations - simple delegation
   async initialize(): Promise<void> {
-    return await this.hybridManager.initialize();
+    return await this.sqliteManager.initialize();
   }
 
   async close(): Promise<void> {
-    return await this.hybridManager.close();
+    return await this.sqliteManager.close();
   }
 
   // Entity operations
@@ -39,18 +40,18 @@ export class EnhancedMemoryManager {
     entities: Entity[],
     branchName?: string
   ): Promise<Entity[]> {
-    return await this.hybridManager.createEntities(entities, branchName);
+    return await this.sqliteManager.createEntities(entities, branchName);
   }
 
   async updateEntity(entity: Entity, branchName?: string): Promise<Entity> {
-    return await this.hybridManager.updateEntity(entity, branchName);
+    return await this.sqliteManager.updateEntity(entity, branchName);
   }
 
   async deleteEntities(
     entityNames: string[],
     branchName?: string
   ): Promise<void> {
-    return await this.hybridManager.deleteEntities(entityNames, branchName);
+    return await this.sqliteManager.deleteEntities(entityNames, branchName);
   }
 
   // Relation operations
@@ -58,14 +59,14 @@ export class EnhancedMemoryManager {
     relations: Relation[],
     branchName?: string
   ): Promise<Relation[]> {
-    return await this.hybridManager.createRelations(relations, branchName);
+    return await this.sqliteManager.createRelations(relations, branchName);
   }
 
   async deleteRelations(
     relations: Relation[],
     branchName?: string
   ): Promise<void> {
-    return await this.hybridManager.deleteRelations(relations, branchName);
+    return await this.sqliteManager.deleteRelations(relations, branchName);
   }
 
   // Search operations
@@ -74,7 +75,7 @@ export class EnhancedMemoryManager {
     branchName?: string,
     includeStatuses?: EntityStatus[]
   ): Promise<KnowledgeGraph> {
-    return await this.hybridManager.searchEntities(
+    return await this.sqliteManager.searchEntities(
       query,
       branchName,
       includeStatuses
@@ -85,7 +86,7 @@ export class EnhancedMemoryManager {
     name: string,
     branchName?: string
   ): Promise<Entity | null> {
-    return await this.hybridManager.findEntityByName(name, branchName);
+    return await this.sqliteManager.findEntityByName(name, branchName);
   }
 
   // Branch operations
@@ -93,29 +94,29 @@ export class EnhancedMemoryManager {
     branchName: string,
     purpose?: string
   ): Promise<MemoryBranchInfo> {
-    return await this.hybridManager.createBranch(branchName, purpose);
+    return await this.sqliteManager.createBranch(branchName, purpose);
   }
 
   async deleteBranch(branchName: string): Promise<void> {
-    return await this.hybridManager.deleteBranch(branchName);
+    return await this.sqliteManager.deleteBranch(branchName);
   }
 
   async listBranches(): Promise<MemoryBranchInfo[]> {
-    return await this.hybridManager.listBranches();
+    return await this.sqliteManager.listBranches();
   }
 
   // Export/Import
   async exportBranch(branchName?: string): Promise<KnowledgeGraph> {
-    return await this.hybridManager.exportBranch(branchName);
+    return await this.sqliteManager.exportBranch(branchName);
   }
 
   async importData(data: KnowledgeGraph, branchName?: string): Promise<void> {
-    return await this.hybridManager.importData(data, branchName);
+    return await this.sqliteManager.importData(data, branchName);
   }
 
   // Utility methods
   async suggestBranch(entityType?: string, content?: string): Promise<string> {
-    return await this.hybridManager.suggestBranch(entityType, content);
+    return await this.sqliteManager.suggestBranch(entityType, content);
   }
 
   // Legacy compatibility methods (maintain exact API)
@@ -124,7 +125,7 @@ export class EnhancedMemoryManager {
     includeStatuses?: EntityStatus[],
     autoCrossContext: boolean = true
   ): Promise<KnowledgeGraph> {
-    return await this.hybridManager.readGraph(
+    return await this.sqliteManager.readGraph(
       branchName,
       includeStatuses,
       autoCrossContext
@@ -137,7 +138,7 @@ export class EnhancedMemoryManager {
     includeStatuses?: EntityStatus[],
     autoCrossContext: boolean = true
   ): Promise<KnowledgeGraph> {
-    return await this.hybridManager.searchNodes(
+    return await this.sqliteManager.searchNodes(
       query,
       branchName,
       includeStatuses,
@@ -151,7 +152,7 @@ export class EnhancedMemoryManager {
     includeStatuses?: EntityStatus[],
     autoCrossContext: boolean = true
   ): Promise<KnowledgeGraph> {
-    return await this.hybridManager.openNodes(
+    return await this.sqliteManager.openNodes(
       names,
       branchName,
       includeStatuses,
@@ -163,7 +164,7 @@ export class EnhancedMemoryManager {
     observations: { entityName: string; contents: string[] }[],
     branchName?: string
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    return await this.hybridManager.addObservations(observations, branchName);
+    return await this.sqliteManager.addObservations(observations, branchName);
   }
 
   async updateEntityStatus(
@@ -172,7 +173,7 @@ export class EnhancedMemoryManager {
     statusReason?: string,
     branchName?: string
   ): Promise<void> {
-    return await this.hybridManager.updateEntityStatus(
+    return await this.sqliteManager.updateEntityStatus(
       entityName,
       newStatus,
       statusReason,
@@ -184,7 +185,7 @@ export class EnhancedMemoryManager {
     deletions: { entityName: string; observations: string[] }[],
     branchName?: string
   ): Promise<void> {
-    return await this.hybridManager.deleteObservations(deletions, branchName);
+    return await this.sqliteManager.deleteObservations(deletions, branchName);
   }
 
   async createCrossReference(
@@ -193,7 +194,7 @@ export class EnhancedMemoryManager {
     targetEntityNames: string[],
     sourceBranch?: string
   ): Promise<void> {
-    return await this.hybridManager.createCrossReference(
+    return await this.sqliteManager.createCrossReference(
       entityName,
       targetBranch,
       targetEntityNames,
@@ -205,6 +206,6 @@ export class EnhancedMemoryManager {
     entityNames: string[],
     sourceBranch?: string
   ): Promise<KnowledgeGraph> {
-    return await this.hybridManager.getCrossContext(entityNames, sourceBranch);
+    return await this.sqliteManager.getCrossContext(entityNames, sourceBranch);
   }
 }
