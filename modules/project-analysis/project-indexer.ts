@@ -95,6 +95,17 @@ export type ProjectType =
   | "go"
   | "java"
   | "spring"
+  | "cpp"
+  | "cpp-cmake"
+  | "cpp-qt"
+  | "cpp-qml"
+  | "cpp-make"
+  | "cpp-meson"
+  | "cpp-bazel"
+  | "c"
+  | "csharp"
+  | "dotnet"
+  | "kotlin"
   | "monorepo"
   | "unknown";
 
@@ -108,6 +119,15 @@ export type PackageManager =
   | "go-mod"
   | "maven"
   | "gradle"
+  | "cmake"
+  | "make"
+  | "qmake"
+  | "meson"
+  | "bazel"
+  | "vcpkg"
+  | "conan"
+  | "nuget"
+  | "dotnet"
   | "unknown";
 
 /**
@@ -303,6 +323,83 @@ export class ProjectIndexer {
    */
   private async detectProjectType(rootPath: string): Promise<ProjectType> {
     try {
+      // Check for C++/C build systems first (most specific to least specific)
+
+      // Qt projects with QML
+      if (
+        (await this.fileExists(path.join(rootPath, "CMakeLists.txt"))) &&
+        (await this.hasQtInCMake(path.join(rootPath, "CMakeLists.txt"))) &&
+        (await this.hasQMLFiles(rootPath))
+      ) {
+        return "cpp-qml";
+      }
+
+      // Qt projects
+      if (await this.hasQtProject(rootPath)) {
+        return "cpp-qt";
+      }
+
+      // CMake C++ projects
+      if (await this.fileExists(path.join(rootPath, "CMakeLists.txt"))) {
+        if (await this.hasCppFiles(rootPath)) {
+          return "cpp-cmake";
+        }
+        return "c";
+      }
+
+      // Makefile projects
+      if (
+        (await this.fileExists(path.join(rootPath, "Makefile"))) ||
+        (await this.fileExists(path.join(rootPath, "makefile")))
+      ) {
+        if (await this.hasCppFiles(rootPath)) {
+          return "cpp-make";
+        }
+        return "c";
+      }
+
+      // Meson projects
+      if (await this.fileExists(path.join(rootPath, "meson.build"))) {
+        if (await this.hasCppFiles(rootPath)) {
+          return "cpp-meson";
+        }
+        return "c";
+      }
+
+      // Bazel projects
+      if (
+        (await this.fileExists(path.join(rootPath, "BUILD"))) ||
+        (await this.fileExists(path.join(rootPath, "BUILD.bazel"))) ||
+        (await this.fileExists(path.join(rootPath, "WORKSPACE")))
+      ) {
+        if (await this.hasCppFiles(rootPath)) {
+          return "cpp-bazel";
+        }
+        return "c";
+      }
+
+      // Generic C++ project
+      if (await this.hasCppFiles(rootPath)) {
+        return "cpp";
+      }
+
+      // .NET/C# projects
+      if (
+        (await this.fileExists(path.join(rootPath, ".csproj"))) ||
+        (await this.fileExists(path.join(rootPath, ".sln"))) ||
+        (await this.hasCSharpProject(rootPath))
+      ) {
+        return "dotnet";
+      }
+
+      // Kotlin projects
+      if (
+        (await this.fileExists(path.join(rootPath, "build.gradle.kts"))) ||
+        (await this.hasKotlinFiles(rootPath))
+      ) {
+        return "kotlin";
+      }
+
       // Check for package.json and its contents
       const packageJsonPath = path.join(rootPath, "package.json");
       if (await this.fileExists(packageJsonPath)) {
@@ -380,20 +477,85 @@ export class ProjectIndexer {
   private async detectPackageManager(
     rootPath: string
   ): Promise<PackageManager> {
+    const hasFileWithExtension = async (
+      dir: string,
+      extension: string
+    ): Promise<boolean> => {
+      try {
+        const entries = await fs.readdir(dir);
+        return entries.some((entry) => entry.endsWith(extension));
+      } catch {
+        return false;
+      }
+    };
+
+    // C++ build systems
+    if (await this.fileExists(path.join(rootPath, "CMakeLists.txt"))) {
+      return "cmake";
+    }
+    if (
+      (await hasFileWithExtension(rootPath, ".pro")) ||
+      (await hasFileWithExtension(rootPath, ".pri"))
+    ) {
+      return "qmake";
+    }
+    if (
+      (await this.fileExists(path.join(rootPath, "Makefile"))) ||
+      (await this.fileExists(path.join(rootPath, "makefile")))
+    ) {
+      return "make";
+    }
+    if (await this.fileExists(path.join(rootPath, "meson.build"))) {
+      return "meson";
+    }
+    if (
+      (await this.fileExists(path.join(rootPath, "BUILD"))) ||
+      (await this.fileExists(path.join(rootPath, "BUILD.bazel"))) ||
+      (await this.fileExists(path.join(rootPath, "WORKSPACE")))
+    ) {
+      return "bazel";
+    }
+    if (await this.fileExists(path.join(rootPath, "vcpkg.json"))) {
+      return "vcpkg";
+    }
+    if (await this.fileExists(path.join(rootPath, "conanfile.txt"))) {
+      return "conan";
+    }
+
+    // .NET
+    try {
+      const entries = await fs.readdir(rootPath);
+      if (entries.some(name => name.endsWith(".csproj") || name.endsWith(".sln"))) {
+        return "dotnet";
+      }
+    } catch {
+      // If the directory cannot be read, fall through to other detectors
+    }
+
+    // Node.js
     if (await this.fileExists(path.join(rootPath, "bun.lockb"))) return "bun";
     if (await this.fileExists(path.join(rootPath, "pnpm-lock.yaml")))
       return "pnpm";
     if (await this.fileExists(path.join(rootPath, "yarn.lock"))) return "yarn";
     if (await this.fileExists(path.join(rootPath, "package-lock.json")))
       return "npm";
+
+    // Python
     if (await this.fileExists(path.join(rootPath, "requirements.txt")))
       return "pip";
+
+    // Rust
     if (await this.fileExists(path.join(rootPath, "Cargo.lock")))
       return "cargo";
+
+    // Go
     if (await this.fileExists(path.join(rootPath, "go.sum"))) return "go-mod";
+
+    // Java
     if (await this.fileExists(path.join(rootPath, "pom.xml"))) return "maven";
     if (await this.fileExists(path.join(rootPath, "build.gradle")))
       return "gradle";
+
     return "unknown";
   }
 
@@ -501,6 +663,158 @@ export class ProjectIndexer {
       category: "source",
       hasImports: true,
       hasExports: true,
+      canDefineInterfaces: true,
+    });
+
+    // C/C++
+    map.set(".c", {
+      extension: ".c",
+      language: "c",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+    map.set(".cpp", {
+      extension: ".cpp",
+      language: "cpp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".cxx", {
+      extension: ".cxx",
+      language: "cpp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".cc", {
+      extension: ".cc",
+      language: "cpp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".h", {
+      extension: ".h",
+      language: "c",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".hpp", {
+      extension: ".hpp",
+      language: "cpp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".hxx", {
+      extension: ".hxx",
+      language: "cpp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".hh", {
+      extension: ".hh",
+      language: "cpp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+
+    // Qt/QML
+    map.set(".qml", {
+      extension: ".qml",
+      language: "qml",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".ui", {
+      extension: ".ui",
+      language: "xml",
+      category: "config",
+      hasImports: false,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+    map.set(".qrc", {
+      extension: ".qrc",
+      language: "xml",
+      category: "config",
+      hasImports: false,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+    map.set(".pro", {
+      extension: ".pro",
+      language: "qmake",
+      category: "build",
+      hasImports: false,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+    map.set(".pri", {
+      extension: ".pri",
+      language: "qmake",
+      category: "build",
+      hasImports: false,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+
+    // C#/.NET
+    map.set(".cs", {
+      extension: ".cs",
+      language: "csharp",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".csproj", {
+      extension: ".csproj",
+      language: "xml",
+      category: "build",
+      hasImports: false,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+    map.set(".sln", {
+      extension: ".sln",
+      language: "text",
+      category: "build",
+      hasImports: false,
+      hasExports: false,
+      canDefineInterfaces: false,
+    });
+
+    // Kotlin
+    map.set(".kt", {
+      extension: ".kt",
+      language: "kotlin",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
+      canDefineInterfaces: true,
+    });
+    map.set(".kts", {
+      extension: ".kts",
+      language: "kotlin",
+      category: "source",
+      hasImports: true,
+      hasExports: false,
       canDefineInterfaces: true,
     });
 
@@ -690,6 +1004,83 @@ export class ProjectIndexer {
           });
         }
       }
+    } else if (language === "c" || language === "cpp") {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // C++20+ module imports
+        const moduleImportMatch = line.match(/^import\s+([^;]+);/);
+        if (moduleImportMatch) {
+          const [, module] = moduleImportMatch;
+          imports.push({
+            source: module.trim(),
+            specifiers: [],
+            isDefault: false,
+            isNamespace: false,
+            line: i + 1,
+          });
+        }
+
+        // C++20+ module exports
+        const moduleExportMatch = line.match(/^export\s+module\s+([^;]+);/);
+        if (moduleExportMatch) {
+          const [, module] = moduleExportMatch;
+          imports.push({
+            source: `module:${module.trim()}`,
+            specifiers: [],
+            isDefault: false,
+            isNamespace: false,
+            line: i + 1,
+          });
+        }
+
+        // Traditional C/C++ includes
+        const includeMatch = line.match(/^#include\s+[<"]([^>"]+)[>"]/);
+        if (includeMatch) {
+          const [, source] = includeMatch;
+          imports.push({
+            source,
+            specifiers: [],
+            isDefault: false,
+            isNamespace: false,
+            line: i + 1,
+          });
+        }
+      }
+    } else if (language === "csharp") {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // C# using statements
+        const usingMatch = line.match(/^using\s+([^;]+);/);
+        if (usingMatch) {
+          const [, namespace_] = usingMatch;
+          imports.push({
+            source: namespace_.trim(),
+            specifiers: [],
+            isDefault: false,
+            isNamespace: true,
+            line: i + 1,
+          });
+        }
+      }
+    } else if (language === "qml") {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // QML imports
+        const importMatch = line.match(/^import\s+([^\s]+)(?:\s+(\d+\.\d+))?/);
+        if (importMatch) {
+          const [, module, version] = importMatch;
+          imports.push({
+            source: version ? `${module} ${version}` : module,
+            specifiers: [],
+            isDefault: false,
+            isNamespace: false,
+            line: i + 1,
+          });
+        }
+      }
     }
 
     return imports;
@@ -761,6 +1152,200 @@ export class ProjectIndexer {
               : [],
             line: i + 1,
             isExported: line.startsWith("export"),
+          });
+        }
+      }
+    } else if (language === "cpp" || language === "c") {
+      let currentNamespace = "";
+      let braceDepth = 0;
+      const namespaceStack: { name: string; depth: number }[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const rawLine = lines[i];
+        const line = rawLine.trim();
+
+        // Track namespace declarations (including nested namespaces with ::)
+        const namespaceMatch = line.match(
+          /^namespace\s+([a-zA-Z_][a-zA-Z0-9_:]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*)\s*{?/
+        );
+        if (namespaceMatch) {
+          const declaredNamespace = namespaceMatch[1];
+          const hasOpeningBrace = line.includes("{");
+          const fullNamespace = currentNamespace
+            ? `${currentNamespace}::${declaredNamespace}`
+            : declaredNamespace;
+          // Namespace becomes active at the depth after its opening brace (if present)
+          const activationDepth = braceDepth + (hasOpeningBrace ? 1 : 0);
+          namespaceStack.push({ name: fullNamespace, depth: activationDepth });
+          currentNamespace = fullNamespace;
+        }
+
+        // Update brace depth for all scopes (namespaces, classes, functions, etc.)
+        const openBraces = (rawLine.match(/{/g) || []).length;
+        const closeBraces = (rawLine.match(/}/g) || []).length;
+        braceDepth += openBraces - closeBraces;
+
+        // Pop namespaces whose scope has ended
+        while (
+          namespaceStack.length > 0 &&
+          braceDepth < namespaceStack[namespaceStack.length - 1].depth
+        ) {
+          namespaceStack.pop();
+        }
+        currentNamespace =
+          namespaceStack.length > 0
+            ? namespaceStack[namespaceStack.length - 1].name
+            : "";
+
+        // C++20+ concept declarations
+        const conceptMatch = line.match(
+          /^(?:template\s*<[^>]+>\s*)?concept\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/
+        );
+        if (conceptMatch) {
+          const [, name] = conceptMatch;
+          const fullName = currentNamespace
+            ? `${currentNamespace}::${name}`
+            : name;
+          interfaces.push({
+            name: fullName,
+            properties: [],
+            extends: [],
+            line: i + 1,
+            isExported: true,
+          });
+        }
+
+        // C++ class declarations (with namespace support, constexpr, final, etc.)
+        const classMatch = line.match(
+          /^(?:export\s+)?(?:template\s*<[^>]+>\s*)?(?:constexpr\s+)?class\s+(?:__declspec\([^)]+\)\s+)?(?:alignas\([^)]+\)\s+)?([a-zA-Z_][a-zA-Z0-9_:]*)\s*(?:final\s+)?(?::\s*(?:public|protected|private)\s+([^{]+))?\s*{?/
+        );
+        if (classMatch) {
+          const [, name, inheritance] = classMatch;
+          // Handle namespace-qualified names (e.g., MyNamespace::MyClass)
+          const fullName = name.includes("::")
+            ? name
+            : currentNamespace
+            ? `${currentNamespace}::${name}`
+            : name;
+          interfaces.push({
+            name: fullName,
+            properties: [],
+            extends: inheritance
+              ? inheritance
+                  .split(",")
+                  .map((s) =>
+                    s.trim().replace(/^(public|protected|private)\s+/, "")
+                  )
+              : [],
+            line: i + 1,
+            isExported: true,
+          });
+        }
+
+        // C++ struct declarations (with namespace support, constexpr, etc.)
+        const structMatch = line.match(
+          /^(?:export\s+)?(?:template\s*<[^>]+>\s*)?(?:constexpr\s+)?struct\s+(?:alignas\([^)]+\)\s+)?([a-zA-Z_][a-zA-Z0-9_:]*)\s*(?:final\s+)?(?::\s*(?:public|protected|private)\s+([^{]+))?\s*{?/
+        );
+        if (structMatch) {
+          const [, name, inheritance] = structMatch;
+          const fullName = name.includes("::")
+            ? name
+            : currentNamespace
+            ? `${currentNamespace}::${name}`
+            : name;
+          interfaces.push({
+            name: fullName,
+            properties: [],
+            extends: inheritance
+              ? inheritance
+                  .split(",")
+                  .map((s) =>
+                    s.trim().replace(/^(public|protected|private)\s+/, "")
+                  )
+              : [],
+            line: i + 1,
+            isExported: true,
+          });
+        }
+
+        // C++ enum class declarations
+        const enumClassMatch = line.match(
+          /^(?:enum\s+class|enum\s+struct)\s+([a-zA-Z_][a-zA-Z0-9_:]*)\s*(?::\s*([^{]+))?\s*{?/
+        );
+        if (enumClassMatch) {
+          const [, name, underlyingType] = enumClassMatch;
+          const fullName = name.includes("::")
+            ? name
+            : currentNamespace
+            ? `${currentNamespace}::${name}`
+            : name;
+          interfaces.push({
+            name: fullName,
+            properties: [],
+            extends: underlyingType ? [underlyingType.trim()] : [],
+            line: i + 1,
+            isExported: true,
+          });
+        }
+      }
+    } else if (language === "csharp") {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // C# interface declarations
+        const interfaceMatch = line.match(
+          /^(?:public\s+|internal\s+)?interface\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?::\s+([^{]+))?\s*{?/
+        );
+        if (interfaceMatch) {
+          const [, name, inheritance] = interfaceMatch;
+          interfaces.push({
+            name,
+            properties: [],
+            extends: inheritance
+              ? inheritance.split(",").map((s) => s.trim())
+              : [],
+            line: i + 1,
+            isExported: true,
+          });
+        }
+
+        // C# class declarations
+        const classMatch = line.match(
+          /^(?:public\s+|internal\s+)?(?:abstract\s+|sealed\s+)?class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?::\s+([^{]+))?\s*{?/
+        );
+        if (classMatch) {
+          const [, name, inheritance] = classMatch;
+          interfaces.push({
+            name,
+            properties: [],
+            extends: inheritance
+              ? inheritance.split(",").map((s) => s.trim())
+              : [],
+            line: i + 1,
+            isExported: true,
+          });
+        }
+      }
+    } else if (language === "qml") {
+      for (let i = 0; i < lines.length; i++) {
+        const rawLine = lines[i];
+        const line = rawLine.trim();
+
+        // QML type declarations
+        // Require the type name to appear at the start of the line (no indentation)
+        // to reduce false positives from embedded JavaScript or object literals.
+        if (!/^[A-Z]/.test(rawLine)) {
+          continue;
+        }
+        const qmlTypeMatch = line.match(/^([A-Z][a-zA-Z0-9_]*)\s*{/);
+        if (qmlTypeMatch) {
+          const [, name] = qmlTypeMatch;
+          interfaces.push({
+            name,
+            properties: [],
+            extends: [],
+            line: i + 1,
+            isExported: true,
           });
         }
       }
@@ -970,5 +1555,124 @@ export class ProjectIndexer {
     }
 
     return directories;
+  }
+
+  /**
+   * Check if project contains C++ files
+   */
+  private async hasCppFiles(rootPath: string): Promise<boolean> {
+    try {
+      const entries = await fs.readdir(rootPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if ([".cpp", ".cc", ".cxx", ".hpp", ".hxx", ".hh"].includes(ext)) {
+            return true;
+          }
+        } else if (entry.isDirectory() && !this.shouldExclude(entry.name)) {
+          if (await this.hasCppFiles(path.join(rootPath, entry.name))) {
+            return true;
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+    return false;
+  }
+
+  /**
+   * Check if project contains QML files
+   */
+  private async hasQMLFiles(rootPath: string): Promise<boolean> {
+    try {
+      const entries = await fs.readdir(rootPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith(".qml")) {
+          return true;
+        } else if (entry.isDirectory() && !this.shouldExclude(entry.name)) {
+          if (await this.hasQMLFiles(path.join(rootPath, entry.name))) {
+            return true;
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+    return false;
+  }
+
+  /**
+   * Check if CMakeLists.txt contains Qt references
+   */
+  private async hasQtInCMake(cmakeFilePath: string): Promise<boolean> {
+    try {
+      const content = await fs.readFile(cmakeFilePath, "utf-8");
+      return (
+        content.includes("find_package(Qt") ||
+        content.includes("find_package(Qt5") ||
+        content.includes("find_package(Qt6") ||
+        content.includes("qt_add_") ||
+        content.includes("qt5_") ||
+        content.includes("qt6_")
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Check if project has Qt project files (.pro, .pri)
+   */
+  private async hasQtProject(rootPath: string): Promise<boolean> {
+    try {
+      const entries = await fs.readdir(rootPath);
+      return entries.some(
+        (entry) => entry.endsWith(".pro") || entry.endsWith(".pri")
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Check if project contains C# files
+   */
+  private async hasCSharpProject(rootPath: string): Promise<boolean> {
+    try {
+      const entries = await fs.readdir(rootPath);
+      return entries.some(
+        (entry) =>
+          entry.endsWith(".csproj") ||
+          entry.endsWith(".sln") ||
+          entry.endsWith(".cs")
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Check if project contains Kotlin files
+   */
+  private async hasKotlinFiles(rootPath: string): Promise<boolean> {
+    try {
+      const entries = await fs.readdir(rootPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (
+          entry.isFile() &&
+          (entry.name.endsWith(".kt") || entry.name.endsWith(".kts"))
+        ) {
+          return true;
+        } else if (entry.isDirectory() && !this.shouldExclude(entry.name)) {
+          if (await this.hasKotlinFiles(path.join(rootPath, entry.name))) {
+            return true;
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+    return false;
   }
 }

@@ -26,6 +26,7 @@ import {
   SearchHandlers,
 } from "./modules/handlers/index.js";
 import { MLHandlers } from "./modules/handlers/ml-handlers.js";
+import * as qtHandlers from "./modules/handlers/qt-handlers.js";
 import { WorkflowHandlers } from "./modules/handlers/workflow-handlers.js";
 import { WorkspaceHandlers } from "./modules/handlers/workspace-handlers.js";
 import { logger } from "./modules/logger.js";
@@ -284,6 +285,91 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "backfill_embeddings":
         return await mlHandlers.handleBackfillEmbeddings(args);
+
+      // Qt/QML Analysis Tools
+      case "analyze_qml_bindings":
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                await qtHandlers.analyzeQmlBindings(args as any, memoryManager),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+
+      case "find_qt_controllers":
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                await qtHandlers.findQtControllers(args, memoryManager),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+
+      case "analyze_layer_architecture":
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                await qtHandlers.analyzeLayerArchitecture(args, memoryManager),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+
+      case "find_qml_usage":
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                await qtHandlers.findQmlUsage(args as any, memoryManager),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+
+      case "list_q_properties":
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                await qtHandlers.listQProperties(args, memoryManager),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+
+      case "list_q_invokables":
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                await qtHandlers.listQInvokables(args, memoryManager),
+                null,
+                2
+              ),
+            },
+          ],
+        };
 
       default:
         logger.warn(`Unknown tool called: ${name}`);
