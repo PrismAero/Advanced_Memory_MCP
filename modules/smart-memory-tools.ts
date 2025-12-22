@@ -1072,4 +1072,168 @@ export const SMART_MEMORY_TOOLS: Tool[] = [
       },
     },
   },
+
+  // Qt/QML-specific tools for analyzing C++ bindings and architecture layers
+  {
+    name: "analyze_qml_bindings",
+    description:
+      "Analyze QML bindings for a specific C++ class. Finds all Q_PROPERTY declarations, Q_INVOKABLE methods, signals, and QML_ELEMENT registrations. Shows what properties and methods are exposed to QML and where they're used in QML files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        class_name: {
+          type: "string",
+          description:
+            "Name of the C++ class to analyze (e.g., 'UserController', 'MyNamespace::DataService')",
+        },
+        include_usage: {
+          type: "boolean",
+          description:
+            "Include QML files that use this class's properties and methods",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within. Defaults to 'main'.",
+        },
+      },
+      required: ["class_name"],
+    },
+  },
+
+  {
+    name: "find_qt_controllers",
+    description:
+      "Find all C++ classes registered with QML (QML_ELEMENT, qmlRegisterType, etc.). Identifies the Controller layer in Qt/QML architecture that exposes business logic to the UI layer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        include_properties: {
+          type: "boolean",
+          description: "Include Q_PROPERTY count for each controller",
+          default: true,
+        },
+        include_invokables: {
+          type: "boolean",
+          description: "Include Q_INVOKABLE method count for each controller",
+          default: true,
+        },
+        namespace_filter: {
+          type: "string",
+          description:
+            "Filter controllers by namespace (e.g., 'App::Controllers')",
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within. Defaults to 'main'.",
+        },
+      },
+    },
+  },
+
+  {
+    name: "analyze_layer_architecture",
+    description:
+      "Analyze the three-layer Qt/QML architecture (Service → Controller → UI). Maps relationships between business logic services (C++), controllers that expose data to QML, and UI components (QML files). Helps ensure proper separation of concerns.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        layer_focus: {
+          type: "string",
+          enum: ["service", "controller", "ui", "all"],
+          description: "Which layer to focus the analysis on",
+          default: "all",
+        },
+        show_violations: {
+          type: "boolean",
+          description:
+            "Show architectural violations (e.g., QML with business logic, Services directly accessed from QML)",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within. Defaults to 'main'.",
+        },
+      },
+    },
+  },
+
+  {
+    name: "find_qml_usage",
+    description:
+      "Find all QML files that use a specific C++ controller or component. Shows property bindings, method calls, and signal connections in QML.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        controller_name: {
+          type: "string",
+          description: "Name of the C++ controller/component to find usage for",
+        },
+        usage_type: {
+          type: "string",
+          enum: ["property", "method", "signal", "all"],
+          description: "Type of usage to find",
+          default: "all",
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within. Defaults to 'main'.",
+        },
+      },
+      required: ["controller_name"],
+    },
+  },
+
+  {
+    name: "list_q_properties",
+    description:
+      "List all Q_PROPERTY declarations across the codebase or for a specific class. Shows property type, READ/WRITE/NOTIFY functions, and where each property is used in QML files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        class_name: {
+          type: "string",
+          description: "Optional: Filter by specific class name",
+        },
+        property_type: {
+          type: "string",
+          description:
+            "Optional: Filter by property type (e.g., 'QString', 'int', 'QObject*')",
+        },
+        include_qml_usage: {
+          type: "boolean",
+          description: "Include QML files that access each property",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within. Defaults to 'main'.",
+        },
+      },
+    },
+  },
+
+  {
+    name: "list_q_invokables",
+    description:
+      "List all Q_INVOKABLE methods across the codebase or for a specific class. Shows method signatures, parameters, return types, and where each method is called from QML.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        class_name: {
+          type: "string",
+          description: "Optional: Filter by specific class name",
+        },
+        include_qml_calls: {
+          type: "boolean",
+          description: "Include QML files that call each method",
+          default: true,
+        },
+        branch_name: {
+          type: "string",
+          description: "Memory branch to search within. Defaults to 'main'.",
+        },
+      },
+    },
+  },
 ];
