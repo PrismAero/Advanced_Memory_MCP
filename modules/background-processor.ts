@@ -1,7 +1,9 @@
 import { EnhancedMemoryManager } from "../enhanced-memory-manager-modular.js";
 import { Entity } from "../memory-types.js";
+import { ContextEngine } from "./intelligence/context-engine.js";
 import { logger } from "./logger.js";
 import { AdaptiveModelTrainer } from "./ml/adaptive-model-trainer.js";
+import { ProjectEmbeddingEngine } from "./ml/project-embedding-engine.js";
 import { TrainingDataCollector } from "./ml/training-data-collector.js";
 import { FileWatcher } from "./project-analysis/file-watcher.js";
 import { InterfaceMapper } from "./project-analysis/interface-mapper.js";
@@ -34,6 +36,8 @@ export class BackgroundProcessor {
   private projectAnalysisOps: ProjectAnalysisOperations | null = null;
   private trainingDataCollector: TrainingDataCollector;
   private adaptiveModelTrainer: AdaptiveModelTrainer | null = null;
+  private contextEngine: ContextEngine | null = null;
+  private projectEmbeddingEngine: ProjectEmbeddingEngine | null = null;
 
   // Project monitoring state
   private currentProjectPath: string | null = null;
@@ -52,6 +56,30 @@ export class BackgroundProcessor {
     this.projectAnalysisOps = projectAnalysisOps || null;
     this.adaptiveModelTrainer = adaptiveModelTrainer || null;
 
+    // Initialize ML components if not provided
+    if (!this.adaptiveModelTrainer) {
+      const modelManager = this.similarityEngine.getModelManager();
+      this.adaptiveModelTrainer = new AdaptiveModelTrainer(modelManager);
+    }
+
+    this.projectEmbeddingEngine = new ProjectEmbeddingEngine(
+      this.similarityEngine.getModelManager(),
+      this.adaptiveModelTrainer
+    );
+
+    if (this.projectAnalysisOps) {
+      this.interfaceMapper = new InterfaceMapper(
+        this.projectAnalysisOps,
+        this.projectEmbeddingEngine
+      );
+
+      this.contextEngine = new ContextEngine(
+        this.projectEmbeddingEngine,
+        this.interfaceMapper,
+        this.projectAnalysisOps
+      );
+    }
+
     // Initialize project analysis components
     this.projectIndexer = new ProjectIndexer();
     this.trainingDataCollector = new TrainingDataCollector();
@@ -66,6 +94,26 @@ export class BackgroundProcessor {
     logger.info(
       "[BOT] Enhanced background processor initialized with ML-based project monitoring"
     );
+  }
+
+  getInterfaceMapper(): InterfaceMapper | null {
+    return this.interfaceMapper;
+  }
+
+  getAdaptiveModelTrainer(): AdaptiveModelTrainer | null {
+    return this.adaptiveModelTrainer;
+  }
+
+  getProjectIndexer(): ProjectIndexer {
+    return this.projectIndexer;
+  }
+
+  getContextEngine(): ContextEngine | null {
+    return this.contextEngine;
+  }
+
+  getProjectEmbeddingEngine(): ProjectEmbeddingEngine | null {
+    return this.projectEmbeddingEngine;
   }
 
   /**
@@ -121,6 +169,23 @@ export class BackgroundProcessor {
     }
 
     logger.info("Enhanced background processor stopped");
+  }
+
+  /**
+   * Set the project to monitor and start monitoring tasks
+   */
+  setMonitoredProject(projectPath: string): void {
+    this.currentProjectPath = projectPath;
+    logger.info(`[BACKGROUND] Set monitored project path: ${projectPath}`);
+
+    // Start monitoring if not already running
+    if (!this.projectMonitoringInterval) {
+      this.startProjectMonitoring();
+    }
+
+    if (!this.interfaceAnalysisInterval) {
+      this.startInterfaceAnalysis();
+    }
   }
 
   /**

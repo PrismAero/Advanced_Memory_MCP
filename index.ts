@@ -25,12 +25,15 @@ import {
   EntityHandlers,
   SearchHandlers,
 } from "./modules/handlers/index.js";
+import { MLHandlers } from "./modules/handlers/ml-handlers.js";
 import { WorkflowHandlers } from "./modules/handlers/workflow-handlers.js";
 import { WorkspaceHandlers } from "./modules/handlers/workspace-handlers.js";
 import { logger } from "./modules/logger.js";
 import { RelationshipIndexer } from "./modules/relationship-indexer.js";
 import { ModernSimilarityEngine } from "./modules/similarity/similarity-engine.js";
 import { SMART_MEMORY_TOOLS } from "./modules/smart-memory-tools.js";
+import { ProjectAnalysisOperations } from "./modules/sqlite/project-analysis-operations.js";
+import { SQLiteConnection } from "./modules/sqlite/sqlite-connection.js";
 
 // SECURITY: Network activity monitor (development safeguard)
 if (process.env.LOG_LEVEL === "debug") {
@@ -60,6 +63,11 @@ const relationshipIndexer = new RelationshipIndexer(
   modernSimilarity
 );
 
+// Initialize SQLite connection for project analysis
+const projectPath = process.env.MEMORY_PATH || process.cwd();
+const sqliteConnection = new SQLiteConnection(projectPath);
+const projectAnalysisOps = new ProjectAnalysisOperations(sqliteConnection);
+
 // Initialize specialized handlers
 const branchHandlers = new BranchHandlers(memoryManager);
 const entityHandlers = new EntityHandlers(
@@ -68,14 +76,29 @@ const entityHandlers = new EntityHandlers(
   relationshipIndexer
 );
 const searchHandlers = new SearchHandlers(memoryManager, modernSimilarity);
-const contextHandlers = new ContextHandlers(memoryManager);
 const workflowHandlers = new WorkflowHandlers(memoryManager);
-const workspaceHandlers = new WorkspaceHandlers(memoryManager);
 
 // Initialize background processor for AI enhancements
 const backgroundProcessor = new BackgroundProcessor(
   memoryManager,
-  modernSimilarity
+  modernSimilarity,
+  projectAnalysisOps
+);
+
+const contextHandlers = new ContextHandlers(memoryManager, backgroundProcessor);
+
+const workspaceHandlers = new WorkspaceHandlers(
+  memoryManager,
+  backgroundProcessor
+);
+
+// Initialize ML handlers
+// Note: We access ML components from backgroundProcessor where they are initialized
+const mlHandlers = new MLHandlers(
+  backgroundProcessor.getAdaptiveModelTrainer()!,
+  backgroundProcessor.getProjectEmbeddingEngine()!,
+  modernSimilarity,
+  projectAnalysisOps
 );
 
 const server = new Server(
@@ -99,6 +122,11 @@ async function initializeComponents(): Promise<void> {
   logger.info("Initializing memory manager...");
   await memoryManager.initialize();
   logger.info("Memory manager initialized successfully");
+
+  // Initialize SQLite connection for project analysis
+  logger.info("Initializing project analysis database...");
+  await sqliteConnection.initialize();
+  logger.info("Project analysis database initialized successfully");
 
   // 2. Initialize TensorFlow.js similarity engine (required - no fallback)
   logger.info("Initializing TensorFlow.js similarity engine...");
@@ -212,37 +240,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "detect_project_patterns":
         return await workspaceHandlers.handleDetectProjectPatterns(args);
 
-      // Advanced ML/AI Tools (Not Yet Implemented)
       case "analyze_project_structure":
+        return await workspaceHandlers.handleAnalyzeProjectStructure(args);
+
+      // Advanced ML/AI Tools
       case "find_interface_usage":
+        return await workspaceHandlers.handleFindInterfaceUsage(args);
+
       case "suggest_project_context":
+        return await contextHandlers.handleSuggestProjectContext(args);
+
       case "navigate_codebase":
+        return await workspaceHandlers.handleNavigateCodebase(args);
+
       case "train_project_model":
+        return await mlHandlers.handleTrainProjectModel(args);
+
       case "generate_interface_embedding":
+        return await mlHandlers.handleGenerateInterfaceEmbedding(args);
+
       case "find_similar_code":
-        logger.warn(
-          `Advanced ML tool '${name}' called but is not yet implemented`
-        );
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error: `Tool '${name}' is not yet implemented`,
-                  message:
-                    "This advanced ML tool is planned but not yet available. Please use the core memory tools instead.",
-                  status: "not_implemented",
-                  suggestion:
-                    "Use smart_search, create_entities, or other core tools for your workflow",
-                },
-                null,
-                2
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return await mlHandlers.handleFindSimilarCode(args);
 
       default:
         logger.warn(`Unknown tool called: ${name}`);
