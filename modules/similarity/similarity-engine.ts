@@ -110,6 +110,10 @@ export class ModernSimilarityEngine {
     }
   }
 
+  getModelManager(): TensorFlowModelManager {
+    return this.modelManager;
+  }
+
   /**
    * Detect similar entities using TensorFlow.js semantic embeddings
    */

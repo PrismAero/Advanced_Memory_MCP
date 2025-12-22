@@ -7,6 +7,7 @@ import {
   ProjectInfo,
 } from "../project-analysis/project-indexer.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
+import { VectorStore } from "../vector-store.js";
 
 /**
  * Project file record for database storage
@@ -142,7 +143,9 @@ export class ProjectAnalysisOperations {
       }
     }
 
-    logger.info(`[SUCCESS] Stored ${storedFiles.length} project files successfully`);
+    logger.info(
+      `[SUCCESS] Stored ${storedFiles.length} project files successfully`
+    );
     return storedFiles;
   }
 
@@ -808,5 +811,84 @@ export class ProjectAnalysisOperations {
     logger.info(` Cleaned up ${deletedCount} deleted files from database`);
 
     return deletedCount;
+  }
+
+  /**
+   * Find similar interfaces using vector similarity
+   * Note: This performs in-memory cosine similarity calculation
+   */
+  async findSimilarInterfaces(
+    queryEmbedding: number[],
+    limit: number = 5,
+    minSimilarity: number = 0.7
+  ): Promise<Array<{ interface: CodeInterfaceRecord; similarity: number }>> {
+    try {
+      // 1. Fetch all interfaces with embeddings
+      // Optimization: In a real production system, we would use a vector database or
+      // an SQLite extension like sqlite-vss. For this local implementation,
+      // we fetch embeddings and calculate similarity in memory.
+      const rows = await this.connection.runQuery(
+        "SELECT * FROM code_interfaces WHERE embedding IS NOT NULL"
+      );
+
+      if (!rows || rows.length === 0) {
+        return [];
+      }
+
+      const results: Array<{
+        interface: CodeInterfaceRecord;
+        similarity: number;
+      }> = [];
+
+      // 2. Calculate cosine similarity for each interface
+      for (const row of rows) {
+        if (!row.embedding) continue;
+
+        // Convert buffer to number array
+        const embedding = new Float32Array(row.embedding);
+
+        // Calculate similarity
+        const similarity = this.calculateCosineSimilarity(
+          queryEmbedding,
+          embedding
+        );
+
+        if (similarity >= minSimilarity) {
+          results.push({
+            interface: row as CodeInterfaceRecord,
+            similarity,
+          });
+        }
+      }
+
+      // 3. Sort by similarity descending and take top N
+      return results
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, limit);
+    } catch (error) {
+      logger.error("Failed to find similar interfaces:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate cosine similarity between two vectors
+   */
+  private calculateCosineSimilarity(
+    vecA: number[] | Float32Array,
+    vecB: number[] | Float32Array
+  ): number {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 }
