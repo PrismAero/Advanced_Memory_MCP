@@ -534,6 +534,26 @@ export class SQLiteConnection {
     });
   }
 
+  async execute(
+    query: string,
+    params: any[] = []
+  ): Promise<{ lastID: number; changes: number }> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error("Database not initialized"));
+        return;
+      }
+
+      this.db.run(query, params, function (err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ lastID: this.lastID, changes: this.changes });
+        }
+      });
+    });
+  }
+
   async getQuery(query: string, params: any[] = []): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.db) {

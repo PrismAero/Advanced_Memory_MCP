@@ -6,8 +6,8 @@ import {
   InterfaceInfo,
   ProjectInfo,
 } from "../project-analysis/project-indexer.js";
-import { SQLiteConnection } from "./sqlite-connection.js";
 import { VectorStore } from "../vector-store.js";
+import { SQLiteConnection } from "./sqlite-connection.js";
 
 /**
  * Project file record for database storage
@@ -118,7 +118,11 @@ export interface InterfaceRelationshipRecord {
  * Handles CRUD operations for project analysis data
  */
 export class ProjectAnalysisOperations {
-  constructor(private connection: SQLiteConnection) {}
+  private vectorStore: VectorStore;
+
+  constructor(private connection: SQLiteConnection) {
+    this.vectorStore = new VectorStore(connection);
+  }
 
   /**
    * Store or update project files from analysis
@@ -189,7 +193,7 @@ export class ProjectAnalysisOperations {
 
       if (existing) {
         // Update existing record
-        await this.connection.runQuery(
+        await this.connection.execute(
           `UPDATE project_files SET 
            file_type = ?, language = ?, category = ?, size_bytes = ?, line_count = ?,
            last_modified = ?, last_analyzed = ?, is_entry_point = ?, has_tests = ?,
@@ -217,7 +221,7 @@ export class ProjectAnalysisOperations {
         record.updated_at = now;
       } else {
         // Insert new record
-        await this.connection.runQuery(
+        const result = await this.connection.execute(
           `INSERT INTO project_files (
             file_path, relative_path, file_type, language, category, size_bytes,
             line_count, last_modified, last_analyzed, branch_id, is_entry_point,
@@ -243,17 +247,21 @@ export class ProjectAnalysisOperations {
             now,
           ]
         );
+        record.id = result.lastID;
+      }
 
-        const newRecord = await this.connection.getQuery(
-          "SELECT * FROM project_files WHERE file_path = ? AND branch_id = ?",
-          [record.file_path, record.branch_id]
-        );
-
-        if (newRecord) {
-          record.id = newRecord.id;
-          record.created_at = newRecord.created_at;
-          record.updated_at = newRecord.updated_at;
-        }
+      // Store embedding if available
+      if (file.embedding && record.id) {
+        await this.vectorStore.add({
+          id: `file_${record.id}`,
+          vector: file.embedding,
+          metadata: {
+            type: "file",
+            filePath: file.filePath,
+            language: file.fileType.language,
+            dbId: record.id,
+          },
+        });
       }
 
       return record;
@@ -323,7 +331,7 @@ export class ProjectAnalysisOperations {
 
       if (existing) {
         // Update existing record
-        await this.connection.runQuery(
+        await this.connection.execute(
           `UPDATE code_interfaces SET 
            interface_type = ?, definition = ?, properties = ?, extends_interfaces = ?,
            is_exported = ?, is_generic = ?, embedding = ?, updated_at = ?
@@ -345,7 +353,7 @@ export class ProjectAnalysisOperations {
         record.updated_at = now;
       } else {
         // Insert new record
-        await this.connection.runQuery(
+        const result = await this.connection.execute(
           `INSERT INTO code_interfaces (
             name, file_id, line_number, interface_type, definition, properties,
             extends_interfaces, is_exported, is_generic, usage_count, embedding,
@@ -367,17 +375,21 @@ export class ProjectAnalysisOperations {
             now,
           ]
         );
+        record.id = result.lastID;
+      }
 
-        const newRecord = await this.connection.getQuery(
-          "SELECT * FROM code_interfaces WHERE name = ? AND file_id = ? AND line_number = ?",
-          [record.name, record.file_id, record.line_number]
-        );
-
-        if (newRecord) {
-          record.id = newRecord.id;
-          record.created_at = newRecord.created_at;
-          record.updated_at = newRecord.updated_at;
-        }
+      // Store embedding in VectorStore
+      if (embedding && record.id) {
+        await this.vectorStore.add({
+          id: `interface_${record.id}`,
+          vector: embedding,
+          metadata: {
+            type: "interface",
+            name: iface.name,
+            fileId: fileId,
+            dbId: record.id,
+          },
+        });
       }
 
       return record;
