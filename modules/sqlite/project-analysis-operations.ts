@@ -124,6 +124,10 @@ export class ProjectAnalysisOperations {
     this.vectorStore = new VectorStore(connection);
   }
 
+  async initialize(): Promise<void> {
+    await this.vectorStore.initialize();
+  }
+
   /**
    * Store or update project files from analysis
    */
@@ -305,8 +309,9 @@ export class ProjectAnalysisOperations {
   ): Promise<CodeInterfaceRecord | null> {
     try {
       const now = new Date().toISOString();
-      const embeddingBuffer = embedding
-        ? Buffer.from(new Float32Array(embedding).buffer)
+      const vector = embedding || iface.embedding;
+      const embeddingBuffer = vector
+        ? Buffer.from(new Float32Array(vector).buffer)
         : null;
 
       // Check if interface already exists
