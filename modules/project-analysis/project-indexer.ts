@@ -515,11 +515,13 @@ export class ProjectIndexer {
     }
 
     // .NET
-    if (
-      (await this.fileExists(path.join(rootPath, ".csproj"))) ||
-      (await this.fileExists(path.join(rootPath, ".sln")))
-    ) {
-      return "dotnet";
+    try {
+      const entries = await fs.readdir(rootPath);
+      if (entries.some(name => name.endsWith(".csproj") || name.endsWith(".sln"))) {
+        return "dotnet";
+      }
+    } catch {
+      // If the directory cannot be read, fall through to other detectors
     }
 
     // Node.js
