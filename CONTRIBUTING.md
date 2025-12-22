@@ -151,7 +151,7 @@ npm run build  # Should work fine
 ## Questions or Security Concerns?
 
 - **General questions**: Open a GitHub issue
-- **Security issues**: Email kai@prismaquatics.io (private)
+- **Security issues**: Use GitHub Security Advisories (https://github.com/PrismAero/Advanced_Memory_MCP/security/advisories/new)
 - **Architecture discussion**: Start a GitHub discussion
 
 ---
