@@ -1,7 +1,9 @@
 import { EnhancedMemoryManager } from "../enhanced-memory-manager-modular.js";
 import { Entity } from "../memory-types.js";
+import { ContextEngine } from "./intelligence/context-engine.js";
 import { logger } from "./logger.js";
 import { AdaptiveModelTrainer } from "./ml/adaptive-model-trainer.js";
+import { ProjectEmbeddingEngine } from "./ml/project-embedding-engine.js";
 import { TrainingDataCollector } from "./ml/training-data-collector.js";
 import { FileWatcher } from "./project-analysis/file-watcher.js";
 import { InterfaceMapper } from "./project-analysis/interface-mapper.js";
@@ -34,6 +36,8 @@ export class BackgroundProcessor {
   private projectAnalysisOps: ProjectAnalysisOperations | null = null;
   private trainingDataCollector: TrainingDataCollector;
   private adaptiveModelTrainer: AdaptiveModelTrainer | null = null;
+  private contextEngine: ContextEngine | null = null;
+  private projectEmbeddingEngine: ProjectEmbeddingEngine | null = null;
 
   // Project monitoring state
   private currentProjectPath: string | null = null;
@@ -52,6 +56,30 @@ export class BackgroundProcessor {
     this.projectAnalysisOps = projectAnalysisOps || null;
     this.adaptiveModelTrainer = adaptiveModelTrainer || null;
 
+    // Initialize ML components if not provided
+    if (!this.adaptiveModelTrainer) {
+      const modelManager = this.similarityEngine.getModelManager();
+      this.adaptiveModelTrainer = new AdaptiveModelTrainer(modelManager);
+    }
+
+    this.projectEmbeddingEngine = new ProjectEmbeddingEngine(
+      this.similarityEngine.getModelManager(),
+      this.adaptiveModelTrainer
+    );
+
+    if (this.projectAnalysisOps) {
+      this.interfaceMapper = new InterfaceMapper(
+        this.projectAnalysisOps,
+        this.projectEmbeddingEngine
+      );
+
+      this.contextEngine = new ContextEngine(
+        this.projectEmbeddingEngine,
+        this.interfaceMapper,
+        this.projectAnalysisOps
+      );
+    }
+
     // Initialize project analysis components
     this.projectIndexer = new ProjectIndexer();
     this.trainingDataCollector = new TrainingDataCollector();
@@ -66,6 +94,26 @@ export class BackgroundProcessor {
     logger.info(
       "[BOT] Enhanced background processor initialized with ML-based project monitoring"
     );
+  }
+
+  getInterfaceMapper(): InterfaceMapper | null {
+    return this.interfaceMapper;
+  }
+
+  getAdaptiveModelTrainer(): AdaptiveModelTrainer | null {
+    return this.adaptiveModelTrainer;
+  }
+
+  getProjectIndexer(): ProjectIndexer {
+    return this.projectIndexer;
+  }
+
+  getContextEngine(): ContextEngine | null {
+    return this.contextEngine;
+  }
+
+  getProjectEmbeddingEngine(): ProjectEmbeddingEngine | null {
+    return this.projectEmbeddingEngine;
   }
 
   /**
@@ -121,6 +169,23 @@ export class BackgroundProcessor {
     }
 
     logger.info("Enhanced background processor stopped");
+  }
+
+  /**
+   * Set the project to monitor and start monitoring tasks
+   */
+  setMonitoredProject(projectPath: string): void {
+    this.currentProjectPath = projectPath;
+    logger.info(`[BACKGROUND] Set monitored project path: ${projectPath}`);
+
+    // Start monitoring if not already running
+    if (!this.projectMonitoringInterval) {
+      this.startProjectMonitoring();
+    }
+
+    if (!this.interfaceAnalysisInterval) {
+      this.startInterfaceAnalysis();
+    }
   }
 
   /**
@@ -189,9 +254,81 @@ export class BackgroundProcessor {
           this.currentProjectPath
         );
         await this.projectAnalysisOps.storeWorkspaceContext(projectInfo);
-        this.lastProjectAnalysis = new Date();
 
-        logger.info("[LOADING] Updated project structure analysis");
+        // Full scan and embedding generation
+        if (this.projectEmbeddingEngine) {
+          const files = await this.projectIndexer.scanProjectFiles(
+            this.currentProjectPath
+          );
+          logger.info(
+            `[ANALYSIS] Scanning ${files.length} files for embeddings...`
+          );
+
+          for (const file of files) {
+            // Generate file embedding
+            // We use the file path and some metadata as context
+            const fileContext = `File: ${file.relativePath}\nType: ${file.fileType.category}\nLanguage: ${file.fileType.language}`;
+            const embedding =
+              await this.projectEmbeddingEngine.generateProjectEmbedding(
+                fileContext,
+                "documentation", // Treat file overview as documentation
+                { file_path: file.filePath }
+              );
+
+            if (embedding) {
+              file.embedding = embedding.embedding;
+            }
+
+            // Generate interface embeddings
+            if (file.interfaces && file.interfaces.length > 0) {
+              for (const iface of file.interfaces) {
+                const ifaceContext = `Interface: ${
+                  iface.name
+                }\nProperties: ${iface.properties.join(", ")}`;
+                const ifaceEmbedding =
+                  await this.projectEmbeddingEngine.generateProjectEmbedding(
+                    ifaceContext,
+                    "interface_definition",
+                    {
+                      file_path: file.filePath,
+                      interface_name: iface.name,
+                      line_number: iface.line,
+                    }
+                  );
+
+                if (ifaceEmbedding) {
+                  iface.embedding = ifaceEmbedding.embedding;
+                }
+              }
+            }
+          }
+
+          // Store files with embeddings
+          const storedFiles = await this.projectAnalysisOps.storeProjectFiles(
+            files
+          );
+
+          // Store interfaces with embeddings
+          for (const file of files) {
+            if (file.interfaces && file.interfaces.length > 0) {
+              // We need the file ID from the stored record
+              const storedFile = storedFiles.find(
+                (f) => f.file_path === file.filePath
+              );
+              if (storedFile && storedFile.id) {
+                await this.projectAnalysisOps.storeCodeInterfaces(
+                  storedFile.id,
+                  file.interfaces
+                );
+              }
+            }
+          }
+        }
+
+        this.lastProjectAnalysis = new Date();
+        logger.info(
+          "[LOADING] Updated project structure analysis with embeddings"
+        );
       }
     } catch (error) {
       logger.error("Failed to monitor project structure:", error);
@@ -207,11 +344,67 @@ export class BackgroundProcessor {
     try {
       logger.debug("[SEARCH] Analyzing project interfaces");
 
+      // Also check and backfill missing embeddings
+      if (this.projectAnalysisOps && this.projectEmbeddingEngine) {
+        await this.backfillMissingEmbeddings();
+      }
+
       // This would trigger interface analysis and relationship mapping
       // For now, just log that it would run
       logger.debug("Interface analysis would run here");
     } catch (error) {
       logger.error("Failed to analyze project interfaces:", error);
+    }
+  }
+
+  /**
+   * Backfill missing embeddings for existing data
+   */
+  private async backfillMissingEmbeddings(): Promise<void> {
+    if (!this.projectAnalysisOps || !this.projectEmbeddingEngine) return;
+
+    try {
+      // Generate embeddings for files without them (batch of 50)
+      const fileEmbeddingGenerator = async (fileContext: string) => {
+        const result =
+          await this.projectEmbeddingEngine!.generateProjectEmbedding(
+            fileContext,
+            "documentation",
+            {}
+          );
+        return result?.embedding || null;
+      };
+
+      const updatedFiles =
+        await this.projectAnalysisOps.generateMissingFileEmbeddings(
+          fileEmbeddingGenerator,
+          50
+        );
+
+      // Generate embeddings for interfaces without them (batch of 50)
+      const interfaceEmbeddingGenerator = async (interfaceContext: string) => {
+        const result =
+          await this.projectEmbeddingEngine!.generateProjectEmbedding(
+            interfaceContext,
+            "interface_definition",
+            {}
+          );
+        return result?.embedding || null;
+      };
+
+      const updatedInterfaces =
+        await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
+          interfaceEmbeddingGenerator,
+          50
+        );
+
+      if (updatedFiles.length > 0 || updatedInterfaces.length > 0) {
+        logger.info(
+          `[VECTOR] Backfilled embeddings: ${updatedFiles.length} files, ${updatedInterfaces.length} interfaces`
+        );
+      }
+    } catch (error) {
+      logger.debug("Backfill embeddings error:", error);
     }
   }
 

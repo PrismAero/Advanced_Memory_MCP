@@ -400,6 +400,15 @@ export class SQLiteConnection {
         "ALTER TABLE entities ADD COLUMN embedding BLOB"
       );
 
+      // Add embedding columns to project analysis tables if they exist
+      await this.safeAlterTable(
+        "ALTER TABLE project_files ADD COLUMN embedding BLOB"
+      );
+
+      await this.safeAlterTable(
+        "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB"
+      );
+
       // Create project analysis tables if they don't exist
       const projectTables = [
         `CREATE TABLE IF NOT EXISTS project_files (
@@ -529,6 +538,26 @@ export class SQLiteConnection {
           reject(err);
         } else {
           resolve(rows);
+        }
+      });
+    });
+  }
+
+  async execute(
+    query: string,
+    params: any[] = []
+  ): Promise<{ lastID: number; changes: number }> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error("Database not initialized"));
+        return;
+      }
+
+      this.db.run(query, params, function (err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ lastID: this.lastID, changes: this.changes });
         }
       });
     });

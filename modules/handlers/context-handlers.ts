@@ -1,4 +1,5 @@
 import { Entity, MemoryBranchInfo } from "../../memory-types.js";
+import { BackgroundProcessor } from "../background-processor.js";
 import { logger } from "../logger.js";
 
 /**
@@ -7,9 +8,90 @@ import { logger } from "../logger.js";
  */
 export class ContextHandlers {
   private memoryManager: any;
+  private backgroundProcessor: BackgroundProcessor | null = null;
 
-  constructor(memoryManager: any) {
+  constructor(memoryManager: any, backgroundProcessor?: BackgroundProcessor) {
     this.memoryManager = memoryManager;
+    this.backgroundProcessor = backgroundProcessor || null;
+  }
+
+  /**
+   * Suggest project context based on current work
+   */
+  async handleSuggestProjectContext(args: any): Promise<any> {
+    const currentFile = args.current_file;
+    const searchQuery = args.search_query;
+    const activeInterfaces = args.active_interfaces || [];
+    const sessionId = args.session_id;
+
+    logger.info("Generating project context suggestions...");
+
+    try {
+      const contextEngine = this.backgroundProcessor?.getContextEngine();
+
+      if (!contextEngine) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  error:
+                    "Context engine not available. Ensure background processor is running with project analysis enabled.",
+                  status: "unavailable",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const suggestions = await contextEngine.generateContextSuggestions(
+        {
+          current_file: currentFile,
+          search_query: searchQuery,
+          working_interfaces: activeInterfaces,
+        },
+        sessionId
+      );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                suggestions,
+                count: suggestions.length,
+                context_source: "ml_context_engine",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error("Error generating context suggestions:", error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                error: error instanceof Error ? error.message : String(error),
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
   }
 
   /**

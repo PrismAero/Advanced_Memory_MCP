@@ -6,6 +6,7 @@ import {
   InterfaceInfo,
   ProjectInfo,
 } from "../project-analysis/project-indexer.js";
+import { VectorStore } from "../vector-store.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
 
 /**
@@ -117,7 +118,79 @@ export interface InterfaceRelationshipRecord {
  * Handles CRUD operations for project analysis data
  */
 export class ProjectAnalysisOperations {
-  constructor(private connection: SQLiteConnection) {}
+  private vectorStore: VectorStore;
+
+  constructor(private connection: SQLiteConnection) {
+    this.vectorStore = new VectorStore(connection);
+  }
+
+  async initialize(): Promise<void> {
+    await this.vectorStore.initialize();
+
+    // Check for and backfill missing embeddings
+    await this.backfillMissingEmbeddings();
+  }
+
+  /**
+   * Backfill embeddings for existing data that doesn't have them
+   * This handles migration/upgrade scenarios
+   */
+  async backfillMissingEmbeddings(): Promise<{
+    filesWithoutEmbeddings: number;
+    interfacesWithoutEmbeddings: number;
+  }> {
+    try {
+      logger.info("[VECTOR] Checking for data without embeddings...");
+
+      // Count files without embeddings in vector store
+      const allFiles = await this.connection.runQuery(
+        "SELECT id, file_path, relative_path, file_type, language FROM project_files"
+      );
+
+      let filesWithoutEmbeddings = 0;
+      if (allFiles && allFiles.length > 0) {
+        for (const file of allFiles) {
+          // Check if vector exists
+          const vectorExists = await this.connection.getQuery(
+            "SELECT id FROM vectors WHERE id = ?",
+            [`file_${file.id}`]
+          );
+
+          if (!vectorExists) {
+            filesWithoutEmbeddings++;
+          }
+        }
+      }
+
+      // Count interfaces without embeddings
+      const allInterfaces = await this.connection.runQuery(
+        "SELECT id, name, file_id FROM code_interfaces WHERE embedding IS NULL"
+      );
+      const interfacesWithoutEmbeddings = allInterfaces?.length || 0;
+
+      if (filesWithoutEmbeddings > 0 || interfacesWithoutEmbeddings > 0) {
+        logger.info(
+          `[VECTOR] Found ${filesWithoutEmbeddings} files and ${interfacesWithoutEmbeddings} interfaces without embeddings`
+        );
+        logger.info(
+          "[VECTOR] These will be populated during next project analysis cycle"
+        );
+      } else {
+        logger.info("[VECTOR] All existing data has embeddings ✓");
+      }
+
+      return {
+        filesWithoutEmbeddings,
+        interfacesWithoutEmbeddings,
+      };
+    } catch (error) {
+      logger.warn("Failed to check for missing embeddings:", error);
+      return {
+        filesWithoutEmbeddings: 0,
+        interfacesWithoutEmbeddings: 0,
+      };
+    }
+  }
 
   /**
    * Store or update project files from analysis
@@ -142,7 +215,9 @@ export class ProjectAnalysisOperations {
       }
     }
 
-    logger.info(`[SUCCESS] Stored ${storedFiles.length} project files successfully`);
+    logger.info(
+      `[SUCCESS] Stored ${storedFiles.length} project files successfully`
+    );
     return storedFiles;
   }
 
@@ -186,7 +261,7 @@ export class ProjectAnalysisOperations {
 
       if (existing) {
         // Update existing record
-        await this.connection.runQuery(
+        await this.connection.execute(
           `UPDATE project_files SET 
            file_type = ?, language = ?, category = ?, size_bytes = ?, line_count = ?,
            last_modified = ?, last_analyzed = ?, is_entry_point = ?, has_tests = ?,
@@ -214,7 +289,7 @@ export class ProjectAnalysisOperations {
         record.updated_at = now;
       } else {
         // Insert new record
-        await this.connection.runQuery(
+        const result = await this.connection.execute(
           `INSERT INTO project_files (
             file_path, relative_path, file_type, language, category, size_bytes,
             line_count, last_modified, last_analyzed, branch_id, is_entry_point,
@@ -240,17 +315,21 @@ export class ProjectAnalysisOperations {
             now,
           ]
         );
+        record.id = result.lastID;
+      }
 
-        const newRecord = await this.connection.getQuery(
-          "SELECT * FROM project_files WHERE file_path = ? AND branch_id = ?",
-          [record.file_path, record.branch_id]
-        );
-
-        if (newRecord) {
-          record.id = newRecord.id;
-          record.created_at = newRecord.created_at;
-          record.updated_at = newRecord.updated_at;
-        }
+      // Store embedding if available
+      if (file.embedding && record.id) {
+        await this.vectorStore.add({
+          id: `file_${record.id}`,
+          vector: file.embedding,
+          metadata: {
+            type: "file",
+            filePath: file.filePath,
+            language: file.fileType.language,
+            dbId: record.id,
+          },
+        });
       }
 
       return record;
@@ -294,8 +373,9 @@ export class ProjectAnalysisOperations {
   ): Promise<CodeInterfaceRecord | null> {
     try {
       const now = new Date().toISOString();
-      const embeddingBuffer = embedding
-        ? Buffer.from(new Float32Array(embedding).buffer)
+      const vector = embedding || iface.embedding;
+      const embeddingBuffer = vector
+        ? Buffer.from(new Float32Array(vector).buffer)
         : null;
 
       // Check if interface already exists
@@ -320,7 +400,7 @@ export class ProjectAnalysisOperations {
 
       if (existing) {
         // Update existing record
-        await this.connection.runQuery(
+        await this.connection.execute(
           `UPDATE code_interfaces SET 
            interface_type = ?, definition = ?, properties = ?, extends_interfaces = ?,
            is_exported = ?, is_generic = ?, embedding = ?, updated_at = ?
@@ -342,7 +422,7 @@ export class ProjectAnalysisOperations {
         record.updated_at = now;
       } else {
         // Insert new record
-        await this.connection.runQuery(
+        const result = await this.connection.execute(
           `INSERT INTO code_interfaces (
             name, file_id, line_number, interface_type, definition, properties,
             extends_interfaces, is_exported, is_generic, usage_count, embedding,
@@ -364,17 +444,21 @@ export class ProjectAnalysisOperations {
             now,
           ]
         );
+        record.id = result.lastID;
+      }
 
-        const newRecord = await this.connection.getQuery(
-          "SELECT * FROM code_interfaces WHERE name = ? AND file_id = ? AND line_number = ?",
-          [record.name, record.file_id, record.line_number]
-        );
-
-        if (newRecord) {
-          record.id = newRecord.id;
-          record.created_at = newRecord.created_at;
-          record.updated_at = newRecord.updated_at;
-        }
+      // Store embedding in VectorStore
+      if (embedding && record.id) {
+        await this.vectorStore.add({
+          id: `interface_${record.id}`,
+          vector: embedding,
+          metadata: {
+            type: "interface",
+            name: iface.name,
+            fileId: fileId,
+            dbId: record.id,
+          },
+        });
       }
 
       return record;
@@ -808,5 +892,227 @@ export class ProjectAnalysisOperations {
     logger.info(` Cleaned up ${deletedCount} deleted files from database`);
 
     return deletedCount;
+  }
+
+  /**
+   * Find similar interfaces using vector similarity
+   * Note: This performs in-memory cosine similarity calculation
+   */
+  async findSimilarInterfaces(
+    queryEmbedding: number[],
+    limit: number = 5,
+    minSimilarity: number = 0.7
+  ): Promise<Array<{ interface: CodeInterfaceRecord; similarity: number }>> {
+    try {
+      // 1. Fetch all interfaces with embeddings
+      // Optimization: In a real production system, we would use a vector database or
+      // an SQLite extension like sqlite-vss. For this local implementation,
+      // we fetch embeddings and calculate similarity in memory.
+      const rows = await this.connection.runQuery(
+        "SELECT * FROM code_interfaces WHERE embedding IS NOT NULL"
+      );
+
+      if (!rows || rows.length === 0) {
+        return [];
+      }
+
+      const results: Array<{
+        interface: CodeInterfaceRecord;
+        similarity: number;
+      }> = [];
+
+      // 2. Calculate cosine similarity for each interface
+      for (const row of rows) {
+        if (!row.embedding) continue;
+
+        // Convert buffer to number array
+        const embedding = new Float32Array(row.embedding);
+
+        // Calculate similarity
+        const similarity = this.calculateCosineSimilarity(
+          queryEmbedding,
+          embedding
+        );
+
+        if (similarity >= minSimilarity) {
+          results.push({
+            interface: row as CodeInterfaceRecord,
+            similarity,
+          });
+        }
+      }
+
+      // 3. Sort by similarity descending and take top N
+      return results
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, limit);
+    } catch (error) {
+      logger.error("Failed to find similar interfaces:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate cosine similarity between two vectors
+   */
+  private calculateCosineSimilarity(
+    vecA: number[] | Float32Array,
+    vecB: number[] | Float32Array
+  ): number {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  /**
+   * Generate embeddings for files without them
+   * Returns the IDs of files that were updated
+   */
+  async generateMissingFileEmbeddings(
+    embeddingGenerator: (fileContext: string) => Promise<number[] | null>,
+    limit: number = 50
+  ): Promise<number[]> {
+    try {
+      // Find files without vector embeddings
+      const filesQuery = `
+        SELECT pf.id, pf.file_path, pf.relative_path, pf.file_type, pf.language, pf.category
+        FROM project_files pf
+        LEFT JOIN vectors v ON v.id = 'file_' || pf.id
+        WHERE v.id IS NULL
+        LIMIT ?
+      `;
+
+      const files = await this.connection.runQuery(filesQuery, [limit]);
+      if (!files || files.length === 0) {
+        return [];
+      }
+
+      logger.info(
+        `[VECTOR] Generating embeddings for ${files.length} files...`
+      );
+
+      const updatedIds: number[] = [];
+
+      for (const file of files) {
+        try {
+          const fileContext = `File: ${file.relative_path}\nType: ${file.category}\nLanguage: ${file.language}`;
+          const embedding = await embeddingGenerator(fileContext);
+
+          if (embedding) {
+            await this.vectorStore.add({
+              id: `file_${file.id}`,
+              vector: embedding,
+              metadata: {
+                type: "file",
+                filePath: file.file_path,
+                language: file.language,
+                dbId: file.id,
+              },
+            });
+            updatedIds.push(file.id);
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to generate embedding for file ${file.file_path}:`,
+            error
+          );
+        }
+      }
+
+      if (updatedIds.length > 0) {
+        logger.info(
+          `[SUCCESS] Generated embeddings for ${updatedIds.length} files`
+        );
+      }
+
+      return updatedIds;
+    } catch (error) {
+      logger.error("Failed to generate missing file embeddings:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate embeddings for interfaces without them
+   * Returns the IDs of interfaces that were updated
+   */
+  async generateMissingInterfaceEmbeddings(
+    embeddingGenerator: (interfaceContext: string) => Promise<number[] | null>,
+    limit: number = 50
+  ): Promise<number[]> {
+    try {
+      const interfaces = await this.connection.runQuery(
+        `SELECT id, name, definition, file_id FROM code_interfaces 
+         WHERE embedding IS NULL 
+         LIMIT ?`,
+        [limit]
+      );
+
+      if (!interfaces || interfaces.length === 0) {
+        return [];
+      }
+
+      logger.info(
+        `[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`
+      );
+
+      const updatedIds: number[] = [];
+
+      for (const iface of interfaces) {
+        try {
+          const interfaceContext = `Interface: ${iface.name}\n${iface.definition}`;
+          const embedding = await embeddingGenerator(interfaceContext);
+
+          if (embedding) {
+            const embeddingBuffer = Buffer.from(
+              new Float32Array(embedding).buffer
+            );
+
+            await this.connection.execute(
+              "UPDATE code_interfaces SET embedding = ?, updated_at = ? WHERE id = ?",
+              [embeddingBuffer, new Date().toISOString(), iface.id]
+            );
+
+            // Also add to vector store
+            await this.vectorStore.add({
+              id: `interface_${iface.id}`,
+              vector: embedding,
+              metadata: {
+                type: "interface",
+                interfaceName: iface.name,
+                dbId: iface.id,
+              },
+            });
+
+            updatedIds.push(iface.id);
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to generate embedding for interface ${iface.name}:`,
+            error
+          );
+        }
+      }
+
+      if (updatedIds.length > 0) {
+        logger.info(
+          `[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`
+        );
+      }
+
+      return updatedIds;
+    } catch (error) {
+      logger.error("Failed to generate missing interface embeddings:", error);
+      return [];
+    }
   }
 }
