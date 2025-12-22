@@ -16,13 +16,6 @@
     "sourceMap": true,
     "downlevelIteration": true
   },
-  "include": [
-    "*.ts",
-    "modules/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "test-memory"
-  ]
+  "include": ["*.ts", "modules/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test-memory"]
 }

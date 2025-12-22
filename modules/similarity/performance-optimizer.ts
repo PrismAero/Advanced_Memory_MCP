@@ -1,4 +1,5 @@
 import { Entity } from "../../memory-types.js";
+import { logger } from "../logger.js";
 import { ModernSimilarityEngine } from "./similarity-engine.js";
 import { TensorFlowModelManager } from "./tensorflow-model-manager.js";
 
@@ -67,7 +68,7 @@ export class PerformanceOptimizer {
    */
   startPerformanceMonitoring(): void {
     if (this.performanceMonitoringActive) {
-      console.log("Performance monitoring already active");
+      logger.info("Performance monitoring already active");
       return;
     }
 
@@ -79,7 +80,7 @@ export class PerformanceOptimizer {
       this.generateOptimizationRecommendations();
     }, this.config.performanceMonitoringInterval);
 
-    console.log(" TensorFlow.js performance monitoring started");
+    logger.info("TensorFlow.js performance monitoring started");
   }
 
   /**
@@ -91,7 +92,7 @@ export class PerformanceOptimizer {
       this.monitoringInterval = undefined;
     }
     this.performanceMonitoringActive = false;
-    console.log(" TensorFlow.js performance monitoring stopped");
+    logger.info("TensorFlow.js performance monitoring stopped");
   }
 
   /**
@@ -109,8 +110,8 @@ export class PerformanceOptimizer {
   }> {
     const times: number[] = [];
 
-    console.log(
-      ` Benchmarking embedding generation with ${testTexts.length} texts, ${iterations} iterations...`
+    logger.info(
+      `Benchmarking embedding generation with ${testTexts.length} texts, ${iterations} iterations...`
     );
 
     for (let i = 0; i < iterations; i++) {
@@ -125,7 +126,7 @@ export class PerformanceOptimizer {
         // Small delay between iterations
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (error) {
-        console.error(`Benchmark iteration ${i + 1} failed:`, error);
+        logger.error(`Benchmark iteration ${i + 1} failed:`, error);
       }
     }
 
@@ -167,8 +168,8 @@ export class PerformanceOptimizer {
       { averageTime: number; throughput: number }
     >();
 
-    console.log(
-      ` Benchmarking batch processing with ${entities.length} entities...`
+    logger.info(
+      `Benchmarking batch processing with ${entities.length} entities...`
     );
 
     for (const batchSize of batchSizes) {
@@ -186,7 +187,7 @@ export class PerformanceOptimizer {
           const endTime = performance.now();
           times.push(endTime - startTime);
         } catch (error) {
-          console.error(`Batch benchmark failed for size ${batchSize}:`, error);
+          logger.error(`Batch benchmark failed for size ${batchSize}:`, error);
         }
 
         // Small delay between batches
@@ -247,8 +248,8 @@ export class PerformanceOptimizer {
     performance: { averageTime: number; totalTests: number };
     recommendations: string[];
   }> {
-    console.log(
-      ` Optimizing similarity thresholds with ${testData.length} test pairs...`
+    logger.info(
+      `Optimizing similarity thresholds with ${testData.length} test pairs...`
     );
 
     const startTime = performance.now();
@@ -275,7 +276,7 @@ export class PerformanceOptimizer {
 
         this.performanceMetrics.similarityCalculationTimes.push(calcTime);
       } catch (error) {
-        console.error(
+        logger.error(
           "Similarity calculation failed during optimization:",
           error
         );

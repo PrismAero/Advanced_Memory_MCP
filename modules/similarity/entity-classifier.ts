@@ -1,5 +1,6 @@
 import { Entity } from "../../memory-types.js";
 import { ModernSimilarityEngine } from "./similarity-engine.js";
+import { logger } from "../logger.js";
 
 /**
  * Semantic Entity Classifier using TensorFlow.js embeddings
@@ -191,7 +192,7 @@ export class EntityClassifier {
         alternatives,
       };
     } catch (error) {
-      console.error("Error in entity type classification:", error);
+      logger.error("Error in entity type classification:", error);
       return {
         suggestedType: entity.entityType || "unknown",
         confidence: 0.0,
@@ -492,7 +493,7 @@ export class EntityClassifier {
             reasoning: classification.reasoning,
           });
         } catch (error) {
-          console.error(`Error classifying entity ${entity.name}:`, error);
+          logger.error(`Error classifying entity ${entity.name}:`, error);
           results.set(entity.name, {
             suggestedType: entity.entityType || "unknown",
             confidence: 0.0,

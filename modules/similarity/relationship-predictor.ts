@@ -1,4 +1,5 @@
 import { Entity, Relation } from "../../memory-types.js";
+import { logger } from "../logger.js";
 import { ModernSimilarityEngine } from "./similarity-engine.js";
 
 /**
@@ -202,7 +203,7 @@ export class RelationshipPredictor {
           predictions.push(prediction);
         }
       } catch (error) {
-        console.error(
+        logger.error(
           `Error predicting relationship between ${sourceEntity.name} and ${candidate.name}:`,
           error
         );
@@ -449,7 +450,7 @@ export class RelationshipPredictor {
       // Return average relevance
       return (sourceRelevance + targetRelevance) / 2;
     } catch (error) {
-      console.error("Error calculating semantic relevance:", error);
+      logger.error("Error calculating semantic relevance:", error);
       return 0.3; // Default moderate relevance
     }
   }
@@ -624,7 +625,7 @@ export class RelationshipPredictor {
           }))
         );
       } catch (error) {
-        console.error(`Error in batch prediction for ${source.name}:`, error);
+        logger.error(`Error in batch prediction for ${source.name}:`, error);
         results.set(source.name, []);
       }
 

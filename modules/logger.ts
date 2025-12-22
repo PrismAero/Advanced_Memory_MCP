@@ -22,11 +22,25 @@ class Logger {
       const timestamp = `[${new Date().toISOString().substr(11, 8)}]`;
       const formattedMessage = `${timestamp} [${level.toUpperCase()}] ${message}`;
 
-      // Use console.error for all logs to ensure visibility through server transport
-      if (args.length > 0) {
-        console.error(formattedMessage, ...args);
+      // For MCP compatibility: only send actual errors to stderr
+      // Info/debug/warn go to stderr but with process.stderr.write to avoid MCP error flagging
+      if (level === "error" || level === "fatal") {
+        if (args.length > 0) {
+          console.error(formattedMessage, ...args);
+        } else {
+          console.error(formattedMessage);
+        }
       } else {
-        console.error(formattedMessage);
+        // Use process.stderr.write directly for non-errors to avoid MCP treating them as errors
+        const fullMessage =
+          args.length > 0
+            ? `${formattedMessage} ${args
+                .map((arg) =>
+                  typeof arg === "object" ? JSON.stringify(arg) : String(arg)
+                )
+                .join(" ")}`
+            : formattedMessage;
+        process.stderr.write(fullMessage + "\n");
       }
     }
   }

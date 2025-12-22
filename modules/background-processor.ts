@@ -1,3 +1,4 @@
+import { EnhancedMemoryManager } from "../enhanced-memory-manager-modular.js";
 import { Entity } from "../memory-types.js";
 import { logger } from "./logger.js";
 import { AdaptiveModelTrainer } from "./ml/adaptive-model-trainer.js";
@@ -5,6 +6,10 @@ import { TrainingDataCollector } from "./ml/training-data-collector.js";
 import { FileWatcher } from "./project-analysis/file-watcher.js";
 import { InterfaceMapper } from "./project-analysis/interface-mapper.js";
 import { ProjectIndexer } from "./project-analysis/project-indexer.js";
+import {
+  BACKGROUND_CONFIG,
+  BATCH_CONFIG,
+} from "./similarity/similarity-config.js";
 import { ModernSimilarityEngine } from "./similarity/similarity-engine.js";
 import { ProjectAnalysisOperations } from "./sqlite/project-analysis-operations.js";
 
@@ -13,7 +18,7 @@ import { ProjectAnalysisOperations } from "./sqlite/project-analysis-operations.
  * Handles automatic relationship detection, relevance scoring, and context management
  */
 export class BackgroundProcessor {
-  private memoryManager: any;
+  private memoryManager: EnhancedMemoryManager;
   private similarityEngine: ModernSimilarityEngine;
   private isProcessing: boolean = false;
   private processingInterval: NodeJS.Timeout | null = null;
@@ -37,7 +42,7 @@ export class BackgroundProcessor {
   private interfaceAnalysisInterval: NodeJS.Timeout | null = null;
 
   constructor(
-    memoryManager: any,
+    memoryManager: EnhancedMemoryManager,
     similarityEngine: ModernSimilarityEngine,
     projectAnalysisOps?: ProjectAnalysisOperations,
     adaptiveModelTrainer?: AdaptiveModelTrainer
@@ -138,7 +143,9 @@ export class BackgroundProcessor {
       this.fileWatcher.startWatching(this.currentProjectPath);
 
       this.fileWatcher.on("significantChanges", (changes) => {
-        logger.debug(`[FOLDER] Detected ${changes.length} significant file changes`);
+        logger.debug(
+          `[FOLDER] Detected ${changes.length} significant file changes`
+        );
         this.handleFileChanges(changes);
       });
     }
@@ -358,9 +365,10 @@ export class BackgroundProcessor {
         for (const entity of branchGraph.entities) {
           const newRelevanceScore = this.calculateRelevanceScore(entity);
 
-          // Update if score changed significantly (>0.1 difference)
+          // Update if score changed significantly
           if (
-            Math.abs((entity.relevanceScore || 0.5) - newRelevanceScore) > 0.1
+            Math.abs((entity.relevanceScore || 0.5) - newRelevanceScore) >
+            BACKGROUND_CONFIG.relevanceUpdateThreshold
           ) {
             await this.updateEntityRelevanceScore(
               entity.name,
@@ -479,7 +487,7 @@ export class BackgroundProcessor {
    */
   private async findPotentialRelationships(entities: Entity[]): Promise<any[]> {
     // Optimize for embeddings: Use batch processing for large entity sets
-    if (entities.length > 20) {
+    if (entities.length > BATCH_CONFIG.size) {
       logger.debug(
         `Using batch TensorFlow.js processing for ${entities.length} entities`
       );
@@ -759,7 +767,9 @@ export class BackgroundProcessor {
     logger.debug("Updating working context flags");
 
     try {
-      const recentCutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days
+      const recentCutoff = new Date(
+        Date.now() - BACKGROUND_CONFIG.recentAccessDays * 24 * 60 * 60 * 1000
+      );
       const branches = await this.memoryManager.listBranches();
 
       for (const branch of branches) {
@@ -843,7 +853,10 @@ export class BackgroundProcessor {
     logger.debug("Cleaning up outdated context");
 
     try {
-      const oldCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000); // 14 days
+      const oldCutoff = new Date(
+        Date.now() -
+          BACKGROUND_CONFIG.workingContextTimeoutDays * 24 * 60 * 60 * 1000
+      );
       const branches = await this.memoryManager.listBranches();
 
       for (const branch of branches) {
@@ -896,14 +909,14 @@ export class BackgroundProcessor {
     // Implementation would go here for future enhancement
   }
 
-  // Helper methods for database updates
+  // Helper methods for database updates - use public API
   private async updateEntityRelevanceScore(
     entityName: string,
     score: number,
     branchName: string
   ): Promise<void> {
     try {
-      await this.memoryManager.sqliteManager.entityOps.updateEntityRelevanceScore(
+      await this.memoryManager.updateEntityRelevanceScore(
         entityName,
         score,
         branchName
@@ -922,7 +935,7 @@ export class BackgroundProcessor {
     branchName: string
   ): Promise<void> {
     try {
-      await this.memoryManager.sqliteManager.entityOps.updateEntityWorkingContext(
+      await this.memoryManager.updateEntityWorkingContext(
         entityName,
         isWorking,
         branchName

@@ -202,13 +202,14 @@ export class HybridMemoryManager implements IMemoryOperations {
     includeStatuses?: EntityStatus[],
     autoCrossContext: boolean = true
   ): Promise<KnowledgeGraph> {
-    // Use direct entity lookup instead of search
+    // Load the branch data once for performance
+    const branchGraph = await this.exportBranch(branchName);
     const foundEntities: Entity[] = [];
     const allRelations: Relation[] = [];
 
     for (const name of names) {
-      // Use findEntityByName for exact lookup
-      const entity = await this.findEntityByName(name, branchName);
+      // Find entity from already-loaded branch data
+      const entity = branchGraph.entities.find((e) => e.name === name);
 
       if (entity) {
         // Check status filter if provided
@@ -218,8 +219,7 @@ export class HybridMemoryManager implements IMemoryOperations {
         ) {
           foundEntities.push(entity);
 
-          // Get all relations involving this entity from the full branch
-          const branchGraph = await this.exportBranch(branchName);
+          // Get relations involving this entity from already-loaded data
           const entityRelations = branchGraph.relations.filter(
             (r) => r.from === name || r.to === name
           );
@@ -301,5 +301,40 @@ export class HybridMemoryManager implements IMemoryOperations {
     } else {
       return await this.exportBranch(sourceBranch);
     }
+  }
+
+  // AI Enhancement Methods - for background processor and relevance scoring
+  async updateEntityRelevanceScore(
+    entityName: string,
+    score: number,
+    branchName?: string
+  ): Promise<void> {
+    return await this.sqliteOps.updateEntityRelevanceScore(
+      entityName,
+      score,
+      branchName
+    );
+  }
+
+  async updateEntityWorkingContext(
+    entityName: string,
+    isWorkingContext: boolean,
+    branchName?: string
+  ): Promise<void> {
+    return await this.sqliteOps.updateEntityWorkingContext(
+      entityName,
+      isWorkingContext,
+      branchName
+    );
+  }
+
+  async updateEntityLastAccessed(
+    entityName: string,
+    branchName?: string
+  ): Promise<void> {
+    return await this.sqliteOps.updateEntityLastAccessed(
+      entityName,
+      branchName
+    );
   }
 }

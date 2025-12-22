@@ -337,42 +337,68 @@ export class SQLiteConnection {
   }
 
   /**
+   * Safely execute an ALTER TABLE query, handling expected "duplicate column" errors
+   */
+  private async safeAlterTable(query: string): Promise<void> {
+    try {
+      await this.runQuery(query);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      // SQLite "duplicate column" error is expected during migration
+      if (
+        errorMessage.includes("duplicate column") ||
+        errorMessage.includes("already exists")
+      ) {
+        // Column already exists - this is expected, no need to log
+        return;
+      }
+      // Log unexpected errors but don't fail the migration
+      logger.warn(
+        `Migration warning for query "${query.substring(
+          0,
+          50
+        )}...": ${errorMessage}`
+      );
+    }
+  }
+
+  /**
    * Migrate existing databases to support AI enhancements
    * Adds new columns if they don't exist for backwards compatibility
    */
   private async migrateToAIEnhancements(): Promise<void> {
     try {
       // Add AI enhancement columns to entities table
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE entities ADD COLUMN working_context INTEGER DEFAULT 0"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE entities ADD COLUMN relevance_score REAL DEFAULT 0.5"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
       // Add AI enhancement columns to memory_branches table
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE memory_branches ADD COLUMN current_focus INTEGER DEFAULT 0"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE memory_branches ADD COLUMN project_phase TEXT DEFAULT 'active-development'"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
       // Add AI enhancement columns to observations table
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE observations ADD COLUMN observation_type TEXT DEFAULT 'reference'"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE observations ADD COLUMN priority TEXT DEFAULT 'normal'"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
       // Add embedding column for TensorFlow.js support
-      await this.runQuery(
+      await this.safeAlterTable(
         "ALTER TABLE entities ADD COLUMN embedding BLOB"
-      ).catch(() => {}); // Ignore if column already exists
+      );
 
       // Create project analysis tables if they don't exist
       const projectTables = [
