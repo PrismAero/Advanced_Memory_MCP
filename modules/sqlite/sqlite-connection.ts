@@ -400,6 +400,15 @@ export class SQLiteConnection {
         "ALTER TABLE entities ADD COLUMN embedding BLOB"
       );
 
+      // Add embedding columns to project analysis tables if they exist
+      await this.safeAlterTable(
+        "ALTER TABLE project_files ADD COLUMN embedding BLOB"
+      );
+
+      await this.safeAlterTable(
+        "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB"
+      );
+
       // Create project analysis tables if they don't exist
       const projectTables = [
         `CREATE TABLE IF NOT EXISTS project_files (

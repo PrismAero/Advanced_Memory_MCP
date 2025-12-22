@@ -254,9 +254,81 @@ export class BackgroundProcessor {
           this.currentProjectPath
         );
         await this.projectAnalysisOps.storeWorkspaceContext(projectInfo);
-        this.lastProjectAnalysis = new Date();
 
-        logger.info("[LOADING] Updated project structure analysis");
+        // Full scan and embedding generation
+        if (this.projectEmbeddingEngine) {
+          const files = await this.projectIndexer.scanProjectFiles(
+            this.currentProjectPath
+          );
+          logger.info(
+            `[ANALYSIS] Scanning ${files.length} files for embeddings...`
+          );
+
+          for (const file of files) {
+            // Generate file embedding
+            // We use the file path and some metadata as context
+            const fileContext = `File: ${file.relativePath}\nType: ${file.fileType.category}\nLanguage: ${file.fileType.language}`;
+            const embedding =
+              await this.projectEmbeddingEngine.generateProjectEmbedding(
+                fileContext,
+                "documentation", // Treat file overview as documentation
+                { file_path: file.filePath }
+              );
+
+            if (embedding) {
+              file.embedding = embedding.embedding;
+            }
+
+            // Generate interface embeddings
+            if (file.interfaces && file.interfaces.length > 0) {
+              for (const iface of file.interfaces) {
+                const ifaceContext = `Interface: ${
+                  iface.name
+                }\nProperties: ${iface.properties.join(", ")}`;
+                const ifaceEmbedding =
+                  await this.projectEmbeddingEngine.generateProjectEmbedding(
+                    ifaceContext,
+                    "interface_definition",
+                    {
+                      file_path: file.filePath,
+                      interface_name: iface.name,
+                      line_number: iface.line,
+                    }
+                  );
+
+                if (ifaceEmbedding) {
+                  iface.embedding = ifaceEmbedding.embedding;
+                }
+              }
+            }
+          }
+
+          // Store files with embeddings
+          const storedFiles = await this.projectAnalysisOps.storeProjectFiles(
+            files
+          );
+
+          // Store interfaces with embeddings
+          for (const file of files) {
+            if (file.interfaces && file.interfaces.length > 0) {
+              // We need the file ID from the stored record
+              const storedFile = storedFiles.find(
+                (f) => f.file_path === file.filePath
+              );
+              if (storedFile && storedFile.id) {
+                await this.projectAnalysisOps.storeCodeInterfaces(
+                  storedFile.id,
+                  file.interfaces
+                );
+              }
+            }
+          }
+        }
+
+        this.lastProjectAnalysis = new Date();
+        logger.info(
+          "[LOADING] Updated project structure analysis with embeddings"
+        );
       }
     } catch (error) {
       logger.error("Failed to monitor project structure:", error);
