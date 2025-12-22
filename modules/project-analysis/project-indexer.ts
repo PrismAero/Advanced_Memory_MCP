@@ -477,13 +477,25 @@ export class ProjectIndexer {
   private async detectPackageManager(
     rootPath: string
   ): Promise<PackageManager> {
+    const hasFileWithExtension = async (
+      dir: string,
+      extension: string
+    ): Promise<boolean> => {
+      try {
+        const entries = await fs.readdir(dir);
+        return entries.some((entry) => entry.endsWith(extension));
+      } catch {
+        return false;
+      }
+    };
+
     // C++ build systems
     if (await this.fileExists(path.join(rootPath, "CMakeLists.txt"))) {
       return "cmake";
     }
     if (
-      (await this.fileExists(path.join(rootPath, ".pro"))) ||
-      (await this.fileExists(path.join(rootPath, ".pri")))
+      (await hasFileWithExtension(rootPath, ".pro")) ||
+      (await hasFileWithExtension(rootPath, ".pri"))
     ) {
       return "qmake";
     }
