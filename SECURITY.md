@@ -62,7 +62,7 @@
 If you discover a security vulnerability:
 
 1. **Do not** create a public issue
-2. Email: kai@prismaquatics.io
+2. Report via GitHub Security Advisories: https://github.com/PrismAero/Advanced_Memory_MCP/security/advisories/new
 3. Include: reproduction steps, potential impact, suggested fix
 
 ### Response Timeline

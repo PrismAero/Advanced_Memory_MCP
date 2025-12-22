@@ -1,23 +1,126 @@
-MIT License
+Creative Commons Attribution-NonCommercial 4.0 International License
+WITH ADDITIONAL TERMS FOR ML/AI COMPONENTS
 
-Copyright (c) 2025 Kai Wyborny (Enhanced features: contextual memory server with branching system, adaptive reasoning server with LLM optimization, and advanced workflow management)
+Copyright (c) 2025 Kai Wyborny / PrismAero
+Copyright (c) 2025 Anthropic, PBC (Original MCP server base implementation)
 
-Copyright (c) 2025 Anthropic, PBC (Original MCP server implementations)
+================================================================================
+PREAMBLE
+================================================================================
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software consists of two distinct components with different licensing terms:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. BASE MCP SERVER (Anthropic, PBC): The foundational Model Context Protocol server
+   implementation, originally created by Anthropic, PBC.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. ENHANCED ML/AI FEATURES (Kai Wyborny / PrismAero): Advanced features including:
+   - TensorFlow.js-based semantic similarity engine
+   - Universal Sentence Encoder integration for embeddings
+   - Vector database with cosine similarity search
+   - Adaptive model training and project-specific ML models
+   - Project analysis with interface mapping and file monitoring
+   - Context engine and intelligent relationship prediction
+   - Background processing for automated analysis
+   - All machine learning algorithms, training methods, and optimization techniques
+
+================================================================================
+LICENSE TERMS
+================================================================================
+
+This work is licensed under the Creative Commons Attribution-NonCommercial 4.0
+International License with the following additional terms:
+
+1. ATTRIBUTION REQUIREMENT
+   You must give appropriate credit to Kai Wyborny / PrismAero for all ML/AI
+   components, provide a link to this license, and indicate if changes were made.
+   You may do so in any reasonable manner, but not in any way that suggests the
+   licensor endorses you or your use.
+
+2. NON-COMMERCIAL USE ONLY
+   You may not use this software or any portion thereof for commercial purposes
+   without obtaining a separate commercial license from the copyright holder.
+
+   "Commercial purposes" means any use primarily intended for or directed toward
+   commercial advantage or monetary compensation, including but not limited to:
+
+   - Integration into commercial products or services
+   - Use in business operations for profit
+   - Providing services to third parties for a fee
+
+   Academic research, personal projects, and open-source contributions are
+   permitted under this license.
+
+3. PROPRIETARY ML/AI COMPONENTS
+   The machine learning algorithms, neural network architectures, embedding
+   generation methods, similarity computation techniques, and adaptive training
+   systems developed by Kai Wyborny / PrismAero remain proprietary intellectual
+   property. Any derivative works must:
+
+   a) Clearly identify and attribute these components
+   b) Maintain this license for those components
+   c) Not circumvent the non-commercial restriction
+   d) Not claim independent invention or ownership of these methods
+
+4. DISTRIBUTION & MODIFICATION
+   You are free to:
+
+   - Share: copy and redistribute the material in any medium or format
+   - Adapt: remix, transform, and build upon the material
+
+   Under the following terms:
+
+   - All distributions must include this complete license
+   - Modified versions must be clearly marked as such
+   - Source code modifications must maintain attribution headers
+   - You may not apply legal terms or technological measures that legally
+     restrict others from doing anything this license permits
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+6. PATENT CLAIMS
+   Any ML/AI algorithms, techniques, or methods that may be patentable remain
+   the intellectual property of Kai Wyborny / PrismAero. This license does not
+   grant any patent rights.
+
+================================================================================
+COMMERCIAL LICENSING
+================================================================================
+
+For commercial use, enterprise licensing, or other inquiries, please contact:
+
+GitHub: https://github.com/PrismAero
+Repository: https://github.com/PrismAero/Advanced_Memory_MCP
+
+================================================================================
+FULL LICENSE TEXT
+================================================================================
+
+The full Creative Commons Attribution-NonCommercial 4.0 International License
+is available at: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+This is a human-readable summary of (and not a substitute for) the license.
+
+You are free to:
+
+- Share — copy and redistribute the material in any medium or format
+- Adapt — remix, transform, and build upon the material
+
+Under the following terms:
+
+- Attribution — You must give appropriate credit, provide a link to the license,
+  and indicate if changes were made.
+- NonCommercial — You may not use the material for commercial purposes.
+- No additional restrictions — You may not apply legal terms or technological
+  measures that legally restrict others from doing anything the license permits.
+
+================================================================================
+
+For the Anthropic MCP base components, please also refer to their original
+licensing terms at: https://github.com/modelcontextprotocol
