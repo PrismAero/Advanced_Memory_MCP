@@ -7,6 +7,9 @@
  * All operations are local-only for maximum privacy and security.
  */
 
+// CRITICAL: Apply Node.js v24 compatibility polyfills BEFORE any TensorFlow.js imports
+import "./modules/node-compat.js";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -47,6 +50,7 @@ if (process.env.LOG_LEVEL === "debug") {
 }
 
 // Initialize modern similarity engine (TensorFlow.js embeddings)
+// TensorFlow.js is the core ML feature of this Advanced Memory Server
 const modernSimilarity = new ModernSimilarityEngine();
 
 // Initialize modular system with TensorFlow.js integration
@@ -74,20 +78,6 @@ const backgroundProcessor = new BackgroundProcessor(
   modernSimilarity
 );
 
-// Initialize modern similarity engine
-modernSimilarity.initialize().catch((error) => {
-  logger.error("Failed to initialize modern similarity engine:", error);
-});
-relationshipIndexer.initialize().catch((error: any) => {
-  logger.error("Failed to initialize relationship indexer:", error);
-});
-
-// Start background processing for AI enhancements (every 30 minutes)
-setTimeout(() => {
-  backgroundProcessor.start(30);
-  logger.info("Background processor started for AI memory enhancements");
-}, 60000); // Start after 1 minute to allow full initialization
-
 const server = new Server(
   {
     name: "adaptive-reasoning-server",
@@ -100,11 +90,34 @@ const server = new Server(
   }
 );
 
-// Initialize the enhanced memory manager
-memoryManager.initialize().catch((error) => {
-  logger.error("Failed to initialize enhanced memory manager:", error);
-  process.exit(1);
-});
+/**
+ * Initialize all components in the correct order.
+ * TensorFlow.js is required - server will fail to start if it cannot initialize.
+ */
+async function initializeComponents(): Promise<void> {
+  // 1. Initialize memory manager first (required for other components)
+  logger.info("Initializing memory manager...");
+  await memoryManager.initialize();
+  logger.info("Memory manager initialized successfully");
+
+  // 2. Initialize TensorFlow.js similarity engine (required - no fallback)
+  logger.info("Initializing TensorFlow.js similarity engine...");
+  await modernSimilarity.initialize();
+  logger.info("TensorFlow.js similarity engine initialized successfully");
+
+  // 3. Initialize relationship indexer
+  logger.info("Initializing relationship indexer...");
+  await relationshipIndexer.initialize();
+  logger.info("Relationship indexer initialized successfully");
+
+  // 4. Start background processor after all components are ready
+  backgroundProcessor.start(30);
+  logger.info(
+    "Background processor started for AI memory enhancements (30 min interval)"
+  );
+
+  logger.info("All components initialized successfully");
+}
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: SMART_MEMORY_TOOLS };
@@ -199,6 +212,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "detect_project_patterns":
         return await workspaceHandlers.handleDetectProjectPatterns(args);
 
+      // Advanced ML/AI Tools (Not Yet Implemented)
+      case "analyze_project_structure":
+      case "find_interface_usage":
+      case "suggest_project_context":
+      case "navigate_codebase":
+      case "train_project_model":
+      case "generate_interface_embedding":
+      case "find_similar_code":
+        logger.warn(
+          `Advanced ML tool '${name}' called but is not yet implemented`
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  error: `Tool '${name}' is not yet implemented`,
+                  message:
+                    "This advanced ML tool is planned but not yet available. Please use the core memory tools instead.",
+                  status: "not_implemented",
+                  suggestion:
+                    "Use smart_search, create_entities, or other core tools for your workflow",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+
       default:
         logger.warn(`Unknown tool called: ${name}`);
         return {
@@ -228,6 +273,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  // Initialize all components before starting the server
+  await initializeComponents();
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("Modular Enhanced Memory MCP Server running on stdio");

@@ -208,4 +208,39 @@ export class EnhancedMemoryManager {
   ): Promise<KnowledgeGraph> {
     return await this.sqliteManager.getCrossContext(entityNames, sourceBranch);
   }
+
+  // AI Enhancement Methods - for background processor and relevance scoring
+  async updateEntityRelevanceScore(
+    entityName: string,
+    score: number,
+    branchName?: string
+  ): Promise<void> {
+    return await this.sqliteManager.updateEntityRelevanceScore(
+      entityName,
+      score,
+      branchName
+    );
+  }
+
+  async updateEntityWorkingContext(
+    entityName: string,
+    isWorkingContext: boolean,
+    branchName?: string
+  ): Promise<void> {
+    return await this.sqliteManager.updateEntityWorkingContext(
+      entityName,
+      isWorkingContext,
+      branchName
+    );
+  }
+
+  async updateEntityLastAccessed(
+    entityName: string,
+    branchName?: string
+  ): Promise<void> {
+    return await this.sqliteManager.updateEntityLastAccessed(
+      entityName,
+      branchName
+    );
+  }
 }

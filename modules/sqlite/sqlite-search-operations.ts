@@ -1,4 +1,5 @@
 import { Entity, EntityStatus, KnowledgeGraph } from "../../memory-types.js";
+import { logger } from "../logger.js";
 import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
 import { SQLiteEntityOperations } from "./sqlite-entity-operations.js";
@@ -110,7 +111,7 @@ export class SQLiteSearchOperations {
           return this.combineSearchResults(semanticResults, textResults);
         }
       } catch (error) {
-        console.warn(
+        logger.warn(
           "Semantic search failed, falling back to text search:",
           error
         );

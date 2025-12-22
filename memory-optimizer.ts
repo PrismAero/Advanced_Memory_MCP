@@ -1,4 +1,5 @@
 import { encoding_for_model } from "tiktoken";
+import { logger } from "./modules/logger.js";
 
 /**
  * Memory-optimized Text Processing for Entity Storage
@@ -133,7 +134,7 @@ export class MemoryOptimizer {
     try {
       this.tokenizer = encoding_for_model("gpt-4");
     } catch (error) {
-      console.warn("Failed to initialize tokenizer:", error);
+      logger.warn("Failed to initialize tokenizer:", error);
       this.tokenizer = null;
     }
   }

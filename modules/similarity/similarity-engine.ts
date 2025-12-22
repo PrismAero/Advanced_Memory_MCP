@@ -1,6 +1,61 @@
 import { Entity } from "../../memory-types.js";
 import { logger } from "../logger.js";
+import {
+  CACHE_CONFIG,
+  CONFIDENCE_CONFIG,
+  THRESHOLDS,
+} from "./similarity-config.js";
 import { TensorFlowModelManager } from "./tensorflow-model-manager.js";
+
+/**
+ * LRU (Least Recently Used) Cache implementation
+ * Automatically evicts least recently used entries when capacity is reached
+ */
+class LRUCache<K, V> {
+  private cache: Map<K, V>;
+  private maxSize: number;
+
+  constructor(maxSize: number) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    if (this.cache.has(key)) {
+      // Update existing - move to end
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Delete oldest (first) entry
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
+    }
+    this.cache.set(key, value);
+  }
+
+  has(key: K): boolean {
+    return this.cache.has(key);
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
 
 /**
  * TensorFlow.js Similarity Engine - Complete replacement with semantic embeddings
@@ -14,22 +69,31 @@ import { TensorFlowModelManager } from "./tensorflow-model-manager.js";
  */
 export class ModernSimilarityEngine {
   private modelManager: TensorFlowModelManager;
-  private embeddingCache: Map<string, number[]> = new Map();
+  private embeddingCache: LRUCache<string, number[]>;
   private initialized = false;
 
-  // Thresholds optimized for embedding-based similarity
-  private readonly SIMILARITY_THRESHOLD = 0.6; // Slightly higher for embeddings
-  private readonly HIGH_CONFIDENCE_THRESHOLD = 0.85;
-  private readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.75;
+  // Use central configuration for thresholds
+  private readonly SIMILARITY_THRESHOLD = THRESHOLDS.minimum;
+  private readonly HIGH_CONFIDENCE_THRESHOLD = CONFIDENCE_CONFIG.high;
+  private readonly MEDIUM_CONFIDENCE_THRESHOLD = CONFIDENCE_CONFIG.medium;
+  private readonly MAX_CACHE_SIZE = CACHE_CONFIG.maxSize;
 
   constructor() {
     this.modelManager = new TensorFlowModelManager();
+    this.embeddingCache = new LRUCache(CACHE_CONFIG.maxSize);
   }
 
   /**
    * Initialize the TensorFlow.js similarity engine
    */
   async initialize(): Promise<void> {
+    if (this.initialized) {
+      logger.debug(
+        "TensorFlow.js similarity engine already initialized, skipping"
+      );
+      return;
+    }
+
     try {
       logger.info("Initializing TensorFlow.js similarity engine...");
       await this.modelManager.initialize();
@@ -292,16 +356,8 @@ export class ModernSimilarityEngine {
     const embeddings = await this.modelManager.generateEmbeddings([entityText]);
     const embedding = embeddings[0];
 
-    // Cache the result
+    // Cache the result (LRU cache handles eviction automatically)
     this.embeddingCache.set(cacheKey, embedding);
-
-    // Limit cache size to prevent memory issues
-    if (this.embeddingCache.size > 1000) {
-      const firstKey = this.embeddingCache.keys().next().value;
-      if (firstKey) {
-        this.embeddingCache.delete(firstKey);
-      }
-    }
 
     return embedding;
   }
@@ -560,12 +616,15 @@ export class ModernSimilarityEngine {
           observations: ["Handles user login", "JWT token management"],
         } as Entity,
         entity2: {
-          name: "Database Connection Pool",
-          entityType: "service",
-          observations: ["Manages database connections", "Connection pooling"],
+          name: "CSS Button Styling",
+          entityType: "component",
+          observations: [
+            "Styled button with hover effects",
+            "Color palette and border radius",
+          ],
         } as Entity,
-        expectedMinSimilarity: 0.0, // Should be low
-        test: "Different services should have low similarity",
+        expectedMinSimilarity: 0.0, // Should be low - truly unrelated concepts
+        test: "Unrelated concepts should have low similarity",
       },
     ];
 

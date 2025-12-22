@@ -223,7 +223,30 @@ export class SQLiteEntityOperations {
     );
 
     if (existing) {
-      throw new Error(`Entity "${validName}" already exists`);
+      // Return the existing entity instead of throwing an error
+      logger.debug(
+        `Entity "${validName}" already exists, returning existing entity`
+      );
+      const existingEntity = await this.connection.getQuery(
+        "SELECT * FROM entities WHERE id = ?",
+        [existing.id]
+      );
+
+      if (existingEntity) {
+        // Get observations for the existing entity (simplified for now)
+        const observations: any[] = []; // TODO: Implement proper observation fetching
+
+        return {
+          name: existingEntity.name,
+          entityType: existingEntity.entity_type,
+          content: existingEntity.original_content || "",
+          observations: observations.map((obs: any) => obs.content),
+          status: existingEntity.status || "active",
+          statusReason: existingEntity.status_reason,
+          created: existingEntity.created_at,
+          lastUpdated: existingEntity.updated_at,
+        };
+      }
     }
 
     // Store the actual content provided by the user

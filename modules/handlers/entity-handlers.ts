@@ -1,5 +1,8 @@
+import { EnhancedMemoryManager } from "../../enhanced-memory-manager-modular.js";
 import { Entity, EntityStatus, Relation } from "../../memory-types.js";
 import { logger } from "../logger.js";
+import { RelationshipIndexer } from "../relationship-indexer.js";
+import { THRESHOLDS } from "../similarity/similarity-config.js";
 import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
 
 /**
@@ -7,14 +10,14 @@ import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
  * Handles entity creation, updates, and deletion with automatic similarity detection
  */
 export class EntityHandlers {
-  private memoryManager: any;
+  private memoryManager: EnhancedMemoryManager;
   private modernSimilarity: ModernSimilarityEngine;
-  private relationshipIndexer?: any;
+  private relationshipIndexer?: RelationshipIndexer;
 
   constructor(
-    memoryManager: any,
+    memoryManager: EnhancedMemoryManager,
     modernSimilarity: ModernSimilarityEngine,
-    relationshipIndexer?: any
+    relationshipIndexer?: RelationshipIndexer
   ) {
     this.memoryManager = memoryManager;
     this.modernSimilarity = modernSimilarity;
@@ -82,7 +85,10 @@ export class EntityHandlers {
                   match.confidence
                 } type=${match.suggestedRelationType}`
               );
-              if (match.confidence === "high" || match.similarity > 0.5) {
+              if (
+                match.confidence === "high" ||
+                match.similarity > THRESHOLDS.minimum
+              ) {
                 relationsToCreate.push({
                   from: newEntity.name,
                   to: match.entity.name,
@@ -132,7 +138,7 @@ export class EntityHandlers {
             autoRelationsResults.push({
               entity: newEntity.name,
               message: "No similar entities found above similarity threshold",
-              similarity_threshold: 0.5,
+              similarity_threshold: THRESHOLDS.minimum,
               candidates_analyzed: existingEntities.length,
               similarity_results: similarEntities.length,
             });
@@ -149,8 +155,8 @@ export class EntityHandlers {
           total_relations_created: totalRelationsCreated,
           entities_processed: createdEntities.length,
           similarity_engine: "ModernSimilarityEngine",
-          similarity_threshold: 0.65,
-          high_confidence_threshold: 0.85,
+          similarity_threshold: THRESHOLDS.minimum,
+          high_confidence_threshold: THRESHOLDS.high,
         });
 
         // Notify background indexer about new entities

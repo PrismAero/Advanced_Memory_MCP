@@ -12,7 +12,10 @@ import {
 
 /**
  * TensorFlow.js Model Manager
- * Handles model downloading, caching, loading, and lifecycle management for local-only operation
+ * Handles model loading and lifecycle management for local-only operation.
+ *
+ * TensorFlow.js is a REQUIRED dependency - no fallback mode.
+ * If TensorFlow.js fails to initialize, the server will not start.
  */
 export class TensorFlowModelManager {
   private loadedModel: tf.GraphModel | tf.LayersModel | any | null = null;
@@ -30,7 +33,8 @@ export class TensorFlowModelManager {
   }
 
   /**
-   * Initialize the model manager and load the preferred model
+   * Initialize the model manager and load the preferred model.
+   * Throws an error if initialization fails - no fallback mode.
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -46,41 +50,31 @@ export class TensorFlowModelManager {
   }
 
   private async _performInitialization(): Promise<void> {
-    try {
-      console.log(
-        "[INIT] Initializing TensorFlow.js Model Manager with bundled models..."
-      );
+    logger.info(
+      "Initializing TensorFlow.js Model Manager with bundled models..."
+    );
 
-      // Load preferred model (bundled - no downloading needed)
-      await this.loadPreferredModel();
+    // Load preferred model (bundled - no downloading needed)
+    await this.loadPreferredModel();
 
-      this.isInitialized = true;
-      console.log(
-        `[SUCCESS] TensorFlow.js Model Manager ready with bundled model: ${this.currentModelId}`
-      );
-    } catch (error) {
-      console.error(
-        "[ERROR] Failed to initialize TensorFlow.js Model Manager:",
-        error
-      );
-      throw error;
-    }
+    // Test TensorFlow compatibility immediately after loading
+    await this.testCompatibility();
+
+    this.isInitialized = true;
+    logger.info(
+      `TensorFlow.js Model Manager ready with bundled model: ${this.currentModelId}`
+    );
   }
 
   /**
-   * Load preferred bundled model (no fallbacks needed)
+   * Load preferred bundled model
    */
   private async loadPreferredModel(): Promise<void> {
     const modelId = this.modelSelection.preferredModel;
 
-    try {
-      logger.info(`Loading bundled model: ${modelId}`);
-      await this.loadModel(modelId);
-      logger.info(`Successfully loaded bundled model: ${modelId}`);
-    } catch (error) {
-      console.error(`[ERROR] Failed to load bundled model ${modelId}:`, error);
-      throw error;
-    }
+    logger.info(`Loading bundled model: ${modelId}`);
+    await this.loadModel(modelId);
+    logger.info(`Successfully loaded bundled model: ${modelId}`);
   }
 
   /**
@@ -92,114 +86,96 @@ export class TensorFlowModelManager {
       throw new Error(`Unknown model ID: ${modelId}`);
     }
 
-    try {
-      const startTime = Date.now();
+    const startTime = Date.now();
 
-      // Handle bundled Universal Sentence Encoder
-      if (modelId === "universal-sentence-encoder") {
-        console.log(`[PACKAGE] Loading bundled Universal Sentence Encoder...`);
-        this.loadedModel = await use.load();
-        this.currentModelId = modelId;
-        const loadTime = Date.now() - startTime;
-        console.log(`[FAST] Bundled model loaded in ${loadTime}ms`);
+    // Handle bundled Universal Sentence Encoder
+    if (modelId === "universal-sentence-encoder") {
+      logger.info(`Loading bundled Universal Sentence Encoder...`);
+      this.loadedModel = await use.load();
+      this.currentModelId = modelId;
+      const loadTime = Date.now() - startTime;
+      logger.info(`Bundled model loaded in ${loadTime}ms`);
 
-        // Warm up the model with a test inference
-        await this.warmUpModel();
-        return;
-      }
-
-      // Fallback for any other models (should not be used in local-only mode)
-      throw new Error(
-        `Model ${modelId} is not available as a bundled model. Only 'universal-sentence-encoder' is supported for local-only operation.`
-      );
-    } catch (error) {
-      console.error(`[ERROR] Error loading model ${modelId}:`, error);
-      throw error;
+      // Warm up the model with a test inference
+      await this.warmUpModel();
+      return;
     }
+
+    // Only universal-sentence-encoder is supported
+    throw new Error(
+      `Model ${modelId} is not available as a bundled model. Only 'universal-sentence-encoder' is supported for local-only operation.`
+    );
   }
 
   /**
-   * Generate embeddings for text input using bundled Universal Sentence Encoder
+   * Generate embeddings for text input using bundled Universal Sentence Encoder.
+   * Throws an error if embedding generation fails - no fallback.
    */
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     if (!this.loadedModel) {
-      throw new Error("No model loaded. Call initialize() first.");
+      throw new Error(
+        "TensorFlow.js model not loaded. Call initialize() first."
+      );
     }
 
-    try {
-      // Preprocess texts for model input
-      const processedTexts = texts.map((text) => this.preprocessText(text));
-
-      // Use Universal Sentence Encoder API for bundled model
-      if (this.currentModelId === "universal-sentence-encoder") {
-        const embeddings = await (this.loadedModel as any).embed(
-          processedTexts
-        );
-        const embeddingData = await embeddings.data();
-        embeddings.dispose();
-
-        // Reshape results - USE produces 512-dimensional embeddings
-        const embeddingDim = 512;
-        const results: number[][] = [];
-
-        for (let i = 0; i < processedTexts.length; i++) {
-          const start = i * embeddingDim;
-          const end = start + embeddingDim;
-          results.push(Array.from(embeddingData.slice(start, end)));
-        }
-
-        return results;
-      }
-
-      // Fallback for other model types (should not be reached in current implementation)
-      throw new Error("Unsupported model type for embedding generation");
-    } catch (error) {
-      console.error("[ERROR] Error generating embeddings:", error);
-
-      // Provide fallback embeddings for development/compatibility
-      console.warn(
-        "[WARNING] Using fallback embedding generation due to TensorFlow compatibility issue"
+    if (!this.isInitialized) {
+      throw new Error(
+        "TensorFlow.js Model Manager not initialized. Call initialize() first."
       );
+    }
+
+    // Preprocess texts for model input
+    const processedTexts = texts.map((text) => this.preprocessText(text));
+
+    // Use Universal Sentence Encoder API for bundled model
+    if (this.currentModelId === "universal-sentence-encoder") {
+      const embeddings = await (this.loadedModel as any).embed(processedTexts);
+      const embeddingData = await embeddings.data();
+      embeddings.dispose();
+
+      // Reshape results - USE produces 512-dimensional embeddings
       const embeddingDim = 512;
       const results: number[][] = [];
 
-      for (let i = 0; i < texts.length; i++) {
-        const fallbackEmbedding = this.generateFallbackEmbedding(
-          texts[i],
-          embeddingDim
-        );
-        results.push(fallbackEmbedding);
+      for (let i = 0; i < processedTexts.length; i++) {
+        const start = i * embeddingDim;
+        const end = start + embeddingDim;
+        results.push(Array.from(embeddingData.slice(start, end)));
       }
 
       return results;
     }
+
+    throw new Error(
+      `Unsupported model type for embedding generation: ${this.currentModelId}`
+    );
   }
 
   /**
-   * Generate deterministic fallback embeddings when TensorFlow.js has issues
+   * Test TensorFlow compatibility by generating a simple embedding directly
    */
-  private generateFallbackEmbedding(text: string, dimension: number): number[] {
-    // Simple hash-based embedding generation for fallback
-    const embedding = new Array(dimension).fill(0);
-
-    // Use text content to generate reproducible values
-    for (let i = 0; i < text.length; i++) {
-      const charCode = text.charCodeAt(i);
-      const index = (charCode * (i + 1)) % dimension;
-      embedding[index] += Math.sin(charCode * 0.01) * 0.1;
+  private async testCompatibility(): Promise<void> {
+    if (!this.loadedModel) {
+      throw new Error("No model loaded for compatibility test");
     }
 
-    // Normalize to unit vector (similar to real embeddings)
-    const magnitude = Math.sqrt(
-      embedding.reduce((sum, val) => sum + val * val, 0)
-    );
-    if (magnitude > 0) {
-      for (let i = 0; i < dimension; i++) {
-        embedding[i] /= magnitude;
+    // Test embedding generation directly
+    const testTexts = ["test"];
+    const processedTexts = testTexts.map((text) => this.preprocessText(text));
+
+    if (this.currentModelId === "universal-sentence-encoder") {
+      const embeddings = await (this.loadedModel as any).embed(processedTexts);
+      const embeddingData = await embeddings.data();
+      embeddings.dispose();
+
+      if (embeddingData && embeddingData.length > 0) {
+        logger.info("TensorFlow.js compatibility test passed");
+      } else {
+        throw new Error(
+          "TensorFlow.js compatibility test failed: no embedding data returned"
+        );
       }
     }
-
-    return embedding;
   }
 
   /**
@@ -313,41 +289,31 @@ export class TensorFlowModelManager {
     this.initializationPromise = null;
   }
 
-  // Private helper methods
-
-  // Cache directory not needed for bundled models
-
-  // Caching methods removed - bundled models don't need caching
-
+  /**
+   * Warm up the model by verifying it's properly loaded
+   */
   private async warmUpModel(): Promise<void> {
-    try {
-      console.log("[HOT] Warming up model...");
+    logger.info("Warming up model...");
 
-      // Simple test to ensure model is working
-      if (
-        this.currentModelId === "universal-sentence-encoder" &&
-        this.loadedModel
-      ) {
-        // Just verify the model object exists and has the embed method
-        if (typeof (this.loadedModel as any).embed === "function") {
-          console.log(
-            "[SUCCESS] Model warmed up successfully - embed method available"
-          );
-        } else {
-          console.warn("[WARNING] Model loaded but embed method not available");
-        }
+    if (
+      this.currentModelId === "universal-sentence-encoder" &&
+      this.loadedModel
+    ) {
+      // Verify the model object exists and has the embed method
+      if (typeof (this.loadedModel as any).embed === "function") {
+        logger.info("Model warmed up successfully - embed method available");
       } else {
-        console.log("[SUCCESS] Model object verified");
+        throw new Error("Model loaded but embed method not available");
       }
-    } catch (error) {
-      console.warn("[WARNING] Model warmup failed:", error);
-      // Don't throw error - warmup is optional
+    } else {
+      logger.info("Model object verified");
     }
   }
 
+  /**
+   * Preprocess text for TensorFlow.js models
+   */
   private preprocessText(text: string): string {
-    // Basic text preprocessing for TensorFlow.js models
-    // This may need to be model-specific
     return text
       .toLowerCase()
       .replace(/[^\w\s]/g, " ")
