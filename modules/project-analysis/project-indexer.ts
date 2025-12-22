@@ -335,11 +335,7 @@ export class ProjectIndexer {
       }
 
       // Qt projects
-      if (
-        (await this.fileExists(path.join(rootPath, ".pro"))) ||
-        (await this.fileExists(path.join(rootPath, ".pri"))) ||
-        (await this.hasQtProject(rootPath))
-      ) {
+      if (await this.hasQtProject(rootPath)) {
         return "cpp-qt";
       }
 
