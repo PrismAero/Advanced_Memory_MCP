@@ -1149,25 +1149,45 @@ export class ProjectIndexer {
       }
     } else if (language === "cpp" || language === "c") {
       let currentNamespace = "";
+      let braceDepth = 0;
+      const namespaceStack: { name: string; depth: number }[] = [];
 
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const rawLine = lines[i];
+        const line = rawLine.trim();
 
         // Track namespace declarations (including nested namespaces with ::)
         const namespaceMatch = line.match(
           /^namespace\s+([a-zA-Z_][a-zA-Z0-9_:]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*)\s*{?/
         );
         if (namespaceMatch) {
-          currentNamespace = namespaceMatch[1];
+          const declaredNamespace = namespaceMatch[1];
+          const hasOpeningBrace = line.includes("{");
+          const fullNamespace = currentNamespace
+            ? `${currentNamespace}::${declaredNamespace}`
+            : declaredNamespace;
+          // Namespace becomes active at the depth after its opening brace (if present)
+          const activationDepth = braceDepth + (hasOpeningBrace ? 1 : 0);
+          namespaceStack.push({ name: fullNamespace, depth: activationDepth });
+          currentNamespace = fullNamespace;
         }
 
-        // End of namespace
-        if (line === "}" || line.startsWith("} //")) {
-          // Simple heuristic - in production, need proper brace tracking
-          if (currentNamespace) {
-            currentNamespace = "";
-          }
+        // Update brace depth for all scopes (namespaces, classes, functions, etc.)
+        const openBraces = (rawLine.match(/{/g) || []).length;
+        const closeBraces = (rawLine.match(/}/g) || []).length;
+        braceDepth += openBraces - closeBraces;
+
+        // Pop namespaces whose scope has ended
+        while (
+          namespaceStack.length > 0 &&
+          braceDepth < namespaceStack[namespaceStack.length - 1].depth
+        ) {
+          namespaceStack.pop();
         }
+        currentNamespace =
+          namespaceStack.length > 0
+            ? namespaceStack[namespaceStack.length - 1].name
+            : "";
 
         // C++20+ concept declarations
         const conceptMatch = line.match(
