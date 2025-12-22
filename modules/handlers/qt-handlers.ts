@@ -961,15 +961,44 @@ async function checkQmlViolations(
       const line = lines[i].trim();
 
       // Check for business logic patterns in QML (violations)
-      if (line.includes("function ") && !line.includes("//")) {
-        // JavaScript functions in QML should be minimal
-        violations.push({
-          file: qmlFile,
-          issue: `Line ${
-            i + 1
-          }: JavaScript function defined in QML. Consider moving logic to C++ controller.`,
-          severity: "warning",
-        });
+      const functionIndex = line.indexOf("function ");
+      if (functionIndex !== -1) {
+        const commentIndex = line.indexOf("//");
+        const isCommentedOut =
+          commentIndex !== -1 && commentIndex < functionIndex;
+
+        // Check if the 'function' keyword is inside a string literal
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        let escaped = false;
+        for (let j = 0; j < functionIndex; j++) {
+          const ch = line[j];
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          if (ch === "\\") {
+            escaped = true;
+            continue;
+          }
+          if (ch === "'" && !inDoubleQuote) {
+            inSingleQuote = !inSingleQuote;
+          } else if (ch === '"' && !inSingleQuote) {
+            inDoubleQuote = !inDoubleQuote;
+          }
+        }
+        const inString = inSingleQuote || inDoubleQuote;
+
+        if (!isCommentedOut && !inString) {
+          // JavaScript functions in QML should be minimal
+          violations.push({
+            file: qmlFile,
+            issue: `Line ${
+              i + 1
+            }: JavaScript function defined in QML. Consider moving logic to C++ controller.`,
+            severity: "warning",
+          });
+        }
       }
 
       if (line.includes("XMLHttpRequest") || line.includes("fetch(")) {
