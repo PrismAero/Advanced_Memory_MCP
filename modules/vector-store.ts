@@ -189,7 +189,7 @@ export class VectorStore {
       this.isDirty = false;
     }
 
-    return tf.tidy(() => {
+    const { scoreValues, indexValues } = tf.tidy(() => {
       const queryTensor = tf.tensor2d([queryVector]);
 
       // Normalize query vector
@@ -213,26 +213,28 @@ export class VectorStore {
         Math.min(limit, this.vectorCache.size)
       );
 
-      const scoreValues = values.dataSync();
-      const indexValues = indices.dataSync();
+      return {
+        scoreValues: Array.from(values.dataSync()),
+        indexValues: Array.from(indices.dataSync()),
+      };
+    }) as unknown as { scoreValues: number[]; indexValues: number[] };
 
-      const results: VectorSearchResult[] = [];
-      for (let i = 0; i < indexValues.length; i++) {
-        const score = scoreValues[i];
-        if (score < minScore) continue;
+    const results: VectorSearchResult[] = [];
+    for (let i = 0; i < indexValues.length; i++) {
+      const score = scoreValues[i];
+      if (score < minScore) continue;
 
-        const idx = indexValues[i];
-        const id = this.idMap[idx];
+      const idx = indexValues[i];
+      const id = this.idMap[idx];
 
-        results.push({
-          id,
-          score,
-          metadata: this.metadataCache.get(id),
-        });
-      }
+      results.push({
+        id,
+        score,
+        metadata: this.metadataCache.get(id),
+      });
+    }
 
-      return results;
-    });
+    return results;
   }
 
   /**

@@ -47,6 +47,7 @@ export interface FileAnalysis {
     complexity: "low" | "medium" | "high";
     documentation: number; // percentage of documented code
   };
+  embedding?: number[];
 }
 
 export interface ImportInfo {
@@ -69,6 +70,7 @@ export interface InterfaceInfo {
   extends: string[];
   line: number;
   isExported: boolean;
+  embedding?: number[];
 }
 
 export interface WorkspaceInfo {
