@@ -128,6 +128,13 @@ async function initializeComponents(): Promise<void> {
   await sqliteConnection.initialize();
   logger.info("Project analysis database initialized successfully");
 
+  // Initialize project analysis operations (includes vector store)
+  logger.info("Initializing project analysis operations and vector store...");
+  await projectAnalysisOps.initialize();
+  logger.info(
+    "Project analysis operations and vector store initialized successfully"
+  );
+
   // 2. Initialize TensorFlow.js similarity engine (required - no fallback)
   logger.info("Initializing TensorFlow.js similarity engine...");
   await modernSimilarity.initialize();
@@ -144,7 +151,20 @@ async function initializeComponents(): Promise<void> {
     "Background processor started for AI memory enhancements (30 min interval)"
   );
 
-  logger.info("All components initialized successfully");
+  // 5. Auto-start project monitoring if MEMORY_PATH is set
+  if (process.env.MEMORY_PATH) {
+    logger.info(
+      `Auto-starting project monitoring for: ${process.env.MEMORY_PATH}`
+    );
+    backgroundProcessor.setMonitoredProject(process.env.MEMORY_PATH);
+    logger.info("Project monitoring activated for MEMORY_PATH");
+  }
+
+  logger.info("✓ All components initialized successfully");
+  logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  logger.info("Adaptive Memory MCP Server Ready");
+  logger.info("Features: TensorFlow.js ML | Vector DB | Project Analysis");
+  logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -261,6 +281,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "find_similar_code":
         return await mlHandlers.handleFindSimilarCode(args);
+
+      case "backfill_embeddings":
+        return await mlHandlers.handleBackfillEmbeddings(args);
 
       default:
         logger.warn(`Unknown tool called: ${name}`);
