@@ -126,6 +126,70 @@ export class ProjectAnalysisOperations {
 
   async initialize(): Promise<void> {
     await this.vectorStore.initialize();
+
+    // Check for and backfill missing embeddings
+    await this.backfillMissingEmbeddings();
+  }
+
+  /**
+   * Backfill embeddings for existing data that doesn't have them
+   * This handles migration/upgrade scenarios
+   */
+  async backfillMissingEmbeddings(): Promise<{
+    filesWithoutEmbeddings: number;
+    interfacesWithoutEmbeddings: number;
+  }> {
+    try {
+      logger.info("[VECTOR] Checking for data without embeddings...");
+
+      // Count files without embeddings in vector store
+      const allFiles = await this.connection.runQuery(
+        "SELECT id, file_path, relative_path, file_type, language FROM project_files"
+      );
+
+      let filesWithoutEmbeddings = 0;
+      if (allFiles && allFiles.length > 0) {
+        for (const file of allFiles) {
+          // Check if vector exists
+          const vectorExists = await this.connection.getQuery(
+            "SELECT id FROM vectors WHERE id = ?",
+            [`file_${file.id}`]
+          );
+
+          if (!vectorExists) {
+            filesWithoutEmbeddings++;
+          }
+        }
+      }
+
+      // Count interfaces without embeddings
+      const allInterfaces = await this.connection.runQuery(
+        "SELECT id, name, file_id FROM code_interfaces WHERE embedding IS NULL"
+      );
+      const interfacesWithoutEmbeddings = allInterfaces?.length || 0;
+
+      if (filesWithoutEmbeddings > 0 || interfacesWithoutEmbeddings > 0) {
+        logger.info(
+          `[VECTOR] Found ${filesWithoutEmbeddings} files and ${interfacesWithoutEmbeddings} interfaces without embeddings`
+        );
+        logger.info(
+          "[VECTOR] These will be populated during next project analysis cycle"
+        );
+      } else {
+        logger.info("[VECTOR] All existing data has embeddings ✓");
+      }
+
+      return {
+        filesWithoutEmbeddings,
+        interfacesWithoutEmbeddings,
+      };
+    } catch (error) {
+      logger.warn("Failed to check for missing embeddings:", error);
+      return {
+        filesWithoutEmbeddings: 0,
+        interfacesWithoutEmbeddings: 0,
+      };
+    }
   }
 
   /**
@@ -907,5 +971,148 @@ export class ProjectAnalysisOperations {
 
     if (normA === 0 || normB === 0) return 0;
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  /**
+   * Generate embeddings for files without them
+   * Returns the IDs of files that were updated
+   */
+  async generateMissingFileEmbeddings(
+    embeddingGenerator: (fileContext: string) => Promise<number[] | null>,
+    limit: number = 50
+  ): Promise<number[]> {
+    try {
+      // Find files without vector embeddings
+      const filesQuery = `
+        SELECT pf.id, pf.file_path, pf.relative_path, pf.file_type, pf.language, pf.category
+        FROM project_files pf
+        LEFT JOIN vectors v ON v.id = 'file_' || pf.id
+        WHERE v.id IS NULL
+        LIMIT ?
+      `;
+
+      const files = await this.connection.runQuery(filesQuery, [limit]);
+      if (!files || files.length === 0) {
+        return [];
+      }
+
+      logger.info(
+        `[VECTOR] Generating embeddings for ${files.length} files...`
+      );
+
+      const updatedIds: number[] = [];
+
+      for (const file of files) {
+        try {
+          const fileContext = `File: ${file.relative_path}\nType: ${file.category}\nLanguage: ${file.language}`;
+          const embedding = await embeddingGenerator(fileContext);
+
+          if (embedding) {
+            await this.vectorStore.add({
+              id: `file_${file.id}`,
+              vector: embedding,
+              metadata: {
+                type: "file",
+                filePath: file.file_path,
+                language: file.language,
+                dbId: file.id,
+              },
+            });
+            updatedIds.push(file.id);
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to generate embedding for file ${file.file_path}:`,
+            error
+          );
+        }
+      }
+
+      if (updatedIds.length > 0) {
+        logger.info(
+          `[SUCCESS] Generated embeddings for ${updatedIds.length} files`
+        );
+      }
+
+      return updatedIds;
+    } catch (error) {
+      logger.error("Failed to generate missing file embeddings:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate embeddings for interfaces without them
+   * Returns the IDs of interfaces that were updated
+   */
+  async generateMissingInterfaceEmbeddings(
+    embeddingGenerator: (interfaceContext: string) => Promise<number[] | null>,
+    limit: number = 50
+  ): Promise<number[]> {
+    try {
+      const interfaces = await this.connection.runQuery(
+        `SELECT id, name, definition, file_id FROM code_interfaces 
+         WHERE embedding IS NULL 
+         LIMIT ?`,
+        [limit]
+      );
+
+      if (!interfaces || interfaces.length === 0) {
+        return [];
+      }
+
+      logger.info(
+        `[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`
+      );
+
+      const updatedIds: number[] = [];
+
+      for (const iface of interfaces) {
+        try {
+          const interfaceContext = `Interface: ${iface.name}\n${iface.definition}`;
+          const embedding = await embeddingGenerator(interfaceContext);
+
+          if (embedding) {
+            const embeddingBuffer = Buffer.from(
+              new Float32Array(embedding).buffer
+            );
+
+            await this.connection.execute(
+              "UPDATE code_interfaces SET embedding = ?, updated_at = ? WHERE id = ?",
+              [embeddingBuffer, new Date().toISOString(), iface.id]
+            );
+
+            // Also add to vector store
+            await this.vectorStore.add({
+              id: `interface_${iface.id}`,
+              vector: embedding,
+              metadata: {
+                type: "interface",
+                interfaceName: iface.name,
+                dbId: iface.id,
+              },
+            });
+
+            updatedIds.push(iface.id);
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to generate embedding for interface ${iface.name}:`,
+            error
+          );
+        }
+      }
+
+      if (updatedIds.length > 0) {
+        logger.info(
+          `[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`
+        );
+      }
+
+      return updatedIds;
+    } catch (error) {
+      logger.error("Failed to generate missing interface embeddings:", error);
+      return [];
+    }
   }
 }

@@ -344,11 +344,67 @@ export class BackgroundProcessor {
     try {
       logger.debug("[SEARCH] Analyzing project interfaces");
 
+      // Also check and backfill missing embeddings
+      if (this.projectAnalysisOps && this.projectEmbeddingEngine) {
+        await this.backfillMissingEmbeddings();
+      }
+
       // This would trigger interface analysis and relationship mapping
       // For now, just log that it would run
       logger.debug("Interface analysis would run here");
     } catch (error) {
       logger.error("Failed to analyze project interfaces:", error);
+    }
+  }
+
+  /**
+   * Backfill missing embeddings for existing data
+   */
+  private async backfillMissingEmbeddings(): Promise<void> {
+    if (!this.projectAnalysisOps || !this.projectEmbeddingEngine) return;
+
+    try {
+      // Generate embeddings for files without them (batch of 50)
+      const fileEmbeddingGenerator = async (fileContext: string) => {
+        const result =
+          await this.projectEmbeddingEngine!.generateProjectEmbedding(
+            fileContext,
+            "documentation",
+            {}
+          );
+        return result?.embedding || null;
+      };
+
+      const updatedFiles =
+        await this.projectAnalysisOps.generateMissingFileEmbeddings(
+          fileEmbeddingGenerator,
+          50
+        );
+
+      // Generate embeddings for interfaces without them (batch of 50)
+      const interfaceEmbeddingGenerator = async (interfaceContext: string) => {
+        const result =
+          await this.projectEmbeddingEngine!.generateProjectEmbedding(
+            interfaceContext,
+            "interface_definition",
+            {}
+          );
+        return result?.embedding || null;
+      };
+
+      const updatedInterfaces =
+        await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
+          interfaceEmbeddingGenerator,
+          50
+        );
+
+      if (updatedFiles.length > 0 || updatedInterfaces.length > 0) {
+        logger.info(
+          `[VECTOR] Backfilled embeddings: ${updatedFiles.length} files, ${updatedInterfaces.length} interfaces`
+        );
+      }
+    } catch (error) {
+      logger.debug("Backfill embeddings error:", error);
     }
   }
 

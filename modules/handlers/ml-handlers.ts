@@ -273,4 +273,101 @@ export class MLHandlers {
       };
     }
   }
+
+  /**
+   * Backfill embeddings for existing data
+   */
+  async handleBackfillEmbeddings(args: any): Promise<any> {
+    const fileLimit = args.file_limit || 100;
+    const interfaceLimit = args.interface_limit || 100;
+
+    logger.info("Starting embedding backfill process...");
+
+    try {
+      // Check current status
+      const status = await this.projectAnalysisOps.backfillMissingEmbeddings();
+
+      // Generate embeddings for files
+      const fileEmbeddingGenerator = async (fileContext: string) => {
+        const result =
+          await this.projectEmbeddingEngine.generateProjectEmbedding(
+            fileContext,
+            "documentation",
+            {}
+          );
+        return result?.embedding || null;
+      };
+
+      const updatedFiles =
+        await this.projectAnalysisOps.generateMissingFileEmbeddings(
+          fileEmbeddingGenerator,
+          fileLimit
+        );
+
+      // Generate embeddings for interfaces
+      const interfaceEmbeddingGenerator = async (interfaceContext: string) => {
+        const result =
+          await this.projectEmbeddingEngine.generateProjectEmbedding(
+            interfaceContext,
+            "interface_definition",
+            {}
+          );
+        return result?.embedding || null;
+      };
+
+      const updatedInterfaces =
+        await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
+          interfaceEmbeddingGenerator,
+          interfaceLimit
+        );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                message: "Embedding backfill completed",
+                before: {
+                  files_without_embeddings: status.filesWithoutEmbeddings,
+                  interfaces_without_embeddings:
+                    status.interfacesWithoutEmbeddings,
+                },
+                processed: {
+                  files_updated: updatedFiles.length,
+                  interfaces_updated: updatedInterfaces.length,
+                },
+                remaining: {
+                  files: status.filesWithoutEmbeddings - updatedFiles.length,
+                  interfaces:
+                    status.interfacesWithoutEmbeddings -
+                    updatedInterfaces.length,
+                },
+                note: "Run again to process more items. Background processor will also handle this automatically.",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error("Failed to backfill embeddings:", error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                error: error instanceof Error ? error.message : String(error),
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
 }

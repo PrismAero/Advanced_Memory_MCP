@@ -1051,4 +1051,25 @@ export const SMART_MEMORY_TOOLS: Tool[] = [
       required: ["code_snippet", "search_type"],
     },
   },
+
+  {
+    name: "backfill_embeddings",
+    description:
+      "Generate embeddings for existing files and interfaces that don't have them yet. Handles database migration/upgrade scenarios. Useful when upgrading to a version with vector database support or when data was added without embeddings.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_limit: {
+          type: "number",
+          description: "Maximum number of files to process in this batch",
+          default: 100,
+        },
+        interface_limit: {
+          type: "number",
+          description: "Maximum number of interfaces to process in this batch",
+          default: 100,
+        },
+      },
+    },
+  },
 ];
