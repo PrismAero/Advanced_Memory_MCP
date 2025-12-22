@@ -2,13 +2,13 @@
   "name": "@prism.enterprises/adaptive-reasoning-server",
   "version": "1.0.0",
   "description": "Adaptive Reasoning Server: SQLite-based memory and knowledge management system for AI assistants",
-  "license": "MIT",
-  "author": "Kai Wyborny - Based on original by Anthropic, PBC",
-  "homepage": "https://modelcontextprotocol.io",
-  "bugs": "https://github.com/PrismAero/adaptive-reasoning-server/issues",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Kai Wyborny / PrismAero (ML/AI components) - Based on original MCP by Anthropic, PBC",
+  "homepage": "https://github.com/PrismAero/Advanced_Memory_MCP",
+  "bugs": "https://github.com/PrismAero/Advanced_Memory_MCP/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PrismAero/adaptive-reasoning-server.git"
+    "url": "https://github.com/PrismAero/Advanced_Memory_MCP.git"
   },
   "publishConfig": {
     "access": "public",
@@ -46,6 +46,7 @@
     "@tensorflow/tfjs": "4.21.0",
     "@tensorflow/tfjs-node": "4.21.0",
     "chokidar": "^3.5.3",
+    "ignore": "^6.0.2",
     "sqlite3": "^5.1.7",
     "tiktoken": "^1.0.22"
   },
