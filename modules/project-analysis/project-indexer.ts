@@ -1320,9 +1320,15 @@ export class ProjectIndexer {
       }
     } else if (language === "qml") {
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const rawLine = lines[i];
+        const line = rawLine.trim();
 
         // QML type declarations
+        // Require the type name to appear at the start of the line (no indentation)
+        // to reduce false positives from embedded JavaScript or object literals.
+        if (!/^[A-Z]/.test(rawLine)) {
+          continue;
+        }
         const qmlTypeMatch = line.match(/^([A-Z][a-zA-Z0-9_]*)\s*{/);
         if (qmlTypeMatch) {
           const [, name] = qmlTypeMatch;
