@@ -6,6 +6,11 @@ import { logger } from "../logger.js";
  * Specialized handlers for AI decision making, status management, and workflow optimization
  */
 export class WorkflowHandlers {
+  // Text truncation lengths for summary views
+  private static readonly MAX_NOTE_PREVIEW_LENGTH = 100;
+  private static readonly MAX_DECISION_SUMMARY_LENGTH = 120;
+  private static readonly MAX_BLOCKER_DESCRIPTION_LENGTH = 150;
+
   private memoryManager: any;
 
   constructor(memoryManager: any) {
@@ -856,7 +861,10 @@ export class WorkflowHandlers {
                         type: e.entityType,
                         last_activity: e.lastAccessed,
                         key_note:
-                          e.observations[0]?.substring(0, 100) || "No notes",
+                          e.observations[0]?.substring(
+                            0,
+                            WorkflowHandlers.MAX_NOTE_PREVIEW_LENGTH
+                          ) || "No notes",
                       })),
                     entity_count: workingContext.entities.length,
                     recent_changes: recentActivity.slice(0, 5),
@@ -865,13 +873,19 @@ export class WorkflowHandlers {
                     decision: d.entity_name,
                     timestamp: d.timestamp,
                     summary:
-                      d.observations[0]?.substring(0, 120) || "No summary",
+                      d.observations[0]?.substring(
+                        0,
+                        WorkflowHandlers.MAX_DECISION_SUMMARY_LENGTH
+                      ) || "No summary",
                   })),
                   blockers_and_issues: blockers.map((b) => ({
                     blocker: b.entity_name,
                     severity: b.severity,
                     description:
-                      b.description?.substring(0, 150) || "No description",
+                      b.description?.substring(
+                        0,
+                        WorkflowHandlers.MAX_BLOCKER_DESCRIPTION_LENGTH
+                      ) || "No description",
                   })),
                   next_recommended_actions: nextSteps
                     .filter((s) => s.priority === "high")

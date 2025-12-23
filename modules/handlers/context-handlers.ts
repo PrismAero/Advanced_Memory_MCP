@@ -1,4 +1,4 @@
-import { Entity, MemoryBranchInfo } from "../../memory-types.js";
+import { Entity, MemoryBranchInfo, Relation } from "../../memory-types.js";
 import { BackgroundProcessor } from "../background-processor.js";
 import { logger } from "../logger.js";
 
@@ -209,7 +209,7 @@ export class ContextHandlers {
     entities: Entity[],
     branchName: string,
     maxEntities: number,
-    relations: any[]
+    relations: Relation[]
   ): Promise<any> {
     // Group entities by type and extract key info
     const byType = this.groupEntitiesByType(entities);
@@ -217,8 +217,8 @@ export class ContextHandlers {
       .filter((e) => e.lastAccessed)
       .sort(
         (a, b) =>
-          new Date(b.lastAccessed!).getTime() -
-          new Date(a.lastAccessed!).getTime()
+          new Date(b.lastAccessed || 0).getTime() -
+          new Date(a.lastAccessed || 0).getTime()
       )
       .slice(0, maxEntities);
 
@@ -326,7 +326,7 @@ export class ContextHandlers {
   private async generateDetailedContext(
     entities: Entity[],
     branchName: string,
-    relations: any[]
+    relations: Relation[]
   ): Promise<any> {
     const byType = this.groupEntitiesByType(entities);
     const recentlyWorked = entities
@@ -383,11 +383,11 @@ export class ContextHandlers {
     };
   }
 
-  private countRelationTypes(relations: any[]): { [key: string]: number } {
+  private countRelationTypes(relations: Relation[]): { [key: string]: number } {
     return relations.reduce((acc, rel) => {
       acc[rel.relationType] = (acc[rel.relationType] || 0) + 1;
       return acc;
-    }, {});
+    }, {} as { [key: string]: number });
   }
 
   /**
@@ -703,7 +703,7 @@ export class ContextHandlers {
   private async getRelationsForEntities(
     entityNames: string[],
     branchName: string
-  ): Promise<any[]> {
+  ): Promise<Relation[]> {
     try {
       // Get the SQLite relation operations from memory manager
       const relationOps = this.memoryManager.sqliteOps?.relationOps;
@@ -722,7 +722,7 @@ export class ContextHandlers {
     }
   }
 
-  private removeDuplicateRelations(relations: any[]): any[] {
+  private removeDuplicateRelations(relations: Relation[]): Relation[] {
     const seen = new Set();
     return relations.filter((relation) => {
       const key = `${relation.from}-${relation.to}-${relation.relationType}`;

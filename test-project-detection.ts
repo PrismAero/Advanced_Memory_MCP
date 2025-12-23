@@ -67,14 +67,27 @@ async function testProjectTypeDetection() {
   });
 
   console.log("\nRecommendations:");
-  if (projectType.primary === "cpp" && projectType.features.includes("qt")) {
-    console.log("  ✓ Qt/QML tools are appropriate for this C++/Qt project");
-  } else if (projectType.primary === "typescript") {
+  // Derive recommendations from actual filtering results
+  const qtToolsEnabled = qtEnabled.length > 0;
+
+  if (qtToolsEnabled) {
+    if (projectType.confidence === 0) {
+      console.log("  ⚠ Unknown project type - all tools enabled by default");
+    } else if (
+      projectType.primary === "cpp" ||
+      projectType.features.includes("qt") ||
+      projectType.features.includes("qml")
+    ) {
+      console.log("  ✓ Qt/QML tools are enabled for this C++/Qt project");
+    } else {
+      console.log(
+        "  ℹ Qt/QML tools are enabled (fallback for unknown project)"
+      );
+    }
+  } else {
     console.log(
-      "  ✓ Qt/QML tools are disabled for this TypeScript project (correct)"
+      `  ✓ Qt/QML tools are disabled for this ${projectType.primary} project (correct)`
     );
-  } else if (projectType.confidence < 0.3) {
-    console.log("  ⚠ Low confidence detection - all tools enabled by default");
   }
 
   console.log("\n================================\n");

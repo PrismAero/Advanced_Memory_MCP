@@ -93,10 +93,13 @@ export async function analyzeQmlBindings(
     );
   }
 
+  // Cache for expensive "all entities" search to avoid duplicate queries
+  let allEntitiesCache: any = null;
+
   if (graph.entities.length === 0) {
-    // Try searching in all entities
-    const allGraph = await memoryCore.searchEntities("", branchName);
-    graph.entities = allGraph.entities.filter(
+    // Try searching in all entities (cache this expensive query)
+    allEntitiesCache = await memoryCore.searchEntities("", branchName);
+    graph.entities = allEntitiesCache.entities.filter(
       (e: EntityWithMetadata) =>
         e.name === className ||
         e.name.endsWith(`::${className}`) ||
@@ -107,17 +110,21 @@ export async function analyzeQmlBindings(
   const entities = graph.entities;
 
   if (entities.length === 0) {
-    // Try to find by file path pattern
-    const allGraph = await memoryCore.searchEntities("", branchName);
-    const possibleFiles = allGraph.entities.filter((e: EntityWithMetadata) => {
-      const filePath = e.metadata?.filePath;
-      if (!filePath) return false;
-      const fileName = filePath.split("/").pop() || "";
-      return (
-        fileName.toLowerCase().includes(className.toLowerCase()) &&
-        /\.(h|hpp|hxx)$/.test(fileName)
-      );
-    });
+    // Try to find by file path pattern (reuse cache if available)
+    if (!allEntitiesCache) {
+      allEntitiesCache = await memoryCore.searchEntities("", branchName);
+    }
+    const possibleFiles = allEntitiesCache.entities.filter(
+      (e: EntityWithMetadata) => {
+        const filePath = e.metadata?.filePath;
+        if (!filePath) return false;
+        const fileName = filePath.split("/").pop() || "";
+        return (
+          fileName.toLowerCase().includes(className.toLowerCase()) &&
+          /\.(h|hpp|hxx)$/.test(fileName)
+        );
+      }
+    );
 
     if (possibleFiles.length > 0) {
       entities.push(...possibleFiles);

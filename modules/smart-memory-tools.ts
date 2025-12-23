@@ -32,7 +32,7 @@ export function filterToolsByProjectType(
     projectType.primary === "cpp" ||
     projectType.features.includes("qt") ||
     projectType.features.includes("qml") ||
-    projectType.confidence === 0; // Include if unknown
+    projectType.confidence === 0; // Enable all tools when project type cannot be determined
 
   const enablePython =
     projectType.primary === "python" ||

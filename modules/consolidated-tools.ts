@@ -16,22 +16,25 @@ export function filterToolsByProjectType(
   tools: Tool[],
   projectType: ProjectType
 ): Tool[] {
+  // When project type is unknown (confidence = 0), enable all tools to be safe
+  const isProjectTypeUnknown = projectType.confidence === 0;
+
   const enableQt =
+    isProjectTypeUnknown ||
     projectType.primary === "cpp" ||
     projectType.features.includes("qt") ||
-    projectType.features.includes("qml") ||
-    projectType.confidence === 0;
+    projectType.features.includes("qml");
 
   const enablePython =
+    isProjectTypeUnknown ||
     projectType.primary === "python" ||
-    projectType.secondary.includes("python") ||
-    projectType.confidence === 0;
+    projectType.secondary.includes("python");
 
   const enableTypeScript =
+    isProjectTypeUnknown ||
     projectType.primary === "typescript" ||
     projectType.primary === "javascript" ||
-    projectType.secondary.includes("typescript") ||
-    projectType.confidence === 0;
+    projectType.secondary.includes("typescript");
 
   return tools.filter((tool) => {
     if (

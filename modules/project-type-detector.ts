@@ -147,7 +147,7 @@ export class ProjectTypeDetector {
 
       // Determine primary language
       const sorted = Object.entries(indicators)
-        .filter(([_, score]) => score > 0)
+        .filter(([lang, score]) => score > 0)
         .sort(([, a], [, b]) => b - a);
 
       if (sorted.length === 0) {
