@@ -19,6 +19,7 @@ import {
 
 import { EnhancedMemoryManager } from "./enhanced-memory-manager-modular.js";
 import { BackgroundProcessor } from "./modules/background-processor.js";
+import { SMART_MEMORY_TOOLS } from "./modules/consolidated-tools.js";
 import { ContextHandlers } from "./modules/handlers/context-handlers.js";
 import {
   BranchHandlers,
@@ -33,12 +34,10 @@ import { logger } from "./modules/logger.js";
 import { ProjectTypeDetector } from "./modules/project-type-detector.js";
 import { RelationshipIndexer } from "./modules/relationship-indexer.js";
 import { ModernSimilarityEngine } from "./modules/similarity/similarity-engine.js";
-import {
-  filterToolsByProjectType,
-  SMART_MEMORY_TOOLS,
-} from "./modules/smart-memory-tools.js";
+import { filterToolsByProjectType } from "./modules/smart-memory-tools.js";
 import { ProjectAnalysisOperations } from "./modules/sqlite/project-analysis-operations.js";
 import { SQLiteConnection } from "./modules/sqlite/sqlite-connection.js";
+import { routeToolCall } from "./modules/tool-router.js";
 
 // SECURITY: Network activity monitor (development safeguard)
 if (process.env.LOG_LEVEL === "debug") {
@@ -235,196 +234,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   try {
-    switch (name) {
-      case "list_memory_branches":
-        return await branchHandlers.handleListMemoryBranches();
+    // Use the tool router to handle consolidated and legacy tool calls
+    const result = await routeToolCall(
+      { name, arguments: args },
+      {
+        branchHandlers,
+        entityHandlers,
+        searchHandlers,
+        contextHandlers,
+        workflowHandlers,
+        workspaceHandlers,
+        mlHandlers,
+        qtHandlers,
+        memoryManager,
+      }
+    );
 
-      case "create_memory_branch":
-        return await branchHandlers.handleCreateMemoryBranch(args);
-
-      case "delete_memory_branch":
-        return await branchHandlers.handleDeleteMemoryBranch(args);
-
-      case "create_entities":
-        return await entityHandlers.handleCreateEntities(args);
-
-      case "smart_search":
-        return await searchHandlers.handleSmartSearch(args);
-
-      case "read_memory_branch":
-        return await branchHandlers.handleReadMemoryBranch(args);
-
-      case "add_observations":
-        return await entityHandlers.handleAddObservations(args);
-
-      case "update_entity_status":
-        return await entityHandlers.handleUpdateEntityStatus(args);
-
-      case "delete_entities":
-        return await entityHandlers.handleDeleteEntities(args);
-
-      // AI Context Retrieval Tools
-      case "recall_working_context":
-        return await contextHandlers.handleRecallWorkingContext(args);
-
-      case "get_project_status":
-        return await contextHandlers.handleGetProjectStatus(args);
-
-      case "find_dependencies":
-        return await contextHandlers.handleFindDependencies(args);
-
-      case "trace_decision_chain":
-        return await contextHandlers.handleTraceDecisionChain(args);
-
-      // AI Workflow Management Tools
-      case "capture_decision":
-        return await workflowHandlers.handleCaptureDecision(args);
-
-      case "mark_current_work":
-        return await workflowHandlers.handleMarkCurrentWork(args);
-
-      case "update_project_status":
-        return await workflowHandlers.handleUpdateProjectStatus(args);
-
-      case "archive_completed_work":
-        return await workflowHandlers.handleArchiveCompletedWork(args);
-
-      case "suggest_related_context":
-        return await workflowHandlers.handleSuggestRelatedContext(args);
-
-      case "check_missing_dependencies":
-        return await workflowHandlers.handleCheckMissingDependencies(args);
-
-      case "get_continuation_context":
-        return await workflowHandlers.handleGetContinuationContext(args);
-
-      // Workspace Integration Tools
-      case "sync_with_workspace":
-        return await workspaceHandlers.handleSyncWithWorkspace(args);
-
-      case "workspace_context_bridge":
-        return await workspaceHandlers.handleWorkspaceContextBridge(args);
-
-      case "detect_project_patterns":
-        return await workspaceHandlers.handleDetectProjectPatterns(args);
-
-      case "analyze_project_structure":
-        return await workspaceHandlers.handleAnalyzeProjectStructure(args);
-
-      // Advanced ML/AI Tools
-      case "find_interface_usage":
-        return await workspaceHandlers.handleFindInterfaceUsage(args);
-
-      case "suggest_project_context":
-        return await contextHandlers.handleSuggestProjectContext(args);
-
-      case "navigate_codebase":
-        return await workspaceHandlers.handleNavigateCodebase(args);
-
-      case "train_project_model":
-        return await mlHandlers.handleTrainProjectModel(args);
-
-      case "generate_interface_embedding":
-        return await mlHandlers.handleGenerateInterfaceEmbedding(args);
-
-      case "find_similar_code":
-        return await mlHandlers.handleFindSimilarCode(args);
-
-      case "backfill_embeddings":
-        return await mlHandlers.handleBackfillEmbeddings(args);
-
-      // Qt/QML Analysis Tools
-      case "analyze_qml_bindings":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await qtHandlers.analyzeQmlBindings(args as any, memoryManager),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "find_qt_controllers":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await qtHandlers.findQtControllers(args, memoryManager),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "analyze_layer_architecture":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await qtHandlers.analyzeLayerArchitecture(args, memoryManager),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "find_qml_usage":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await qtHandlers.findQmlUsage(args as any, memoryManager),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "list_q_properties":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await qtHandlers.listQProperties(args, memoryManager),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "list_q_invokables":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await qtHandlers.listQInvokables(args, memoryManager),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      default:
-        logger.warn(`Unknown tool called: ${name}`);
-        return {
-          content: [{ type: "text", text: `Unknown tool: ${name}` }],
-          isError: true,
-        };
+    // If result is already in MCP response format, return it
+    if (result && typeof result === "object" && "content" in result) {
+      return result;
     }
+
+    // Otherwise, wrap it in MCP response format
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
   } catch (error) {
     logger.error(`Error handling tool call '${name}':`, error);
     return {

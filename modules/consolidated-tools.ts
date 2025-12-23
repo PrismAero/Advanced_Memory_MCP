@@ -307,7 +307,8 @@ export const CONSOLIDATED_TOOLS: Tool[] = [
         entity_names: {
           type: "array",
           items: { type: "string" },
-          description: "Entities to analyze (optional, uses working context if empty)",
+          description:
+            "Entities to analyze (optional, uses working context if empty)",
         },
         branch_name: {
           type: "string",
@@ -393,8 +394,7 @@ export const CONSOLIDATED_TOOLS: Tool[] = [
             "workspace_bridge",
             "find_interface_usage",
           ],
-          description:
-            "Type of analysis to perform on the project",
+          description: "Type of analysis to perform on the project",
         },
         workspace_path: {
           type: "string",
@@ -698,7 +698,8 @@ export const CONSOLIDATED_TOOLS: Tool[] = [
         },
         include_qml_usage: {
           type: "boolean",
-          description: "Include QML files that use each element (default: true)",
+          description:
+            "Include QML files that use each element (default: true)",
           default: true,
         },
         include_qml_calls: {
@@ -715,3 +716,99 @@ export const CONSOLIDATED_TOOLS: Tool[] = [
     },
   },
 ];
+
+// Export consolidated tools as the main tool list
+export const SMART_MEMORY_TOOLS = CONSOLIDATED_TOOLS;
+
+// Legacy tool names for backward compatibility mapping
+export const LEGACY_TOOL_MAP: {
+  [key: string]: { tool: string; action?: string; operation?: string };
+} = {
+  // Branch operations
+  list_memory_branches: { tool: "manage_branches", action: "list" },
+  create_memory_branch: { tool: "manage_branches", action: "create" },
+  delete_memory_branch: { tool: "manage_branches", action: "delete" },
+
+  // Entity operations
+  create_entities: { tool: "manage_entities", action: "create" },
+  add_observations: { tool: "manage_entities", action: "add_observations" },
+  update_entity_status: { tool: "manage_entities", action: "update_status" },
+  delete_entities: { tool: "manage_entities", action: "delete" },
+
+  // Search
+  smart_search: { tool: "search" },
+  read_memory_branch: { tool: "search" }, // with query=""
+
+  // Context
+  recall_working_context: { tool: "manage_context", action: "recall" },
+  get_continuation_context: { tool: "manage_context", action: "continuation" },
+  mark_current_work: { tool: "manage_context", action: "mark_work" },
+  archive_completed_work: { tool: "manage_context", action: "archive" },
+
+  // Project status
+  get_project_status: { tool: "project_status", action: "get" },
+  update_project_status: { tool: "project_status", action: "update" },
+
+  // Dependencies
+  find_dependencies: { tool: "analyze_dependencies", operation: "find" },
+  trace_decision_chain: {
+    tool: "analyze_dependencies",
+    operation: "trace_decisions",
+  },
+  check_missing_dependencies: {
+    tool: "analyze_dependencies",
+    operation: "check_missing",
+  },
+
+  // Project analysis
+  sync_with_workspace: { tool: "analyze_project", operation: "sync_workspace" },
+  workspace_context_bridge: {
+    tool: "analyze_project",
+    operation: "workspace_bridge",
+  },
+  detect_project_patterns: {
+    tool: "analyze_project",
+    operation: "detect_patterns",
+  },
+  analyze_project_structure: {
+    tool: "analyze_project",
+    operation: "analyze_structure",
+  },
+  find_interface_usage: {
+    tool: "analyze_project",
+    operation: "find_interface_usage",
+  },
+
+  // Context suggestions
+  suggest_project_context: {
+    tool: "suggest_context",
+    operation: "project_context",
+  },
+  suggest_related_context: {
+    tool: "suggest_context",
+    operation: "related_context",
+  },
+
+  // ML operations
+  train_project_model: { tool: "ml_operations", operation: "train_model" },
+  generate_interface_embedding: {
+    tool: "ml_operations",
+    operation: "generate_embedding",
+  },
+  find_similar_code: { tool: "ml_operations", operation: "find_similar_code" },
+  backfill_embeddings: {
+    tool: "ml_operations",
+    operation: "backfill_embeddings",
+  },
+
+  // Qt/QML
+  analyze_qml_bindings: { tool: "analyze_qt", operation: "qml_bindings" },
+  find_qt_controllers: { tool: "analyze_qt", operation: "find_controllers" },
+  analyze_layer_architecture: {
+    tool: "analyze_qt",
+    operation: "layer_architecture",
+  },
+  find_qml_usage: { tool: "analyze_qt", operation: "qml_usage" },
+  list_q_properties: { tool: "list_qt_elements", operation: "properties" },
+  list_q_invokables: { tool: "list_qt_elements", operation: "invokables" },
+};
