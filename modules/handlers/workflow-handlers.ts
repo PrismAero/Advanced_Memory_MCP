@@ -861,7 +861,7 @@ export class WorkflowHandlers {
                         type: e.entityType,
                         last_activity: e.lastAccessed,
                         key_note:
-                          e.observations[0]?.substring(
+                          e.observations?.[0]?.substring(
                             0,
                             WorkflowHandlers.MAX_NOTE_PREVIEW_LENGTH
                           ) || "No notes",
@@ -873,7 +873,7 @@ export class WorkflowHandlers {
                     decision: d.entity_name,
                     timestamp: d.timestamp,
                     summary:
-                      d.observations[0]?.substring(
+                      d.observations?.[0]?.substring(
                         0,
                         WorkflowHandlers.MAX_DECISION_SUMMARY_LENGTH
                       ) || "No summary",
@@ -1247,7 +1247,7 @@ export class WorkflowHandlers {
       .map((e: Entity) => ({
         decision_name: e.name,
         timestamp: e.created || e.lastUpdated,
-        summary: e.observations[0]?.substring(0, 100) || "",
+        summary: e.observations?.[0]?.substring(0, 100) || "",
       }))
       .slice(0, 3);
   }
@@ -1266,12 +1266,12 @@ export class WorkflowHandlers {
       )
       .map((e: Entity) => ({
         blocker_name: e.name,
-        severity: e.observations.some((obs) =>
+        severity: e.observations?.some((obs) =>
           obs.toLowerCase().includes("critical")
         )
           ? "critical"
           : "normal",
-        description: e.observations[0] || "",
+        description: e.observations?.[0] || "",
       }))
       .slice(0, 3);
   }
