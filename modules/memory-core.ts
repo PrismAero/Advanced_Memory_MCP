@@ -22,6 +22,11 @@ export interface IMemoryOperations {
     branchName?: string
   ): Promise<Relation[]>;
   deleteRelations(relations: Relation[], branchName?: string): Promise<void>;
+  cleanupOrphanedRelations(branchName?: string): Promise<number>;
+  cleanupLowValueRelations(
+    branchName?: string,
+    minScore?: number
+  ): Promise<number>;
 
   // Search operations
   searchEntities(
@@ -144,6 +149,11 @@ export abstract class BaseMemoryManager implements IMemoryOperations {
     relations: Relation[],
     branchName?: string
   ): Promise<void>;
+  abstract cleanupOrphanedRelations(branchName?: string): Promise<number>;
+  abstract cleanupLowValueRelations(
+    branchName?: string,
+    minScore?: number
+  ): Promise<number>;
   abstract searchEntities(
     query: string,
     branchName?: string,

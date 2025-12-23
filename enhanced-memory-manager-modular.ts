@@ -69,6 +69,20 @@ export class EnhancedMemoryManager {
     return await this.sqliteManager.deleteRelations(relations, branchName);
   }
 
+  async cleanupOrphanedRelations(branchName?: string): Promise<number> {
+    return await this.sqliteManager.cleanupOrphanedRelations(branchName);
+  }
+
+  async cleanupLowValueRelations(
+    branchName?: string,
+    minScore?: number
+  ): Promise<number> {
+    return await this.sqliteManager.cleanupLowValueRelations(
+      branchName,
+      minScore
+    );
+  }
+
   // Search operations
   async searchEntities(
     query: string,

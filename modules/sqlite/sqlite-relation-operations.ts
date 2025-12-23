@@ -184,4 +184,105 @@ export class SQLiteRelationOperations {
       relationType: row.relation_type,
     }));
   }
+
+  /**
+   * Clean up orphaned relations (relations pointing to non-existent entities)
+   * and duplicate/redundant relations
+   */
+  async cleanupOrphanedRelations(branchName?: string): Promise<number> {
+    const branchId = await this.connection.getBranchId(branchName);
+
+    try {
+      // Delete relations where from_entity_id doesn't exist
+      const orphanedFromResult = await this.connection.runQuery(
+        `
+        DELETE FROM relations 
+        WHERE branch_id = ? AND from_entity_id NOT IN (
+          SELECT id FROM entities WHERE branch_id = ?
+        )
+        `,
+        [branchId, branchId]
+      );
+
+      // Delete relations where to_entity_id doesn't exist
+      const orphanedToResult = await this.connection.runQuery(
+        `
+        DELETE FROM relations 
+        WHERE branch_id = ? AND to_entity_id NOT IN (
+          SELECT id FROM entities WHERE branch_id = ?
+        )
+        `,
+        [branchId, branchId]
+      );
+
+      // Delete duplicate relations (keep only one of each unique relation)
+      await this.connection.runQuery(
+        `
+        DELETE FROM relations 
+        WHERE branch_id = ? AND id NOT IN (
+          SELECT MIN(id) 
+          FROM relations 
+          WHERE branch_id = ?
+          GROUP BY from_entity_id, to_entity_id, relation_type
+        )
+        `,
+        [branchId, branchId]
+      );
+
+      // Count total cleaned up (SQLite doesn't return affected rows easily, so we log)
+      logger.info(
+        `Cleaned up orphaned and duplicate relations in branch ${
+          branchName || "main"
+        }`
+      );
+
+      return 0; // Would need to track changes separately to return accurate count
+    } catch (error) {
+      logger.error("Error cleaning up orphaned relations:", error);
+      return 0;
+    }
+  }
+
+  /**
+   * Clean up low-value relations based on criteria:
+   * - Relations with generic types (similar_to) between unrelated entities
+   * - Relations created automatically that have low semantic similarity
+   */
+  async cleanupLowValueRelations(
+    branchName?: string,
+    minScore: number = 0.6
+  ): Promise<number> {
+    const branchId = await this.connection.getBranchId(branchName);
+
+    try {
+      // This would require storing relation confidence scores in the database
+      // For now, we'll clean up generic "similar_to" relations between folders/configs
+      const result = await this.connection.runQuery(
+        `
+        DELETE FROM relations 
+        WHERE branch_id = ? 
+        AND relation_type IN ('similar_to')
+        AND EXISTS (
+          SELECT 1 FROM entities e1 
+          WHERE e1.id = relations.from_entity_id 
+          AND e1.entity_type IN ('reference', 'folder')
+        )
+        AND EXISTS (
+          SELECT 1 FROM entities e2 
+          WHERE e2.id = relations.to_entity_id 
+          AND e2.entity_type IN ('reference', 'folder')
+        )
+        `,
+        [branchId]
+      );
+
+      logger.debug(
+        `Cleaned up low-value relations in branch ${branchName || "main"}`
+      );
+      return 0;
+    } catch (error) {
+      logger.error("Error cleaning up low-value relations:", error);
+      return 0;
+    }
+  }
 }

@@ -531,7 +531,10 @@ export class BackgroundProcessor {
       // Task 4: Clean up outdated context flags
       await this.cleanupOutdatedContext();
 
-      // Task 5: Suggest new branch relationships
+      // Task 5: Clean up orphaned and low-value relations
+      await this.cleanupRelations();
+
+      // Task 6: Suggest new branch relationships
       await this.suggestBranchRelationships();
 
       logger.info("Background processing tasks completed successfully");
@@ -1088,6 +1091,29 @@ export class BackgroundProcessor {
       logger.debug("Outdated context cleanup completed");
     } catch (error) {
       logger.error("Error during context cleanup:", error);
+    }
+  }
+
+  /**
+   * Clean up orphaned relations and low-value/duplicate relations
+   */
+  private async cleanupRelations(): Promise<void> {
+    logger.debug("Cleaning up orphaned and low-value relations");
+
+    try {
+      const branches = await this.memoryManager.listBranches();
+
+      for (const branch of branches) {
+        // Clean up orphaned relations (pointing to deleted entities)
+        await this.memoryManager.cleanupOrphanedRelations(branch.name);
+
+        // Clean up low-value relations with similarity < 0.6
+        await this.memoryManager.cleanupLowValueRelations(branch.name, 0.6);
+      }
+
+      logger.debug("Relations cleanup completed");
+    } catch (error) {
+      logger.error("Error during relations cleanup:", error);
     }
   }
 

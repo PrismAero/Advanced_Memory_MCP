@@ -262,32 +262,81 @@ export class MemoryOptimizer {
   }
 
   /**
-   * Extract keywords from text for indexing - Enhanced for technical content
+   * Extract keywords from text for indexing - Enhanced for technical content with stricter filtering
    */
   private extractKeywords(text: string): string[] {
-    const words = text.toLowerCase().match(/\b[a-zA-Z]{2,}\b/g) || [];
+    const words = text.toLowerCase().match(/\b[a-zA-Z]{3,}\b/g) || []; // Minimum 3 chars
     const technicalTerms =
       text.match(
         /\b[A-Z][a-zA-Z]*\b|\b[a-z]+[A-Z][a-zA-Z]*\b|\b[a-zA-Z]*\d+[a-zA-Z]*\b/g
       ) || [];
     const wordCounts: Record<string, number> = {};
 
+    // Additional stop words for generic/low-value terms
+    const stopWords = new Set([
+      ...this.fillerWords,
+      "file",
+      "folder",
+      "path",
+      "src",
+      "dist",
+      "build",
+      "node",
+      "modules",
+      "test",
+      "tests",
+      "example",
+      "examples",
+      "tmp",
+      "temp",
+      "cache",
+      "git",
+      "github",
+      "npm",
+      "pkg",
+      "lib",
+      "bin",
+      "obj",
+      "out",
+      "true",
+      "false",
+      "null",
+      "undefined",
+      "var",
+      "let",
+      "const",
+      "string",
+      "number",
+      "boolean",
+      "array",
+      "object",
+      "function",
+      "return",
+      "export",
+      "import",
+      "from",
+      "default",
+      "class",
+      "interface",
+    ]);
+
     // Count word frequency with higher weight for technical terms
     words.forEach((word) => {
-      if (!this.fillerWords.has(word) && word.length >= 2) {
+      if (!stopWords.has(word) && word.length >= 4) {
+        // Stricter: minimum 4 chars
         wordCounts[word] = (wordCounts[word] || 0) + 1;
       }
     });
 
-    // Add technical terms with higher weight
+    // Add technical terms with higher weight (must be meaningful)
     technicalTerms.forEach((term) => {
       const lowerTerm = term.toLowerCase();
-      if (lowerTerm.length >= 2) {
+      if (lowerTerm.length >= 4 && !stopWords.has(lowerTerm)) {
         wordCounts[lowerTerm] = (wordCounts[lowerTerm] || 0) + 2; // Double weight for technical terms
       }
     });
 
-    // Also extract file paths, URLs, and technical patterns
+    // Extract file paths, URLs, and technical patterns with stricter filtering
     const patterns = [
       /\/[a-zA-Z0-9._/-]+\.[a-zA-Z0-9]+/g, // File paths
       /https?:\/\/[a-zA-Z0-9.-]+[a-zA-Z0-9._/-]*/g, // URLs
@@ -300,17 +349,21 @@ export class MemoryOptimizer {
       const matches = text.match(pattern) || [];
       matches.forEach((match) => {
         const cleanMatch = match.toLowerCase().replace(/[^\w]/g, "");
-        if (cleanMatch.length >= 3) {
+        if (cleanMatch.length >= 5 && !stopWords.has(cleanMatch)) {
+          // Minimum 5 chars for patterns
           wordCounts[cleanMatch] = (wordCounts[cleanMatch] || 0) + 3; // Triple weight for patterns
         }
       });
     });
 
-    // Return top keywords by frequency, prioritizing technical content
-    return Object.entries(wordCounts)
+    // Filter out keywords that appear only once (low relevance)
+    const significantKeywords = Object.entries(wordCounts)
+      .filter(([, count]) => count >= 2) // Must appear at least twice OR be technical
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 15) // Increased from 10 to 15 for better coverage
+      .slice(0, 10) // Reduced from 15 to 10 for more focused keywords
       .map(([word]) => word);
+
+    return significantKeywords;
   }
 
   /**

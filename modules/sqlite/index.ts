@@ -87,6 +87,20 @@ export class ModularSQLiteOperations implements IMemoryOperations {
     return await this.relationOps.deleteRelations(relations, branchName);
   }
 
+  async cleanupOrphanedRelations(branchName?: string): Promise<number> {
+    return await this.relationOps.cleanupOrphanedRelations(branchName);
+  }
+
+  async cleanupLowValueRelations(
+    branchName?: string,
+    minScore?: number
+  ): Promise<number> {
+    return await this.relationOps.cleanupLowValueRelations(
+      branchName,
+      minScore
+    );
+  }
+
   // Search operations - delegate to SearchOperations
   async searchEntities(
     query: string,

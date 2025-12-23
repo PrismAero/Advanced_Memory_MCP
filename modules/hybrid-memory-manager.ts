@@ -126,6 +126,17 @@ export class HybridMemoryManager implements IMemoryOperations {
     return await this.sqliteOps.deleteRelations(relations, branchName);
   }
 
+  async cleanupOrphanedRelations(branchName?: string): Promise<number> {
+    return await this.sqliteOps.cleanupOrphanedRelations(branchName);
+  }
+
+  async cleanupLowValueRelations(
+    branchName?: string,
+    minScore?: number
+  ): Promise<number> {
+    return await this.sqliteOps.cleanupLowValueRelations(branchName, minScore);
+  }
+
   async searchEntities(
     query: string,
     branchName?: string,

@@ -486,7 +486,7 @@ export class WorkflowHandlers {
       } catch (error) {
         logger.warn(
           `Failed to clear working context for ${entity.name}:`,
-          error
+          error instanceof Error ? error.message : String(error)
         );
       }
     }
