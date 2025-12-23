@@ -82,18 +82,59 @@ export async function analyzeQmlBindings(
 
   logger.info(`Analyzing QML bindings for class: ${className}`);
 
-  // Get project files from memory
-  const graph = await memoryCore.searchEntities(
-    `${className} class`,
-    branchName
-  );
+  // Try multiple search strategies to find the class
+  let graph = await memoryCore.searchEntities(className, branchName);
+
+  if (graph.entities.length === 0) {
+    // Try searching without "class" keyword
+    graph = await memoryCore.searchEntities(
+      `${className} interface`,
+      branchName
+    );
+  }
+
+  if (graph.entities.length === 0) {
+    // Try searching in all entities
+    const allGraph = await memoryCore.searchEntities("", branchName);
+    graph.entities = allGraph.entities.filter(
+      (e: EntityWithMetadata) =>
+        e.name === className ||
+        e.name.endsWith(`::${className}`) ||
+        e.name.includes(className)
+    );
+  }
+
   const entities = graph.entities;
+
+  if (entities.length === 0) {
+    // Try to find by file path pattern
+    const allGraph = await memoryCore.searchEntities("", branchName);
+    const possibleFiles = allGraph.entities.filter((e: EntityWithMetadata) => {
+      const filePath = e.metadata?.filePath;
+      if (!filePath) return false;
+      const fileName = filePath.split("/").pop() || "";
+      return (
+        fileName.toLowerCase().includes(className.toLowerCase()) &&
+        /\.(h|hpp|hxx)$/.test(fileName)
+      );
+    });
+
+    if (possibleFiles.length > 0) {
+      entities.push(...possibleFiles);
+      logger.info(
+        `Found ${possibleFiles.length} files matching class name pattern`
+      );
+    }
+  }
 
   // Find the C++ file containing this class
   const cppFiles = entities.filter(
     (e: EntityWithMetadata) =>
-      e.entityType === "interface" &&
-      (e.name === className || e.name.endsWith(`::${className}`))
+      e.metadata?.filePath &&
+      /\.(h|hpp|hxx|cpp|cc|cxx)$/.test(e.metadata.filePath) &&
+      (e.name === className ||
+        e.name.endsWith(`::${className}`) ||
+        e.name.includes(className))
   );
 
   if (cppFiles.length === 0) {
@@ -272,24 +313,40 @@ export async function findQtControllers(
 
   logger.info("Finding Qt controllers with QML registration");
 
-  // Search for files with QML registration
-  const graph = await memoryCore.searchEntities(
-    "QML_ELEMENT qmlRegisterType class",
+  // First try to search for entities with QML-related metadata
+  const qmlSearchGraph = await memoryCore.searchEntities(
+    "controller class",
     branchName
   );
-  const entities = graph.entities;
+
+  // Also search by file type for .h and .cpp files
+  const allGraph = await memoryCore.searchEntities("", branchName);
+  const allEntities = allGraph.entities;
+
+  // Combine and filter for potential Qt controller files
+  const potentialControllerEntities = allEntities.filter(
+    (e: EntityWithMetadata) => {
+      const filePath = e.metadata?.filePath;
+      if (!filePath) return false;
+
+      // Look for header files in controller directories or with Controller suffix
+      return (
+        /\.(h|hpp|hxx)$/.test(filePath) &&
+        (filePath.includes("/controller") ||
+          filePath.includes("/Controller") ||
+          /controller\.(h|hpp|hxx)$/i.test(filePath) ||
+          e.name.toLowerCase().includes("controller"))
+      );
+    }
+  );
+
+  logger.info(
+    `Found ${potentialControllerEntities.length} potential controller files to analyze`
+  );
 
   const controllers: QtController[] = [];
 
-  // Filter for C++ files
-  const cppEntities = entities.filter(
-    (e: EntityWithMetadata) =>
-      e.entityType === "interface" &&
-      e.metadata?.filePath &&
-      /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath)
-  );
-
-  for (const entity of cppEntities) {
+  for (const entity of potentialControllerEntities) {
     const filePath = (entity as EntityWithMetadata).metadata?.filePath;
     if (!filePath) continue;
 

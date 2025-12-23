@@ -58,6 +58,34 @@ export class ContextHandlers {
         sessionId
       );
 
+      if (suggestions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  suggestions: [],
+                  count: 0,
+                  context_source: "ml_context_engine",
+                  diagnostics: {
+                    context_engine_available: true,
+                    current_file_provided: !!currentFile,
+                    search_query_provided: !!searchQuery,
+                    active_interfaces_count: activeInterfaces.length,
+                    note: "No suggestions generated. This could mean: 1) Project hasn't been analyzed yet, 2) No embeddings exist for the codebase, or 3) Current context doesn't match any known patterns.",
+                    suggestion:
+                      "Try running analyze_project_structure first, or provide more specific context (file path, interfaces, or search query).",
+                  },
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
       return {
         content: [
           {
@@ -96,77 +124,57 @@ export class ContextHandlers {
 
   /**
    * Recall all entities currently marked as working context
+   * Returns condensed summary to minimize token usage on large projects
    */
   async handleRecallWorkingContext(args: any): Promise<any> {
     const branchName = args.branch_name || "main";
-    const includeRelated = args.include_related !== false; // Default true
-    const maxRelated = args.max_related || 10;
+    const detailLevel = args.detail_level || "summary"; // summary | detailed | full
+    const maxEntitiesSummary = args.max_entities || 10;
 
-    logger.info(`Recalling working context from branch: ${branchName}`);
+    logger.info(
+      `Recalling working context from branch: ${branchName} (detail: ${detailLevel})`
+    );
 
     try {
       // Get all entities with working_context flag set
       const workingContextResults = await this.memoryManager.searchEntities(
-        "", // Empty query to get all
+        "",
         branchName,
-        ["active", "draft"], // Include active and draft entities
+        ["active", "draft"],
         {
           workingContextOnly: true,
           includeConfidenceScores: true,
         }
       );
 
-      let allEntities = workingContextResults.entities;
-      let allRelations = workingContextResults.relations;
+      const allEntities = workingContextResults.entities;
 
-      // Add related entities if requested
-      if (includeRelated && workingContextResults.entities.length > 0) {
-        logger.info(
-          `Expanding working context with related entities (max: ${maxRelated})`
-        );
-
-        // Get entities with high relevance scores or recent access
-        const relatedResults = await this.memoryManager.searchEntities(
-          "", // Empty query
+      // Generate condensed summary for large projects
+      if (
+        detailLevel === "summary" ||
+        (detailLevel === "detailed" && allEntities.length > 50)
+      ) {
+        return this.generateContextSummary(
+          allEntities,
           branchName,
-          ["active"],
-          {
-            includeContext: true,
-            includeConfidenceScores: true,
-          }
+          maxEntitiesSummary,
+          workingContextResults.relations
         );
-
-        // Filter and add top related entities not already in working context
-        const workingEntityNames = new Set(
-          workingContextResults.entities.map((e: Entity) => e.name)
-        );
-        const relatedEntities = relatedResults.entities
-          .filter(
-            (e: Entity) =>
-              !workingEntityNames.has(e.name) &&
-              ((e.relevanceScore && e.relevanceScore > 0.6) ||
-                (e.lastAccessed &&
-                  new Date(e.lastAccessed) >
-                    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))) // Last 7 days
-          )
-          .slice(0, maxRelated);
-
-        allEntities = [...allEntities, ...relatedEntities];
-
-        // Get relations for related entities
-        if (relatedEntities.length > 0) {
-          const relatedEntityNames = relatedEntities.map((e: Entity) => e.name);
-          const contextRelations = await this.getRelationsForEntities(
-            relatedEntityNames,
-            branchName
-          );
-          allRelations = [...allRelations, ...contextRelations];
-        }
       }
 
-      // Remove duplicate relations
-      const uniqueRelations = this.removeDuplicateRelations(allRelations);
+      // Detailed mode: Include more entities but still limit data
+      if (detailLevel === "detailed") {
+        return this.generateDetailedContext(
+          allEntities,
+          branchName,
+          workingContextResults.relations
+        );
+      }
 
+      // Full mode: Return everything (legacy behavior)
+      const uniqueRelations = this.removeDuplicateRelations(
+        workingContextResults.relations
+      );
       return {
         content: [
           {
@@ -178,33 +186,9 @@ export class ContextHandlers {
                   relations: uniqueRelations,
                 },
                 branch: branchName,
-                context_expansion: includeRelated,
-                confidence_scores:
-                  workingContextResults.confidence_scores || [],
-                summary: `Found ${
-                  workingContextResults.entities.length
-                } working context entities${
-                  includeRelated
-                    ? ` with ${
-                        allEntities.length -
-                        workingContextResults.entities.length
-                      } related entities`
-                    : ""
-                } in branch "${branchName}"`,
-                ai_hints: {
-                  active_entities: allEntities.filter(
-                    (e: Entity) => e.workingContext
-                  ).length,
-                  high_relevance_entities: allEntities.filter(
-                    (e: Entity) => e.relevanceScore && e.relevanceScore > 0.8
-                  ).length,
-                  recent_activity: allEntities.filter(
-                    (e: Entity) =>
-                      e.lastAccessed &&
-                      new Date(e.lastAccessed) >
-                        new Date(Date.now() - 24 * 60 * 60 * 1000)
-                  ).length,
-                },
+                detail_level: "full",
+                warning:
+                  "Full detail mode may use significant tokens on large projects. Consider using detail_level='summary'.",
               },
               null,
               2
@@ -216,6 +200,194 @@ export class ContextHandlers {
       logger.error("Error recalling working context:", error);
       throw error;
     }
+  }
+
+  /**
+   * Generate condensed context summary (optimized for large projects)
+   */
+  private async generateContextSummary(
+    entities: Entity[],
+    branchName: string,
+    maxEntities: number,
+    relations: any[]
+  ): Promise<any> {
+    // Group entities by type and extract key info
+    const byType = this.groupEntitiesByType(entities);
+    const recentlyWorked = entities
+      .filter((e) => e.lastAccessed)
+      .sort(
+        (a, b) =>
+          new Date(b.lastAccessed!).getTime() -
+          new Date(a.lastAccessed!).getTime()
+      )
+      .slice(0, maxEntities);
+
+    const highPriority = entities
+      .filter((e) => e.relevanceScore && e.relevanceScore > 0.8)
+      .slice(0, maxEntities);
+
+    // Extract rules and structures
+    const rules = entities.filter(
+      (e) =>
+        e.entityType === "rule" ||
+        e.entityType === "guideline" ||
+        e.observations.some(
+          (obs) =>
+            obs.toLowerCase().includes("must") ||
+            obs.toLowerCase().includes("rule")
+        )
+    );
+
+    const knownIssues = entities.filter(
+      (e) =>
+        e.entityType === "issue" ||
+        e.entityType === "blocker" ||
+        e.observations.some(
+          (obs) =>
+            obs.toLowerCase().includes("bug") ||
+            obs.toLowerCase().includes("issue")
+        )
+    );
+
+    const structures = entities.filter(
+      (e) =>
+        e.entityType === "architecture" ||
+        e.entityType === "pattern" ||
+        e.entityType === "interface"
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              project_outline: {
+                branch: branchName,
+                total_entities: entities.length,
+                entity_types: byType,
+                detail_level: "summary",
+              },
+              last_worked_areas: recentlyWorked.map((e) => ({
+                name: e.name,
+                type: e.entityType,
+                last_accessed: e.lastAccessed,
+                relevance: e.relevanceScore,
+                summary:
+                  e.observations[0]?.substring(0, 150) || "No description",
+              })),
+              high_priority_items: highPriority.map((e) => ({
+                name: e.name,
+                type: e.entityType,
+                relevance: e.relevanceScore,
+                summary:
+                  e.observations[0]?.substring(0, 150) || "No description",
+              })),
+              must_know_rules: rules.map((e) => ({
+                name: e.name,
+                rule: e.observations[0] || "See entity for details",
+                importance: e.relevanceScore || 0.5,
+              })),
+              coding_structures: structures.slice(0, 10).map((e) => ({
+                name: e.name,
+                type: e.entityType,
+                description:
+                  e.observations[0]?.substring(0, 100) || "No description",
+              })),
+              known_issues: knownIssues.map((e) => ({
+                name: e.name,
+                issue:
+                  e.observations[0]?.substring(0, 150) ||
+                  "See entity for details",
+                status: e.status,
+              })),
+              key_relationships: {
+                total_relations: relations.length,
+                relationship_types: this.countRelationTypes(relations),
+                critical_dependencies: relations.filter(
+                  (r) =>
+                    r.relationType === "depends_on" ||
+                    r.relationType === "requires"
+                ).length,
+              },
+              usage_note: `Using summary mode to reduce token usage. ${entities.length} total entities condensed. Use detail_level='detailed' for more info or specify entity names directly.`,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  /**
+   * Generate detailed context (middle ground between summary and full)
+   */
+  private async generateDetailedContext(
+    entities: Entity[],
+    branchName: string,
+    relations: any[]
+  ): Promise<any> {
+    const byType = this.groupEntitiesByType(entities);
+    const recentlyWorked = entities
+      .filter((e) => e.lastAccessed)
+      .sort(
+        (a, b) =>
+          new Date(b.lastAccessed!).getTime() -
+          new Date(a.lastAccessed!).getTime()
+      )
+      .slice(0, 20);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              working_context: {
+                branch: branchName,
+                total_entities: entities.length,
+                entity_types: byType,
+                detail_level: "detailed",
+              },
+              recently_worked: recentlyWorked.map((e) => ({
+                name: e.name,
+                type: e.entityType,
+                observations: e.observations.slice(0, 3), // Limit observations
+                relevance: e.relevanceScore,
+                last_accessed: e.lastAccessed,
+                status: e.status,
+              })),
+              entity_summary_by_type: Object.entries(byType).map(
+                ([type, count]) => ({
+                  type,
+                  count,
+                  top_entities: entities
+                    .filter((e) => e.entityType === type)
+                    .slice(0, 5)
+                    .map((e) => e.name),
+                })
+              ),
+              relationships: {
+                total: relations.length,
+                types: this.countRelationTypes(relations),
+                sample: relations.slice(0, 20), // Limit relation samples
+              },
+              usage_note: `Detailed mode active. Use detail_level='summary' for condensed view or detail_level='full' for complete data.`,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  private countRelationTypes(relations: any[]): { [key: string]: number } {
+    return relations.reduce((acc, rel) => {
+      acc[rel.relationType] = (acc[rel.relationType] || 0) + 1;
+      return acc;
+    }, {});
   }
 
   /**
@@ -532,9 +704,22 @@ export class ContextHandlers {
     entityNames: string[],
     branchName: string
   ): Promise<any[]> {
-    // This would typically call the relation operations to get relations
-    // For now, return empty array as placeholder
-    return [];
+    try {
+      // Get the SQLite relation operations from memory manager
+      const relationOps = this.memoryManager.sqliteOps?.relationOps;
+
+      if (!relationOps) {
+        logger.warn("Relation operations not available");
+        return [];
+      }
+
+      const branchId =
+        await this.memoryManager.sqliteOps.connection.getBranchId(branchName);
+      return await relationOps.getRelationsForEntities(entityNames, branchId);
+    } catch (error) {
+      logger.warn("Failed to fetch relations for entities:", error);
+      return [];
+    }
   }
 
   private removeDuplicateRelations(relations: any[]): any[] {
@@ -552,9 +737,88 @@ export class ContextHandlers {
     branchName: string,
     depth: number
   ): Promise<any[]> {
-    // Placeholder for dependency tracing logic
-    // Would analyze relationships and determine dependencies
-    return [];
+    try {
+      const dependencies: any[] = [];
+      const visited = new Set<string>();
+      const queue: Array<{
+        entity: string;
+        currentDepth: number;
+        path: string[];
+      }> = entityNames.map((name) => ({
+        entity: name,
+        currentDepth: 0,
+        path: [name],
+      }));
+
+      while (queue.length > 0) {
+        const { entity, currentDepth, path } = queue.shift()!;
+
+        if (visited.has(entity) || currentDepth >= depth) {
+          continue;
+        }
+
+        visited.add(entity);
+
+        // Get relations for this entity
+        const relations = await this.getRelationsForEntities(
+          [entity],
+          branchName
+        );
+
+        for (const relation of relations) {
+          // Track both dependencies (from -> to) and dependents (to -> from)
+          if (relation.from === entity && !visited.has(relation.to)) {
+            dependencies.push({
+              from: relation.from,
+              to: relation.to,
+              type: relation.relationType,
+              depth: currentDepth + 1,
+              path: [...path, relation.to],
+              direction: "depends_on",
+              importance: this.assessDependencyImportance(
+                relation.relationType
+              ),
+              status: "active",
+            });
+
+            if (currentDepth + 1 < depth) {
+              queue.push({
+                entity: relation.to,
+                currentDepth: currentDepth + 1,
+                path: [...path, relation.to],
+              });
+            }
+          } else if (relation.to === entity && !visited.has(relation.from)) {
+            dependencies.push({
+              from: relation.from,
+              to: relation.to,
+              type: relation.relationType,
+              depth: currentDepth + 1,
+              path: [...path, relation.from],
+              direction: "depended_by",
+              importance: this.assessDependencyImportance(
+                relation.relationType
+              ),
+              status: "active",
+            });
+          }
+        }
+      }
+
+      return dependencies;
+    } catch (error) {
+      logger.error("Failed to trace dependencies:", error);
+      return [];
+    }
+  }
+
+  private assessDependencyImportance(relationType: string): string {
+    const criticalTypes = ["requires", "depends_on", "implements", "extends"];
+    const importantTypes = ["uses", "calls", "references"];
+
+    if (criticalTypes.includes(relationType)) return "critical";
+    if (importantTypes.includes(relationType)) return "important";
+    return "optional";
   }
 
   private async getDecisionChainForEntity(

@@ -30,9 +30,13 @@ import * as qtHandlers from "./modules/handlers/qt-handlers.js";
 import { WorkflowHandlers } from "./modules/handlers/workflow-handlers.js";
 import { WorkspaceHandlers } from "./modules/handlers/workspace-handlers.js";
 import { logger } from "./modules/logger.js";
+import { ProjectTypeDetector } from "./modules/project-type-detector.js";
 import { RelationshipIndexer } from "./modules/relationship-indexer.js";
 import { ModernSimilarityEngine } from "./modules/similarity/similarity-engine.js";
-import { SMART_MEMORY_TOOLS } from "./modules/smart-memory-tools.js";
+import {
+  filterToolsByProjectType,
+  SMART_MEMORY_TOOLS,
+} from "./modules/smart-memory-tools.js";
 import { ProjectAnalysisOperations } from "./modules/sqlite/project-analysis-operations.js";
 import { SQLiteConnection } from "./modules/sqlite/sqlite-connection.js";
 
@@ -68,6 +72,9 @@ const relationshipIndexer = new RelationshipIndexer(
 const projectPath = process.env.MEMORY_PATH || process.cwd();
 const sqliteConnection = new SQLiteConnection(projectPath);
 const projectAnalysisOps = new ProjectAnalysisOperations(sqliteConnection);
+
+// Initialize project type detector
+const projectTypeDetector = new ProjectTypeDetector(projectPath);
 
 // Initialize specialized handlers
 const branchHandlers = new BranchHandlers(memoryManager);
@@ -168,8 +175,48 @@ async function initializeComponents(): Promise<void> {
   logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
 
+// Dynamic tool list based on project type
+let availableTools = SMART_MEMORY_TOOLS;
+let projectTypeDetected = false;
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools: SMART_MEMORY_TOOLS };
+  // Detect project type on first ListTools request
+  if (!projectTypeDetected) {
+    try {
+      // Check for override environment variable
+      const forceEnableAll = process.env.MCP_ENABLE_ALL_TOOLS === "true";
+
+      if (forceEnableAll) {
+        logger.info(
+          "MCP_ENABLE_ALL_TOOLS=true: Enabling all tools regardless of project type"
+        );
+        availableTools = SMART_MEMORY_TOOLS;
+      } else {
+        const projectType = await projectTypeDetector.detectProjectType();
+        availableTools = filterToolsByProjectType(
+          SMART_MEMORY_TOOLS,
+          projectType
+        );
+
+        const qtEnabled = availableTools.some(
+          (t) => t.name.includes("qml") || t.name.includes("qt")
+        );
+
+        logger.info(
+          `Tools filtered for project type: ${projectType.primary} (${availableTools.length}/${SMART_MEMORY_TOOLS.length} tools available)`
+        );
+        logger.info(`  Qt/QML tools: ${qtEnabled ? "enabled" : "disabled"}`);
+      }
+
+      projectTypeDetected = true;
+    } catch (error) {
+      logger.warn("Project type detection failed, using all tools:", error);
+      availableTools = SMART_MEMORY_TOOLS;
+      projectTypeDetected = true;
+    }
+  }
+
+  return { tools: availableTools };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {

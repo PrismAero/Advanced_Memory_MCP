@@ -449,26 +449,104 @@ export class WorkspaceHandlers {
    * Navigate codebase based on semantic query
    */
   async handleNavigateCodebase(args: any): Promise<any> {
-    const query = args.query;
-    const limit = args.limit || 5;
+    const featureDescription = args.feature_description;
+    const navigationGoal = args.navigation_goal;
+    const startingPoint = args.starting_point;
+    const maxResults = args.max_results || 20;
+    const branchName = args.branch_name || "main";
+    const includeConfidence = args.include_confidence_scores !== false;
 
-    if (!query) {
+    if (!featureDescription) {
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({ error: "query is required" }, null, 2),
+            text: JSON.stringify(
+              { error: "feature_description is required" },
+              null,
+              2
+            ),
           },
         ],
         isError: true,
       };
     }
 
-    logger.info(`Navigating codebase with query: ${query}`);
+    if (!navigationGoal) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                error: "navigation_goal is required",
+                valid_goals: [
+                  "find_related_files",
+                  "locate_interfaces",
+                  "find_implementations",
+                  "trace_dependencies",
+                  "find_examples",
+                ],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    logger.info(
+      `Navigating codebase: ${navigationGoal} for "${featureDescription}"`
+    );
 
     try {
-      // This would ideally use the ContextEngine or ProjectEmbeddingEngine
-      // For now, we'll perform a basic file search or return a placeholder
+      const contextEngine = this.backgroundProcessor?.getContextEngine();
+
+      if (!contextEngine) {
+        // Fallback to basic semantic search if embedding engine not available
+        logger.warn("Context engine not available, using fallback search");
+
+        const searchResults = await this.memoryManager.searchEntities(
+          featureDescription,
+          branchName,
+          ["active", "draft"],
+          { includeContext: true, includeConfidenceScores: includeConfidence }
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  navigation_goal: navigationGoal,
+                  feature_description: featureDescription,
+                  suggested_entities: searchResults.entities.slice(
+                    0,
+                    maxResults
+                  ),
+                  total_found: searchResults.entities.length,
+                  method: "semantic_search_fallback",
+                  note: "Using basic search. For ML-enhanced navigation, ensure background processor is running with project analysis enabled.",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      // Use context engine for intelligent navigation
+      const navigationResults = await contextEngine.navigateCodebase({
+        feature_description: featureDescription,
+        navigation_goal: navigationGoal,
+        starting_point: startingPoint,
+        max_results: maxResults,
+        branch_name: branchName,
+      });
 
       return {
         content: [
@@ -476,10 +554,11 @@ export class WorkspaceHandlers {
             type: "text",
             text: JSON.stringify(
               {
-                query,
-                suggested_files: [], // Placeholder
-                message:
-                  "Codebase navigation requires active project embedding index.",
+                navigation_goal: navigationGoal,
+                feature_description: featureDescription,
+                results: navigationResults,
+                include_confidence: includeConfidence,
+                method: "ml_context_engine",
               },
               null,
               2

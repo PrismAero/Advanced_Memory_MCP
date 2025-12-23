@@ -780,10 +780,11 @@ export class WorkflowHandlers {
     const branchName = args.branch_name || "main";
     const workSessionId = args.work_session_id;
     const timeWindowHours = args.time_window_hours || 24;
-    const includeBlockers = args.include_blockers !== false; // Default true
+    const includeBlockers = args.include_blockers !== false;
+    const detailLevel = args.detail_level || "summary"; // summary | detailed
 
     logger.info(
-      `Getting continuation context for branch: ${branchName} (window: ${timeWindowHours}h)`
+      `Getting continuation context for branch: ${branchName} (window: ${timeWindowHours}h, detail: ${detailLevel})`
     );
 
     try {
@@ -829,6 +830,71 @@ export class WorkflowHandlers {
         );
       }
 
+      // Condensed summary mode for large projects
+      if (detailLevel === "summary") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  continuation_summary: {
+                    branch: branchName,
+                    timestamp: new Date().toISOString(),
+                    work_session_id: workSessionId,
+                  },
+                  where_you_left_off: {
+                    last_worked_entities: workingContext.entities
+                      .sort(
+                        (a: Entity, b: Entity) =>
+                          new Date(b.lastAccessed || 0).getTime() -
+                          new Date(a.lastAccessed || 0).getTime()
+                      )
+                      .slice(0, 5)
+                      .map((e: Entity) => ({
+                        name: e.name,
+                        type: e.entityType,
+                        last_activity: e.lastAccessed,
+                        key_note:
+                          e.observations[0]?.substring(0, 100) || "No notes",
+                      })),
+                    entity_count: workingContext.entities.length,
+                    recent_changes: recentActivity.slice(0, 5),
+                  },
+                  recent_decisions: recentDecisions.slice(0, 10).map((d) => ({
+                    decision: d.entity_name,
+                    timestamp: d.timestamp,
+                    summary:
+                      d.observations[0]?.substring(0, 120) || "No summary",
+                  })),
+                  blockers_and_issues: blockers.map((b) => ({
+                    blocker: b.entity_name,
+                    severity: b.severity,
+                    description:
+                      b.description?.substring(0, 150) || "No description",
+                  })),
+                  next_recommended_actions: nextSteps
+                    .filter((s) => s.priority === "high")
+                    .slice(0, 5),
+                  ready_to_continue: blockers.length === 0,
+                  session_metadata: sessionContext
+                    ? {
+                        duration_minutes: sessionContext.duration_minutes,
+                        completed_items: sessionContext.completed_items,
+                        in_progress_items: sessionContext.in_progress_items,
+                      }
+                    : null,
+                  usage_note: `Condensed continuation context (${workingContext.entities.length} entities). Use detail_level='detailed' for full data.`,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      // Detailed mode (original behavior)
       return {
         content: [
           {
@@ -840,16 +906,25 @@ export class WorkflowHandlers {
                   work_session_id: workSessionId,
                   time_window_hours: timeWindowHours,
                   context_timestamp: new Date().toISOString(),
+                  detail_level: "detailed",
                 },
                 current_state: {
-                  working_entities: workingContext.entities,
+                  working_entities: workingContext.entities.map(
+                    (e: Entity) => ({
+                      name: e.name,
+                      type: e.entityType,
+                      observations: e.observations.slice(0, 2), // Limit to 2 observations
+                      relevance: e.relevanceScore,
+                      last_accessed: e.lastAccessed,
+                    })
+                  ),
                   entity_count: workingContext.entities.length,
                   high_relevance_entities: workingContext.entities.filter(
                     (e: Entity) => e.relevanceScore && e.relevanceScore > 0.8
                   ).length,
                 },
-                recent_activity: recentActivity,
-                recent_decisions: recentDecisions,
+                recent_activity: recentActivity.slice(0, 15),
+                recent_decisions: recentDecisions.slice(0, 15),
                 blockers: blockers,
                 next_steps: nextSteps,
                 session_context: sessionContext,

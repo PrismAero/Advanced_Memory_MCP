@@ -714,6 +714,96 @@ export class ContextEngine {
   }
 
   /**
+   * Navigate codebase based on feature description and navigation goal
+   */
+  async navigateCodebase(args: {
+    feature_description: string;
+    navigation_goal: string;
+    starting_point?: string;
+    max_results?: number;
+    branch_name?: string;
+  }): Promise<any> {
+    const {
+      feature_description,
+      navigation_goal,
+      starting_point,
+      max_results = 20,
+    } = args;
+
+    logger.info(
+      `Context engine navigating: ${navigation_goal} for "${feature_description}"`
+    );
+
+    try {
+      // Generate embedding for feature description
+      const queryEmbedding =
+        await this.embeddingEngine.generateProjectEmbedding(
+          feature_description,
+          "business_logic"
+        );
+
+      if (!queryEmbedding) {
+        throw new Error("Failed to generate query embedding");
+      }
+
+      // Find similar interfaces/code based on navigation goal
+      const similarInterfaces =
+        await this.projectAnalysisOps.findSimilarInterfaces(
+          queryEmbedding.embedding,
+          max_results
+        );
+
+      // Format results based on navigation goal
+      const results = {
+        navigation_type: navigation_goal,
+        query: feature_description,
+        starting_point: starting_point || "workspace_root",
+        suggested_locations: similarInterfaces.map((result) => ({
+          interface_name: result.interface.name,
+          file_id: result.interface.file_id,
+          line_number: result.interface.line_number,
+          similarity_score: result.similarity,
+          interface_type: result.interface.interface_type,
+          definition_preview:
+            result.interface.definition.substring(0, 150) + "...",
+          confidence: this.calculateNavigationConfidence(
+            result.similarity,
+            navigation_goal
+          ),
+        })),
+        total_results: similarInterfaces.length,
+        navigation_metadata: {
+          embedding_generated: true,
+          ml_enhanced: true,
+          similarity_threshold: 0.7,
+        },
+      };
+
+      return results;
+    } catch (error) {
+      logger.error("Failed to navigate codebase:", error);
+      throw error;
+    }
+  }
+
+  private calculateNavigationConfidence(
+    similarity: number,
+    navigationGoal: string
+  ): number {
+    // Adjust confidence based on navigation goal
+    const goalWeights: { [key: string]: number } = {
+      find_related_files: 0.9,
+      locate_interfaces: 1.0,
+      find_implementations: 0.95,
+      trace_dependencies: 0.85,
+      find_examples: 0.9,
+    };
+
+    const weight = goalWeights[navigationGoal] || 0.9;
+    return Math.min(similarity * weight, 1.0);
+  }
+
+  /**
    * Get engine statistics
    */
   getStatistics(): {

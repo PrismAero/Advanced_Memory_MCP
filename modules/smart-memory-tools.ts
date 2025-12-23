@@ -1,4 +1,78 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { ProjectType } from "./project-type-detector.js";
+
+/**
+ * Tool categories for dynamic filtering
+ */
+const QT_QML_TOOLS = [
+  "analyze_qml_bindings",
+  "find_qt_controllers",
+  "analyze_layer_architecture",
+  "find_qml_usage",
+  "list_q_properties",
+  "list_q_invokables",
+];
+
+const PYTHON_SPECIFIC_TOOLS: string[] = [
+  // Add Python-specific tools here if any
+];
+
+const TYPESCRIPT_SPECIFIC_TOOLS: string[] = [
+  // Add TypeScript-specific tools here if any
+];
+
+/**
+ * Filter tools based on detected project type
+ */
+export function filterToolsByProjectType(
+  tools: Tool[],
+  projectType: ProjectType
+): Tool[] {
+  const enableQt =
+    projectType.primary === "cpp" ||
+    projectType.features.includes("qt") ||
+    projectType.features.includes("qml") ||
+    projectType.confidence === 0; // Include if unknown
+
+  const enablePython =
+    projectType.primary === "python" ||
+    projectType.secondary.includes("python") ||
+    projectType.confidence === 0;
+
+  const enableTypeScript =
+    projectType.primary === "typescript" ||
+    projectType.primary === "javascript" ||
+    projectType.secondary.includes("typescript") ||
+    projectType.confidence === 0;
+
+  return tools.filter((tool) => {
+    // Always include core memory tools (not in any specific category)
+    if (
+      !QT_QML_TOOLS.includes(tool.name) &&
+      !PYTHON_SPECIFIC_TOOLS.includes(tool.name) &&
+      !TYPESCRIPT_SPECIFIC_TOOLS.includes(tool.name)
+    ) {
+      return true;
+    }
+
+    // Filter Qt/QML tools
+    if (QT_QML_TOOLS.includes(tool.name)) {
+      return enableQt;
+    }
+
+    // Filter Python tools
+    if (PYTHON_SPECIFIC_TOOLS.includes(tool.name)) {
+      return enablePython;
+    }
+
+    // Filter TypeScript tools
+    if (TYPESCRIPT_SPECIFIC_TOOLS.includes(tool.name)) {
+      return enableTypeScript;
+    }
+
+    return true;
+  });
+}
 
 /**
  * Smart Memory Tools - Consolidated and Intelligent

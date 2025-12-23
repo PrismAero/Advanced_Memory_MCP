@@ -232,6 +232,28 @@ export class MLHandlers {
           limit
         );
 
+      if (similarInterfaces.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  message: "No similar code found",
+                  query_embedding_generated: true,
+                  results: [],
+                  note: "This could mean: 1) No interfaces have been indexed yet (run analyze_project_structure), 2) No embeddings exist for indexed interfaces, or 3) The similarity threshold is too high. Try analyzing the project first.",
+                  suggestion:
+                    "Run analyze_project_structure on the workspace to build the interface index.",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
       return {
         content: [
           {
