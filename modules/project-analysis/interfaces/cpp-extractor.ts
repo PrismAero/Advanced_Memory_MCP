@@ -234,14 +234,21 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
   ): NormalizedCodeInterface[] {
     const results: NormalizedCodeInterface[] = [];
     const functionPattern =
-      /(^|\n)\s*(?:(?:static|inline|constexpr|extern|virtual|explicit|friend|export)\s+)*([A-Za-z_~][\w:<>,\s*&]+?)\s+([A-Za-z_~][A-Za-z0-9_:~]*)\s*\(([^;{}()]*)\)\s*(?:const\s*)?(?:noexcept\s*)?(?:->\s*([^;{}]+))?\s*(?:[;{])/g;
+      /(^|\n)[ \t]*(?:(?:static|inline|constexpr|extern|virtual|explicit|friend|export)\s+)*([A-Za-z_~][\w:<>, \t*&]*?)\s+([*&\s]*)([A-Za-z_~][A-Za-z0-9_:~]*)\s*\(([^;{}()]*)\)\s*(?:const\s*)?(?:noexcept\s*)?(?:->\s*([^;{}]+))?\s*(?:[;{])/g;
 
     let match: RegExpExecArray | null;
     while ((match = functionPattern.exec(content)) !== null) {
-      const returnType = match[2].trim();
-      const fullName = match[3].trim();
+      const pointerPrefix = match[3].trim();
+      const returnType = `${match[2].trim()}${pointerPrefix ? ` ${pointerPrefix}` : ""}`;
+      const fullName = match[4].trim();
       const name = fullName.split("::").pop() || fullName;
       if (/^(if|for|while|switch|return|catch)$/.test(name)) continue;
+      if (/^(return|else|if|for|while|switch|catch)\b/.test(returnType)) {
+        continue;
+      }
+      if (isSourceFile(context.relativePath) && match[0].trim().endsWith(";")) {
+        continue;
+      }
       const line = lineOf(content, match.index + match[1].length);
       results.push(
         makeInterface({
@@ -251,11 +258,11 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
           language: context.language,
           relativePath: context.relativePath,
           line,
-          signature: `${returnType} ${fullName}(${match[4].trim()})`,
+          signature: `${returnType} ${fullName}(${match[5].trim()})`,
           definition: lines[line - 1]?.trim() || fullName,
           documentation: precedingDocumentation(lines, line - 1),
-          parameters: splitCsv(match[4]).map((param) => ({ name: param })),
-          returnType: match[5]?.trim() || returnType,
+          parameters: splitCsv(match[5]).map((param) => ({ name: param })),
+          returnType: match[6]?.trim() || returnType,
         }),
       );
     }
@@ -316,4 +323,8 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
     }
     return snippet.join("\n").slice(0, 4_000);
   }
+}
+
+function isSourceFile(relativePath: string): boolean {
+  return /\.(?:c|cc|cpp|cxx|m|mm)$/i.test(relativePath);
 }
