@@ -135,7 +135,34 @@ export class SQLiteConnection {
         entity_id INTEGER NOT NULL,
         weight REAL DEFAULT 1.0,
         context TEXT,
+        normalized_keyword TEXT,
+        source_type TEXT DEFAULT 'entity_content',
+        source_id TEXT,
+        branch_id INTEGER,
+        observation_id INTEGER,
+        keyword_type TEXT DEFAULT 'term',
+        confidence REAL DEFAULT 1.0,
+        position INTEGER,
+        phrase_length INTEGER DEFAULT 1,
+        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+        metadata TEXT,
         FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS keyword_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        keyword_id INTEGER NOT NULL,
+        entity_id INTEGER NOT NULL,
+        linked_type TEXT NOT NULL,
+        linked_id TEXT,
+        relation_type TEXT NOT NULL,
+        weight REAL DEFAULT 1.0,
+        metadata TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE CASCADE,
+        FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
+        UNIQUE(keyword_id, linked_type, linked_id, relation_type)
       )`,
 
       // Cross-references
@@ -325,6 +352,13 @@ export class SQLiteConnection {
       "CREATE INDEX IF NOT EXISTS idx_branch_relationships_to ON branch_relationships(to_branch_id)",
       "CREATE INDEX IF NOT EXISTS idx_keywords_keyword ON keywords(keyword)",
       "CREATE INDEX IF NOT EXISTS idx_keywords_entity ON keywords(entity_id)",
+      "CREATE INDEX IF NOT EXISTS idx_keywords_normalized ON keywords(normalized_keyword)",
+      "CREATE INDEX IF NOT EXISTS idx_keywords_branch ON keywords(branch_id)",
+      "CREATE INDEX IF NOT EXISTS idx_keywords_type ON keywords(keyword_type)",
+      "CREATE INDEX IF NOT EXISTS idx_keywords_source ON keywords(source_type)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_keywords_unique_signal ON keywords(entity_id, normalized_keyword, source_type, source_id, observation_id, keyword_type)",
+      "CREATE INDEX IF NOT EXISTS idx_keyword_links_entity ON keyword_links(entity_id)",
+      "CREATE INDEX IF NOT EXISTS idx_keyword_links_target ON keyword_links(linked_type, linked_id)",
       "CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)",
       "CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)",
       "CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)",
@@ -428,6 +462,67 @@ export class SQLiteConnection {
       await this.safeAlterTable(
         "ALTER TABLE observations ADD COLUMN priority TEXT DEFAULT 'normal'"
       );
+
+      for (const column of [
+        "normalized_keyword TEXT",
+        "source_type TEXT DEFAULT 'entity_content'",
+        "source_id TEXT",
+        "branch_id INTEGER",
+        "observation_id INTEGER",
+        "keyword_type TEXT DEFAULT 'term'",
+        "confidence REAL DEFAULT 1.0",
+        "position INTEGER",
+        "phrase_length INTEGER DEFAULT 1",
+        "last_seen DATETIME",
+        "metadata TEXT",
+      ]) {
+        await this.safeAlterTable(`ALTER TABLE keywords ADD COLUMN ${column}`);
+      }
+
+      await this.runQuery(
+        "UPDATE keywords SET normalized_keyword = LOWER(keyword) WHERE normalized_keyword IS NULL"
+      );
+      await this.runQuery(
+        "UPDATE keywords SET branch_id = (SELECT branch_id FROM entities WHERE entities.id = keywords.entity_id) WHERE branch_id IS NULL"
+      );
+      await this.runQuery(
+        "UPDATE keywords SET source_id = CAST(entity_id AS TEXT) WHERE source_id IS NULL"
+      );
+      await this.runQuery(
+        "UPDATE keywords SET last_seen = CURRENT_TIMESTAMP WHERE last_seen IS NULL"
+      );
+
+      await this.runQuery(
+        `CREATE TABLE IF NOT EXISTS keyword_links (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          keyword_id INTEGER NOT NULL,
+          entity_id INTEGER NOT NULL,
+          linked_type TEXT NOT NULL,
+          linked_id TEXT,
+          relation_type TEXT NOT NULL,
+          weight REAL DEFAULT 1.0,
+          metadata TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE CASCADE,
+          FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
+          UNIQUE(keyword_id, linked_type, linked_id, relation_type)
+        )`
+      );
+
+      for (const indexQuery of [
+        "CREATE INDEX IF NOT EXISTS idx_keywords_normalized ON keywords(normalized_keyword)",
+        "CREATE INDEX IF NOT EXISTS idx_keywords_branch ON keywords(branch_id)",
+        "CREATE INDEX IF NOT EXISTS idx_keywords_type ON keywords(keyword_type)",
+        "CREATE INDEX IF NOT EXISTS idx_keywords_source ON keywords(source_type)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_keywords_unique_signal ON keywords(entity_id, normalized_keyword, source_type, source_id, observation_id, keyword_type)",
+        "CREATE INDEX IF NOT EXISTS idx_keyword_links_entity ON keyword_links(entity_id)",
+        "CREATE INDEX IF NOT EXISTS idx_keyword_links_target ON keyword_links(linked_type, linked_id)",
+      ]) {
+        await this.runQuery(indexQuery).catch((error) => {
+          logger.warn("Failed to create keyword index:", error);
+        });
+      }
 
       // Add embedding column for TensorFlow.js support
       await this.safeAlterTable(

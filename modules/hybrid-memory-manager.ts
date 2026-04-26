@@ -89,6 +89,7 @@ export class HybridMemoryManager implements IMemoryOperations {
         optimizedObservations,
         optimizedContent: optimization.optimized,
         keywords: optimization.keywords,
+        keywordSignals: optimization.keywordSignals,
         entities: optimization.entities,
         compressionRatio: optimization.compressionRatio,
         tokenCount: optimization.tokenCount,

@@ -5,6 +5,7 @@ import {
   OptimizationMetadata,
 } from "../../memory-types.js";
 import { logger } from "../logger.js";
+import { KeywordOperations } from "./keyword-operations.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
 
 /**
@@ -16,7 +17,11 @@ type EntityWithOptimization = Entity & {
 };
 
 export class SQLiteEntityOperations {
-  constructor(private connection: SQLiteConnection) {}
+  private keywordOps: KeywordOperations;
+
+  constructor(private connection: SQLiteConnection) {
+    this.keywordOps = new KeywordOperations(connection);
+  }
 
   async createEntities(
     entities: Entity[],
@@ -95,6 +100,8 @@ export class SQLiteEntityOperations {
       }
     }
 
+    await this.keywordOps.refreshEntityKeywords(existingEntity.id, branchId);
+
     return {
       ...entity,
       lastUpdated: new Date().toISOString(),
@@ -136,6 +143,11 @@ export class SQLiteEntityOperations {
         await this.connection.runQuery(
           "DELETE FROM relations WHERE from_entity_id = ? OR to_entity_id = ?",
           [entity.id, entity.id]
+        );
+
+        await this.connection.runQuery(
+          "DELETE FROM keyword_links WHERE entity_id = ?",
+          [entity.id]
         );
 
         // Delete keywords
@@ -344,18 +356,7 @@ export class SQLiteEntityOperations {
       }
     }
 
-    // Store extracted keywords for faster lookup
-    if (optimizationMeta?.keywords && optimizationMeta.keywords.length > 0) {
-      for (const keyword of optimizationMeta.keywords) {
-        await this.connection.runQuery(
-          `
-          INSERT INTO keywords (keyword, entity_id, weight, context)
-          VALUES (?, ?, ?, ?)
-        `,
-          [keyword, entityRow.id, 1, validEntityType]
-        );
-      }
-    }
+    await this.keywordOps.refreshEntityKeywords(entityRow.id, branchId);
 
     const now = new Date().toISOString();
     return {
@@ -407,7 +408,7 @@ export class SQLiteEntityOperations {
         for (let i = 0; i < obs.contents.length; i++) {
           const content = obs.contents[i];
           if (content && content.trim()) {
-            await this.connection.runQuery(
+            await this.connection.execute(
               `INSERT INTO observations (entity_id, content, optimized_content, sequence_order)
                VALUES (?, ?, ?, ?)`,
               [entity.id, content, content, startSeq + i]
@@ -421,6 +422,7 @@ export class SQLiteEntityOperations {
           "UPDATE entities SET updated_at = ? WHERE id = ?",
           [new Date().toISOString(), entity.id]
         );
+        await this.keywordOps.refreshEntityKeywords(entity.id, branchId);
 
         results.push({
           entityName: obs.entityName,
@@ -477,6 +479,7 @@ export class SQLiteEntityOperations {
           "UPDATE entities SET updated_at = ? WHERE id = ?",
           [new Date().toISOString(), entity.id]
         );
+        await this.keywordOps.refreshEntityKeywords(entity.id, branchId);
 
         logger.info(
           `Deleted ${deletion.observations.length} observations from "${deletion.entityName}"`

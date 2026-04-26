@@ -29,6 +29,21 @@ export interface OptimizationMetadata {
   optimizedObservations: string[];
   optimizedContent: string;
   keywords: string[];
+  keywordSignals?: Array<{
+    keyword: string;
+    normalizedKeyword: string;
+    keywordType: string;
+    sourceType: string;
+    sourceId?: string | number;
+    observationId?: number;
+    branchId?: number;
+    weight: number;
+    confidence: number;
+    position?: number;
+    phraseLength: number;
+    context?: string;
+    metadata?: Record<string, any>;
+  }>;
   entities: string[];
   compressionRatio: number;
   tokenCount: number;

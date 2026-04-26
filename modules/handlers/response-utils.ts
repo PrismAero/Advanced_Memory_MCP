@@ -28,7 +28,7 @@ export interface SanitizeOptions {
  */
 export function sanitizeEntity(
   entity: Entity,
-  options: SanitizeOptions = {}
+  options: SanitizeOptions = {},
 ): any {
   if (!entity) return entity;
 
@@ -47,6 +47,10 @@ export function sanitizeEntity(
     searchType,
     semanticSimilarity,
     semanticConfidence,
+    keywordMatchScore,
+    matchedKeywords,
+    keywordSources,
+    keywordCouplings,
     content,
     observations,
     ...rest
@@ -60,8 +64,21 @@ export function sanitizeEntity(
 
   if (keepSearchMeta) {
     if (searchType !== undefined) out.searchType = searchType;
-    if (semanticSimilarity !== undefined) out.semanticSimilarity = semanticSimilarity;
-    if (semanticConfidence !== undefined) out.semanticConfidence = semanticConfidence;
+    if (semanticSimilarity !== undefined)
+      out.semanticSimilarity = semanticSimilarity;
+    if (semanticConfidence !== undefined)
+      out.semanticConfidence = semanticConfidence;
+    if (keywordMatchScore !== undefined)
+      out.keywordMatchScore = keywordMatchScore;
+    if (Array.isArray(matchedKeywords)) {
+      out.matchedKeywords = matchedKeywords.slice(0, 12);
+    }
+    if (Array.isArray(keywordSources)) {
+      out.keywordSources = keywordSources.slice(0, 12);
+    }
+    if (Array.isArray(keywordCouplings)) {
+      out.keywordCouplings = keywordCouplings.slice(0, 8);
+    }
   }
 
   if (Array.isArray(observations)) {
@@ -81,7 +98,7 @@ export function sanitizeEntity(
 
 export function sanitizeEntities(
   entities: Entity[] | undefined | null,
-  options: SanitizeOptions = {}
+  options: SanitizeOptions = {},
 ): any[] {
   if (!Array.isArray(entities)) return [];
   return entities.map((e) => sanitizeEntity(e, options));

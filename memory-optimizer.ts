@@ -1,4 +1,6 @@
 import { encoding_for_model } from "tiktoken";
+import { ContextualKeywordExtractor } from "./modules/keywords/keyword-extractor.js";
+import type { KeywordSignal } from "./modules/keywords/keyword-types.js";
 import { logger } from "./modules/logger.js";
 
 /**
@@ -15,6 +17,7 @@ export interface OptimizedMemoryContent {
   originalTokenCount: number;
   compressionRatio: number;
   keywords: string[];
+  keywordSignals: KeywordSignal[];
   entities: string[];
 }
 
@@ -28,6 +31,7 @@ export interface MemoryOptimizationConfig {
 export class MemoryOptimizer {
   private tokenizer: any;
   private config: MemoryOptimizationConfig;
+  private keywordExtractor = new ContextualKeywordExtractor();
 
   // Technical abbreviations for memory storage
   private abbreviations: Record<string, string> = {
@@ -151,9 +155,10 @@ export class MemoryOptimizer {
    */
   optimize(text: string): OptimizedMemoryContent {
     const originalTokenCount = this.countTokens(text);
-    const keywords = this.config.extractKeywords
-      ? this.extractKeywords(text)
+    const keywordSignals = this.config.extractKeywords
+      ? this.keywordExtractor.extractText(text)
       : [];
+    const keywords = keywordSignals.slice(0, 15).map((signal) => signal.normalizedKeyword);
     const entities = this.config.extractEntities
       ? this.extractEntities(text)
       : [];
@@ -184,6 +189,7 @@ export class MemoryOptimizer {
       originalTokenCount,
       compressionRatio,
       keywords,
+      keywordSignals,
       entities,
     };
   }
@@ -258,58 +264,6 @@ export class MemoryOptimizer {
     const clean = word.toLowerCase().replace(/[^\w]/g, "");
     // Check if word appears to be technical, a name, or otherwise important
     return clean.length > 3 || /[A-Z]/.test(word) || /\d/.test(word);
-  }
-
-  /**
-   * Extract keywords from text for indexing - Enhanced for technical content
-   */
-  private extractKeywords(text: string): string[] {
-    const words = text.toLowerCase().match(/\b[a-zA-Z]{2,}\b/g) || [];
-    const technicalTerms =
-      text.match(
-        /\b[A-Z][a-zA-Z]*\b|\b[a-z]+[A-Z][a-zA-Z]*\b|\b[a-zA-Z]*\d+[a-zA-Z]*\b/g
-      ) || [];
-    const wordCounts: Record<string, number> = {};
-
-    // Count word frequency with higher weight for technical terms
-    words.forEach((word) => {
-      if (!this.fillerWords.has(word) && word.length >= 2) {
-        wordCounts[word] = (wordCounts[word] || 0) + 1;
-      }
-    });
-
-    // Add technical terms with higher weight
-    technicalTerms.forEach((term) => {
-      const lowerTerm = term.toLowerCase();
-      if (lowerTerm.length >= 2) {
-        wordCounts[lowerTerm] = (wordCounts[lowerTerm] || 0) + 2; // Double weight for technical terms
-      }
-    });
-
-    // Also extract file paths, URLs, and technical patterns
-    const patterns = [
-      /\/[a-zA-Z0-9._/-]+\.[a-zA-Z0-9]+/g, // File paths
-      /https?:\/\/[a-zA-Z0-9.-]+[a-zA-Z0-9._/-]*/g, // URLs
-      /@[a-zA-Z0-9/-]+/g, // NPM packages
-      /[A-Z_][A-Z0-9_]+=\w+/g, // Environment variables
-      /\b[a-zA-Z]+\([^)]*\)/g, // Function calls
-    ];
-
-    patterns.forEach((pattern) => {
-      const matches = text.match(pattern) || [];
-      matches.forEach((match) => {
-        const cleanMatch = match.toLowerCase().replace(/[^\w]/g, "");
-        if (cleanMatch.length >= 3) {
-          wordCounts[cleanMatch] = (wordCounts[cleanMatch] || 0) + 3; // Triple weight for patterns
-        }
-      });
-    });
-
-    // Return top keywords by frequency, prioritizing technical content
-    return Object.entries(wordCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 15) // Increased from 10 to 15 for better coverage
-      .map(([word]) => word);
   }
 
   /**

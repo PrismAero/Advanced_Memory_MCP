@@ -1,5 +1,6 @@
 import { Relation } from "../../memory-types.js";
 import { logger } from "../logger.js";
+import { KeywordOperations } from "./keyword-operations.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
 
 /**
@@ -7,11 +8,15 @@ import { SQLiteConnection } from "./sqlite-connection.js";
  * Handles CRUD operations for entity relationships
  */
 export class SQLiteRelationOperations {
-  constructor(private connection: SQLiteConnection) {}
+  private keywordOps: KeywordOperations;
+
+  constructor(private connection: SQLiteConnection) {
+    this.keywordOps = new KeywordOperations(connection);
+  }
 
   async createRelations(
     relations: Relation[],
-    branchName?: string
+    branchName?: string,
   ): Promise<Relation[]> {
     if (!relations || relations.length === 0) {
       return [];
@@ -28,15 +33,17 @@ export class SQLiteRelationOperations {
     if (validRelations.length === 0) return [];
 
     const entityNames = Array.from(
-      new Set(validRelations.flatMap((relation) => [relation.from, relation.to]))
+      new Set(
+        validRelations.flatMap((relation) => [relation.from, relation.to]),
+      ),
     );
     const placeholders = entityNames.map(() => "?").join(",");
     const entityRows = await this.connection.runQuery(
       `SELECT id, name FROM entities WHERE branch_id = ? AND name IN (${placeholders})`,
-      [branchId, ...entityNames]
+      [branchId, ...entityNames],
     );
     const entityIds = new Map<string, number>(
-      (entityRows || []).map((row: any) => [row.name, row.id])
+      (entityRows || []).map((row: any) => [row.name, row.id]),
     );
 
     await this.connection.withTransaction(async () => {
@@ -48,7 +55,7 @@ export class SQLiteRelationOperations {
           logger.warn(
             `From entity "${relation.from}" not found in branch ${
               branchName || "main"
-            }`
+            }`,
           );
           continue;
         }
@@ -57,7 +64,7 @@ export class SQLiteRelationOperations {
           logger.warn(
             `To entity "${relation.to}" not found in branch ${
               branchName || "main"
-            }`
+            }`,
           );
           continue;
         }
@@ -67,12 +74,31 @@ export class SQLiteRelationOperations {
           INSERT OR IGNORE INTO relations (from_entity_id, to_entity_id, relation_type, branch_id)
           VALUES (?, ?, ?, ?)
           `,
-          [fromEntityId, toEntityId, relation.relationType, branchId]
+          [fromEntityId, toEntityId, relation.relationType, branchId],
         );
 
         createdRelations.push(relation);
       }
     });
+
+    for (const relation of createdRelations) {
+      const fromEntityId = entityIds.get(relation.from);
+      const toEntityId = entityIds.get(relation.to);
+      if (!fromEntityId || !toEntityId) continue;
+      const relationRow = await this.connection.getQuery(
+        "SELECT id FROM relations WHERE from_entity_id = ? AND to_entity_id = ? AND relation_type = ? AND branch_id = ?",
+        [fromEntityId, toEntityId, relation.relationType, branchId],
+      );
+      if (relationRow?.id) {
+        await this.keywordOps.addRelationKeywords(
+          relationRow.id,
+          branchId,
+          fromEntityId,
+          toEntityId,
+          `${relation.from} ${relation.relationType} ${relation.to}`,
+        );
+      }
+    }
 
     // Demoted from INFO to DEBUG: this fires for every batch of
     // relations (including auto-detected pairs) and was the source
@@ -82,14 +108,14 @@ export class SQLiteRelationOperations {
     logger.debug(
       `Created ${createdRelations.length} of ${
         relations.length
-      } relations in branch ${branchName || "main"}`
+      } relations in branch ${branchName || "main"}`,
     );
     return createdRelations;
   }
 
   async deleteRelations(
     relations: Relation[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     if (!relations || relations.length === 0) {
       return;
@@ -107,12 +133,12 @@ export class SQLiteRelationOperations {
         // Get entity IDs
         const fromEntity = await this.connection.getQuery(
           "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [relation.from, branchId]
+          [relation.from, branchId],
         );
 
         const toEntity = await this.connection.getQuery(
           "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [relation.to, branchId]
+          [relation.to, branchId],
         );
 
         if (!fromEntity || !toEntity) {
@@ -125,12 +151,12 @@ export class SQLiteRelationOperations {
           DELETE FROM relations 
           WHERE from_entity_id = ? AND to_entity_id = ? AND relation_type = ? AND branch_id = ?
           `,
-          [fromEntity.id, toEntity.id, relation.relationType, branchId]
+          [fromEntity.id, toEntity.id, relation.relationType, branchId],
         );
       } catch (error) {
         logger.error(
           `Failed to delete relation: ${relation.from} -> ${relation.to}:`,
-          error
+          error,
         );
       }
     }
@@ -138,7 +164,7 @@ export class SQLiteRelationOperations {
 
   async getRelationsForEntities(
     entityNames: string[],
-    branchId?: number
+    branchId?: number,
   ): Promise<Relation[]> {
     if (!entityNames || entityNames.length === 0) {
       return [];
@@ -180,7 +206,7 @@ export class SQLiteRelationOperations {
       JOIN entities et ON r.to_entity_id = et.id
       WHERE r.branch_id = ?
     `,
-      [branchId]
+      [branchId],
     );
 
     return relationRows.map((row: any) => ({
