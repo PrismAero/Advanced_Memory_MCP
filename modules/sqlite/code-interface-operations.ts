@@ -170,7 +170,7 @@ export class CodeInterfaceOperations {
   async findSimilarInterfaces(
     queryEmbedding: number[],
     limit = 5,
-    minSimilarity = 0.7,
+    minSimilarity = -1,
   ): Promise<Array<{ interface: CodeInterfaceRecord; similarity: number }>> {
     try {
       const rows = await this.connection.runQuery(

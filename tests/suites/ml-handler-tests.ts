@@ -245,6 +245,9 @@ export async function runMLHandlerTests(
         if (typeof out.error !== "string") {
           throw new Error("error field should be a string");
         }
+        if (!/insufficient|not enough/i.test(out.error)) {
+          throw new Error(`Unexpected training error: ${out.error}`);
+        }
         return { mode: "graceful_error", error: out.error };
       }
       if (!out.session_id || !out.status) {

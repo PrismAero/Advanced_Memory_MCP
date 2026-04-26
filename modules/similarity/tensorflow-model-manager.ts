@@ -281,7 +281,9 @@ export class TensorFlowModelManager {
    */
   dispose(): void {
     if (this.loadedModel) {
-      this.loadedModel.dispose();
+      if (typeof (this.loadedModel as any).dispose === "function") {
+        (this.loadedModel as any).dispose();
+      }
       this.loadedModel = null;
     }
     this.currentModelId = null;

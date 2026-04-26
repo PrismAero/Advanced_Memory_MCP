@@ -261,10 +261,12 @@ export class SQLiteEntityOperations {
     const optimizedEntityContent =
       optimizationMeta?.optimizedContent || originalContent;
 
-    // Insert entity with AI enhancement fields
-    await this.connection.runQuery(
+    // Insert entity with AI enhancement fields. The INSERT OR IGNORE is
+    // intentional: concurrent same-key creates can race after the existence
+    // check above, and the API treats duplicate creates as idempotent.
+    const insertResult = await this.connection.execute(
       `
-      INSERT INTO entities (
+      INSERT OR IGNORE INTO entities (
         name,
         entity_type,
         branch_id,
@@ -303,9 +305,26 @@ export class SQLiteEntityOperations {
     );
 
     const entityRow = await this.connection.getQuery(
-      "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
+      "SELECT * FROM entities WHERE name = ? AND branch_id = ?",
       [validName, branchId]
     );
+
+    if (insertResult.changes === 0) {
+      const observations = await this.connection.runQuery(
+        "SELECT content FROM observations WHERE entity_id = ? ORDER BY sequence_order",
+        [entityRow.id]
+      );
+      return {
+        name: entityRow.name || validName,
+        entityType: entityRow.entity_type || validEntityType,
+        content: entityRow.original_content || originalContent,
+        observations: (observations || []).map((obs: any) => obs.content),
+        status: entityRow.status || "active",
+        statusReason: entityRow.status_reason,
+        created: entityRow.created_at,
+        lastUpdated: entityRow.updated_at,
+      };
+    }
 
     // Insert observations
     if (validObservations.length > 0) {

@@ -155,7 +155,7 @@ export class ProjectAnalysisOperations {
   findSimilarInterfaces(
     queryEmbedding: number[],
     limit = 5,
-    minSimilarity = 0.7,
+    minSimilarity = -1,
   ): Promise<Array<{ interface: CodeInterfaceRecord; similarity: number }>> {
     return this.interfaceOps.findSimilarInterfaces(
       queryEmbedding,

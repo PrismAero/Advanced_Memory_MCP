@@ -458,11 +458,13 @@ npm test
 ### Test commands
 
 ```bash
-npm test              # build + run the full suite (entity, ML, similarity, search, branch, relation, perf, concurrency)
-npm run test:quick    # build + run the suite with --quick (skips long perf/concurrency runs)
+npm test              # build + run the aggressive Vitest suite (MCP stdio, handlers, strict regressions, stress)
+npm run test:quick    # run MCP/handler Vitest suites without rebuilding
+npm run test:legacy   # build + run the previous custom harness
+npm run test:coverage # build + run Vitest with V8 coverage
 ```
 
-The ML test groups (`ML-Baseline`, `ML-Embeddings`, `ML-Semantic`, `ML-Language`, `ML-Trainer`, `ML-Training`, `ML-Collector`, `ML-Handlers`) exercise the trainer end-to-end against the curated baseline seed.
+The default suite is intentionally aggressive. It exercises the public MCP stdio boundary, handler dispatch, strict regression checks for formerly shallow assertions, similarity quality gates, and SQLite/concurrency stress. Failures in semantic ranking or stress thresholds should be treated as product issues, not hidden behind permissive "handled" checks.
 
 ### Project structure
 

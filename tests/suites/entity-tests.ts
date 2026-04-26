@@ -101,14 +101,14 @@ export async function runEntityTests(runner: EntityTestRunner): Promise<void> {
   });
 
   await runner.runTest("Create entity with empty name", "Entity-Edge", async () => {
-    try {
-      await runner.memoryManager.createEntities([
-        { name: "", entityType: "test", observations: [] },
-      ]);
-      return { handled: true };
-    } catch {
-      return { handled: true, rejected: true };
+    const entities = await runner.memoryManager.createEntities([
+      { name: "", entityType: "test", observations: [] },
+    ]);
+    if (entities[0]?.name !== "Unnamed Entity") {
+      throw new Error(`Expected normalized empty name, got ${entities[0]?.name}`);
     }
+    await runner.memoryManager.deleteEntities(["Unnamed Entity"]);
+    return { normalizedTo: entities[0].name };
   });
 
   await runner.runTest("Create entity with very long name", "Entity-Edge", async () => {
@@ -150,8 +150,16 @@ export async function runEntityTests(runner: EntityTestRunner): Promise<void> {
     await runner.memoryManager.createEntities([
       { name: "DuplicateTest", entityType: "test", observations: ["second"] },
     ]);
+    const graph = await runner.memoryManager.readGraph();
+    const duplicates = graph.entities.filter((entity: any) => entity.name === "DuplicateTest");
+    if (duplicates.length !== 1) {
+      throw new Error(`Expected one DuplicateTest row, got ${duplicates.length}`);
+    }
+    if (duplicates[0].observations.includes("second")) {
+      throw new Error("Duplicate create unexpectedly replaced original observations");
+    }
     await runner.memoryManager.deleteEntities(["DuplicateTest"]);
-    return { handled: true };
+    return { deduped: true };
   });
 
   await runner.runTest("Create entity with very long observation", "Entity-Edge", async () => {

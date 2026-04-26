@@ -618,6 +618,7 @@ export class SQLiteConnection {
           if (err) {
             logger.error("Error closing database:", err);
           }
+        this.db = null;
           resolve();
         });
       });
@@ -637,7 +638,7 @@ export class SQLiteConnection {
 
     // Create branch if it doesn't exist
     await this.runQuery(
-      "INSERT INTO memory_branches (name, purpose) VALUES (?, ?)",
+      "INSERT OR IGNORE INTO memory_branches (name, purpose) VALUES (?, ?)",
       [name, `Auto-created branch: ${name}`]
     );
 

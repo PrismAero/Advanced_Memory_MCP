@@ -114,6 +114,12 @@ export class ModernSimilarityEngine {
     return this.modelManager;
   }
 
+  dispose(): void {
+    this.embeddingCache.clear();
+    this.modelManager.dispose();
+    this.initialized = false;
+  }
+
   /**
    * Detect similar entities using TensorFlow.js semantic embeddings
    */

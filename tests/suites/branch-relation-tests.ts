@@ -138,25 +138,35 @@ export async function runRelationTests(runner: MemoryGraphTestRunner): Promise<v
   });
 
   await runner.runTest("Create relation with non-existent entity", "Relation-Edge", async () => {
-    try {
-      await runner.memoryManager.createRelations([
-        { from: "NonExistent1", to: "NonExistent2", relationType: "test" },
-      ]);
-      return { handled: true };
-    } catch {
-      return { handled: true };
+    const created = await runner.memoryManager.createRelations([
+      { from: "NonExistent1", to: "NonExistent2", relationType: "test" },
+    ]);
+    if (created.length !== 0) {
+      throw new Error("Non-existent entity relation should not be created");
     }
+    return { skipped: true };
   });
 
   await runner.runTest("Self-referential relation", "Relation-Edge", async () => {
-    await runner.memoryManager.createRelations([
+    const created = await runner.memoryManager.createRelations([
       {
         from: "RelTest_ServiceA",
         to: "RelTest_ServiceA",
         relationType: "self_reference",
       },
     ]);
-    return { handled: true };
+    if (created.length !== 1) {
+      throw new Error("Self-referential relation was not reported as created");
+    }
+    const graph = await runner.memoryManager.openNodes(["RelTest_ServiceA"]);
+    const found = graph.relations.some(
+      (relation: any) =>
+        relation.from === "RelTest_ServiceA" &&
+        relation.to === "RelTest_ServiceA" &&
+        relation.relationType === "self_reference",
+    );
+    if (!found) throw new Error("Self-referential relation not persisted");
+    return { persisted: true };
   });
 
   await runner.memoryManager.deleteEntities([
@@ -178,17 +188,32 @@ export async function runWorkingContextTests(
 
   await runner.runTest("Update working context", "WorkingContext", async () => {
     await runner.memoryManager.updateEntityWorkingContext("WCTest_Entity1", true);
+    const entity = await runner.memoryManager.findEntityByName("WCTest_Entity1");
+    if (!entity?.workingContext) throw new Error("Working context was not persisted");
     return { updated: true };
   });
 
   await runner.runTest("Update relevance score", "WorkingContext", async () => {
     await runner.memoryManager.updateEntityRelevanceScore("WCTest_Entity1", 0.85);
+    const entity = await runner.memoryManager.findEntityByName("WCTest_Entity1");
+    if (Math.abs((entity?.relevanceScore || 0) - 0.85) > 0.001) {
+      throw new Error(`Relevance score was not persisted: ${entity?.relevanceScore}`);
+    }
     return { score: 0.85 };
   });
 
   await runner.runTest("Update last accessed", "WorkingContext", async () => {
+    const before = await runner.memoryManager.findEntityByName("WCTest_Entity1");
     await runner.memoryManager.updateEntityLastAccessed("WCTest_Entity1");
-    return { updated: true };
+    const after = await runner.memoryManager.findEntityByName("WCTest_Entity1");
+    if (!after?.lastAccessed) throw new Error("lastAccessed missing after update");
+    if (
+      before?.lastAccessed &&
+      new Date(after.lastAccessed).getTime() < new Date(before.lastAccessed).getTime()
+    ) {
+      throw new Error("lastAccessed moved backwards");
+    }
+    return { updated: true, lastAccessed: after.lastAccessed };
   });
 
   await runner.memoryManager.deleteEntities(["WCTest_Entity1", "WCTest_Entity2"]);

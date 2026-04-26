@@ -108,6 +108,12 @@ export async function runSimilarityTests(
       entity2,
     ]);
     if (results.length === 0) throw new Error("No results");
+    if (!results[0].suggestedRelationType) {
+      throw new Error("Missing suggested relation type");
+    }
+    if (results[0].confidence !== "high" && results[0].confidence !== "medium") {
+      throw new Error(`Unexpected confidence: ${results[0].confidence}`);
+    }
     return {
       similarity: results[0].similarity,
       relationType: results[0].suggestedRelationType,
@@ -194,7 +200,11 @@ export async function runSearchTests(
 
   await runner.runTest("Semantic search", "Search", async () => {
     const results = await runner.memoryManager.searchEntities("login security tokens");
-    return { count: results.entities.length };
+    const names = results.entities.map((entity: any) => entity.name);
+    if (!names.includes("SearchTest_UserAuth")) {
+      throw new Error(`Expected auth service in semantic search results, got ${names.join(", ")}`);
+    }
+    return { count: results.entities.length, names };
   });
 
   await runner.runTest("Search with special characters", "Search-Edge", async () => {

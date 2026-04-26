@@ -1054,14 +1054,11 @@ class TestRunner {
       const match = results.find((r) => r.interface.name === "MathOperation");
 
       if (!match) {
-        // If we don't find it, it might be due to low similarity or empty DB
-        // But since we just added it, it should be there.
-        // Note: Similarity might be low if the model isn't great, but it should be in the list if it's the only one.
-        return {
-          found: false,
-          count: results.length,
-          topResult: results[0]?.interface.name,
-        };
+        throw new Error(
+          `MathOperation not found in semantic code search results. Top result: ${
+            results[0]?.interface.name || "none"
+          }`
+        );
       }
 
       return {
