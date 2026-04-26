@@ -3,6 +3,7 @@ import { Entity } from "../memory-types.js";
 import { ContextEngine } from "./intelligence/context-engine.js";
 import { logger } from "./logger.js";
 import { AdaptiveModelTrainer } from "./ml/adaptive-model-trainer.js";
+import { resolveOwnedPath } from "./path-boundary.js";
 import { ProjectEmbeddingEngine } from "./ml/project-embedding-engine.js";
 import { TrainingDataCollector } from "./ml/training-data-collector.js";
 import { FileWatcher } from "./project-analysis/file-watcher.js";
@@ -169,9 +170,13 @@ export class BackgroundProcessor {
     }
 
     if (this.fileWatcher) {
-      this.fileWatcher.stopWatching();
+      void this.fileWatcher.stopWatching();
       this.fileWatcher = null;
     }
+
+    this.trainingDataCollector.dispose();
+    this.contextEngine?.dispose();
+    this.adaptiveModelTrainer?.dispose();
 
     logger.info("Enhanced background processor stopped");
   }
@@ -180,11 +185,11 @@ export class BackgroundProcessor {
    * Set the project to monitor and start monitoring tasks
    */
   setMonitoredProject(projectPath: string): void {
-    this.currentProjectPath = projectPath;
+    this.currentProjectPath = resolveOwnedPath(projectPath, "project_path");
     // Force the next monitorProjectStructure() to actually run,
     // even if the process previously ran one for a different path.
     this.lastProjectAnalysis = null;
-    logger.info(`[BACKGROUND] Set monitored project path: ${projectPath}`);
+    logger.info(`[BACKGROUND] Set monitored project path: ${this.currentProjectPath}`);
 
     // Start monitoring if not already running
     if (!this.projectMonitoringInterval) {

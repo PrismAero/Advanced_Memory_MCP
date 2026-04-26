@@ -108,13 +108,15 @@ export class TrainingDataCollector extends EventEmitter {
   private collectionStartTime: Date;
   private sessionTrackingMap = new Map<string, number>(); // session_id -> interaction_count
   private dataQualityThreshold = 0.3; // Minimum quality score to include in training
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private maxInteractionsPerCollection = 5000;
 
   constructor() {
     super();
     this.collectionStartTime = new Date();
 
     // Periodically clean up old data (keep last 30 days)
-    setInterval(() => {
+    this.cleanupInterval = setInterval(() => {
       this.cleanupOldData();
     }, 24 * 60 * 60 * 1000); // Daily cleanup
 
@@ -126,6 +128,7 @@ export class TrainingDataCollector extends EventEmitter {
    */
   async recordSearchInteraction(interaction: SearchInteraction): Promise<void> {
     this.searchInteractions.push(interaction);
+    this.trimCollection(this.searchInteractions);
     this.trackSession(interaction.session_id);
 
     // Generate training data points
@@ -147,6 +150,7 @@ export class TrainingDataCollector extends EventEmitter {
     interaction: RelationshipInteraction
   ): Promise<void> {
     this.relationshipInteractions.push(interaction);
+    this.trimCollection(this.relationshipInteractions);
     this.trackSession(interaction.session_id);
 
     // Generate training data if relationship was confirmed
@@ -169,6 +173,7 @@ export class TrainingDataCollector extends EventEmitter {
    */
   async recordInterfaceUsage(pattern: InterfaceUsagePattern): Promise<void> {
     this.interfaceUsagePatterns.push(pattern);
+    this.trimCollection(this.interfaceUsagePatterns);
     this.trackSession(pattern.session_id);
 
     // Generate training data for successful usage
@@ -189,6 +194,7 @@ export class TrainingDataCollector extends EventEmitter {
     feedback: ContextRetrievalFeedback
   ): Promise<void> {
     this.contextFeedback.push(feedback);
+    this.trimCollection(this.contextFeedback);
     this.trackSession(feedback.session_id);
 
     // Generate training data from user feedback
@@ -662,6 +668,15 @@ export class TrainingDataCollector extends EventEmitter {
     logger.info(" Cleared all training data collection");
   }
 
+  dispose(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.clearAllData();
+    this.removeAllListeners();
+  }
+
   /**
    * Export training data for analysis
    */
@@ -679,5 +694,10 @@ export class TrainingDataCollector extends EventEmitter {
       context_feedback: this.contextFeedback,
       statistics: this.getStatistics(),
     };
+  }
+
+  private trimCollection<T>(items: T[]): void {
+    if (items.length <= this.maxInteractionsPerCollection) return;
+    items.splice(0, items.length - this.maxInteractionsPerCollection);
   }
 }

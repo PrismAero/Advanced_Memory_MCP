@@ -1,11 +1,10 @@
 import * as chokidar from "chokidar";
 import { EventEmitter } from "events";
 import { promises as fs } from "fs";
-import type { Ignore } from "ignore";
-import ignoreLib from "ignore";
 import path from "node:path";
 import { logger } from "../logger.js";
 import { buildWatcherIgnoreGlobs } from "./exclusion-patterns.js";
+import { IgnorePolicy } from "./ignore-policy.js";
 import { ProjectIndexer, ProjectInfo } from "./project-indexer.js";
 
 /**
@@ -90,7 +89,7 @@ export class FileWatcher extends EventEmitter {
   private processingInterval: NodeJS.Timeout | null = null;
   private isWatching = false;
   private projectInfo: ProjectInfo | null = null;
-  private ignoreFilter: Ignore | null = null;
+  private ignorePolicy = new IgnorePolicy();
 
   // Change tracking
   private pendingChanges = new Map<string, FileChangeEvent>();
@@ -817,67 +816,18 @@ export class FileWatcher extends EventEmitter {
    * Load .gitignore patterns from the project root
    */
   private async loadGitignorePatterns(): Promise<void> {
-    // @ts-ignore - ignore has a default export that TypeScript doesn't recognize properly
-    const ig = ignoreLib.default || ignoreLib;
-    this.ignoreFilter = ig();
-
-    // Add base patterns that should always be ignored
-    const basePatterns = [
-      ".git",
-      "node_modules",
-      ".DS_Store",
-      "*.log",
-      "_codeql",
-    ];
-
-    this.ignoreFilter.add(basePatterns);
-
-    // Add configured ignore patterns
-    if (this.config.ignored && this.config.ignored.length > 0) {
-      const patterns = this.config.ignored.map((pattern) =>
-        pattern.replace(/^\*\*\//g, "").replace(/\/\*\*$/g, "")
-      );
-      this.ignoreFilter.add(patterns);
-    }
-
-    // Add additional patterns if specified
-    if (
-      this.config.additionalIgnorePatterns &&
-      this.config.additionalIgnorePatterns.length > 0
-    ) {
-      this.ignoreFilter.add(this.config.additionalIgnorePatterns);
-    }
-
-    // Try to load .gitignore from project root
-    const gitignorePath = path.join(this.rootPath, ".gitignore");
-    try {
-      const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-      const patterns = gitignoreContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#"));
-
-      if (patterns.length > 0) {
-        this.ignoreFilter.add(patterns);
-        logger.info(
-          `[GITIGNORE] Loaded ${patterns.length} patterns from .gitignore`
-        );
-      }
-    } catch (error) {
-      // .gitignore not found or not readable - that's okay
-      logger.debug(
-        "[GITIGNORE] No .gitignore file found, using default patterns"
-      );
-    }
+    await this.ignorePolicy.load(this.rootPath, {
+      additionalPatterns: this.config.additionalIgnorePatterns,
+      createMemoryIgnore: true,
+    });
   }
 
   /**
    * Check if path should be ignored
    */
   private shouldIgnore(relativePath: string): boolean {
-    // Use gitignore filter if available
-    if (this.ignoreFilter && this.config.useGitignore) {
-      return this.ignoreFilter.ignores(relativePath);
+    if (this.config.useGitignore && this.ignorePolicy.ignores(relativePath)) {
+      return true;
     }
 
     // Fallback to basic pattern matching

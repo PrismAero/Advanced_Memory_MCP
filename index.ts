@@ -348,19 +348,22 @@ async function main() {
 }
 
 // Cleanup handlers
-process.on("SIGINT", async () => {
-  logger.info("Shutting down Enhanced Memory MCP Server...");
+async function shutdown(): Promise<void> {
   backgroundProcessor.stop();
   relationshipIndexer.shutdown();
+  projectAnalysisOps.dispose();
   await memoryManager.close();
+}
+
+process.on("SIGINT", async () => {
+  logger.info("Shutting down Enhanced Memory MCP Server...");
+  await shutdown();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
   logger.info("Shutting down Enhanced Memory MCP Server...");
-  backgroundProcessor.stop();
-  relationshipIndexer.shutdown();
-  await memoryManager.close();
+  await shutdown();
   process.exit(0);
 });
 

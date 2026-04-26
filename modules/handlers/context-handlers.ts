@@ -81,8 +81,8 @@ export class ContextHandlers {
   async handleRecallWorkingContext(args: any): Promise<any> {
     const branchName = args.branch_name || "main";
     const includeRelated = args.include_related !== false;
-    const maxRelated = args.max_related || 10;
-    const maxObservations = args.max_observations ?? 5;
+    const maxRelated = clampInteger(args.max_related, 1, 50, 10);
+    const maxObservations = clampInteger(args.max_observations, 0, 100, 5);
 
     const working = await this.memoryManager.searchEntities(
       "",
@@ -164,7 +164,7 @@ export class ContextHandlers {
 
   async handleFindDependencies(args: any): Promise<any> {
     const branchName = args.branch_name || "main";
-    const dependencyDepth = args.dependency_depth || 2;
+    const dependencyDepth = clampInteger(args.dependency_depth, 1, 3, 2);
     let targetEntities: string[] = args.entity_names || [];
 
     if (targetEntities.length === 0) {
@@ -202,8 +202,8 @@ export class ContextHandlers {
 
   async handleTraceDecisionChain(args: any): Promise<any> {
     const branchName = args.branch_name || "main";
-    const maxDecisions = args.max_decisions || 10;
-    const timeWindowDays = args.time_window_days || 30;
+    const maxDecisions = clampInteger(args.max_decisions, 1, 25, 10);
+    const timeWindowDays = clampInteger(args.time_window_days, 1, 365, 30);
     const entityName = args.entity_name;
 
     const decisions = entityName
@@ -226,9 +226,9 @@ export class ContextHandlers {
 
   async handleGetContinuationContext(args: any): Promise<any> {
     const branchName = args.branch_name || "main";
-    const timeWindowHours = args.time_window_hours || 24;
+    const timeWindowHours = clampInteger(args.time_window_hours, 1, 24 * 30, 24);
     const includeBlockers = args.include_blockers !== false;
-    const maxObservations = args.max_observations ?? 5;
+    const maxObservations = clampInteger(args.max_observations, 0, 100, 5);
     const cutoff = new Date(Date.now() - timeWindowHours * 60 * 60 * 1000);
 
     const working = await this.memoryManager.searchEntities(
@@ -268,7 +268,7 @@ export class ContextHandlers {
     }
 
     const branchName = args.branch_name || "main";
-    const max = args.max_suggestions || 10;
+    const max = clampInteger(args.max_suggestions, 1, 50, 10);
 
     let targetEntities: string[] = args.entity_names || [];
     if (targetEntities.length === 0) {
@@ -548,4 +548,15 @@ export class ContextHandlers {
       return acc;
     }, {});
   }
+}
+
+function clampInteger(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(numeric)));
 }

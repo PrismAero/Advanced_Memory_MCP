@@ -124,6 +124,9 @@ export class ContextEngine {
   private workingContexts = new Map<string, WorkingContext>();
   private suggestionCache = new Map<string, ContextSuggestion[]>();
   private contextPredictionCache = new Map<string, ContextPrediction>();
+  private maxWorkingContexts = 100;
+  private maxSuggestionCacheEntries = 200;
+  private maxPredictionCacheEntries = 100;
 
   constructor(
     embeddingEngine: ProjectEmbeddingEngine,
@@ -226,6 +229,7 @@ export class ContextEngine {
 
     // Cache the results
     this.suggestionCache.set(cacheKey, sortedSuggestions);
+    this.trimMap(this.suggestionCache, this.maxSuggestionCacheEntries);
 
     return sortedSuggestions;
   }
@@ -275,6 +279,7 @@ export class ContextEngine {
 
     // Cache the prediction
     this.contextPredictionCache.set(cacheKey, prediction);
+    this.trimMap(this.contextPredictionCache, this.maxPredictionCacheEntries);
 
     return prediction;
   }
@@ -298,6 +303,7 @@ export class ContextEngine {
 
     const updated = { ...existing, ...updates, session_id: sessionId };
     this.workingContexts.set(sessionId, updated);
+    this.trimMap(this.workingContexts, this.maxWorkingContexts);
 
     // Clear related caches
     this.clearCachesForSession(sessionId);
@@ -739,5 +745,17 @@ export class ContextEngine {
     this.suggestionCache.clear();
     this.contextPredictionCache.clear();
     logger.info(" Cleared context engine caches");
+  }
+
+  dispose(): void {
+    this.workingContexts.clear();
+    this.clearAllCaches();
+  }
+
+  private trimMap<K, V>(map: Map<K, V>, maxEntries: number): void {
+    while (map.size > maxEntries) {
+      const oldestKey = map.keys().next().value as K;
+      map.delete(oldestKey);
+    }
   }
 }

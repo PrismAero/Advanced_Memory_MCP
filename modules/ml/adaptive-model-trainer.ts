@@ -94,6 +94,8 @@ export class AdaptiveModelTrainer {
   private activeModel: tf.LayersModel | null = null;
   private isTraining = false;
   private initializationPromise: Promise<void>;
+  private scheduledTrainingTimer: NodeJS.Timeout | null = null;
+  private maxRetainedTrainingDataPoints = 10000;
 
   constructor(baseModelManager: TensorFlowModelManager, cacheDir?: string) {
     this.baseModelManager = baseModelManager;
@@ -210,6 +212,7 @@ export class AdaptiveModelTrainer {
     }
 
     this.trainingData.set(dataPoint.id, dataPoint);
+    this.trimTrainingData();
 
     // Auto-trigger training if we have enough data
     if (this.trainingData.size % 100 === 0 && this.trainingData.size > 0) {
@@ -670,7 +673,10 @@ export class AdaptiveModelTrainer {
    * Schedule training to run asynchronously
    */
   private scheduleTraining(): void {
-    setTimeout(async () => {
+    if (this.scheduledTrainingTimer) return;
+
+    this.scheduledTrainingTimer = setTimeout(async () => {
+      this.scheduledTrainingTimer = null;
       try {
         if (!this.isTraining && this.trainingData.size >= 500) {
           logger.info("[BOT] Auto-starting incremental training");
@@ -686,6 +692,11 @@ export class AdaptiveModelTrainer {
    * Clean up resources
    */
   dispose(): void {
+    if (this.scheduledTrainingTimer) {
+      clearTimeout(this.scheduledTrainingTimer);
+      this.scheduledTrainingTimer = null;
+    }
+
     if (this.activeModel) {
       this.activeModel.dispose();
       this.activeModel = null;
@@ -697,6 +708,18 @@ export class AdaptiveModelTrainer {
   }
 
   // Helper methods
+  private trimTrainingData(): void {
+    if (this.trainingData.size <= this.maxRetainedTrainingDataPoints) return;
+
+    const sorted = Array.from(this.trainingData.values()).sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+    );
+    const overflow = this.trainingData.size - this.maxRetainedTrainingDataPoints;
+    for (const point of sorted.slice(0, overflow)) {
+      this.trainingData.delete(point.id);
+    }
+  }
+
   private async fileExists(filePath: string): Promise<boolean> {
     try {
       await fs.access(filePath);

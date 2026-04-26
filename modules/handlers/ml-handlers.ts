@@ -49,10 +49,14 @@ export class MLHandlers {
   }
 
   async handleTrainProjectModel(args: any): Promise<any> {
-    const epochs = args.epochs ?? args.training_config?.epochs ?? 10;
-    const batchSize = args.batch_size ?? args.training_config?.batch_size ?? 16;
-    const learningRate =
-      args.learning_rate ?? args.training_config?.learning_rate ?? 0.001;
+    const epochs = clampNumber(args.epochs ?? args.training_config?.epochs, 1, 50, 10);
+    const batchSize = clampNumber(args.batch_size ?? args.training_config?.batch_size, 1, 128, 16);
+    const learningRate = clampNumber(
+      args.learning_rate ?? args.training_config?.learning_rate,
+      0.000001,
+      0.1,
+      0.001,
+    );
 
     try {
       const session = await this.adaptiveModelTrainer.startTraining({
@@ -117,7 +121,7 @@ export class MLHandlers {
     if (!args.code_snippet) {
       return jsonResponse({ error: "code_snippet is required" });
     }
-    const limit = args.limit ?? args.max_results ?? 5;
+    const limit = clampNumber(args.limit ?? args.max_results, 1, 50, 5);
 
     try {
       const queryEmbedding =
@@ -153,8 +157,8 @@ export class MLHandlers {
   }
 
   async handleBackfillEmbeddings(args: any): Promise<any> {
-    const fileLimit = args.file_limit || 100;
-    const interfaceLimit = args.interface_limit || 100;
+    const fileLimit = clampNumber(args.file_limit, 1, 500, 100);
+    const interfaceLimit = clampNumber(args.interface_limit, 1, 500, 100);
 
     try {
       const status = await this.projectAnalysisOps.backfillMissingEmbeddings();
@@ -216,4 +220,15 @@ export class MLHandlers {
       });
     }
   }
+}
+
+function clampNumber(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, numeric));
 }

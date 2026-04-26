@@ -19,26 +19,32 @@ export class SQLiteRelationOperations {
 
     const branchId = await this.connection.getBranchId(branchName);
     const createdRelations: Relation[] = [];
+    const validRelations = relations.filter((relation) => {
+      const isValid = relation.from && relation.to && relation.relationType;
+      if (!isValid) logger.warn("Skipping invalid relation:", relation);
+      return isValid;
+    });
 
-    for (const relation of relations) {
-      if (!relation.from || !relation.to || !relation.relationType) {
-        logger.warn("Skipping invalid relation:", relation);
-        continue;
-      }
+    if (validRelations.length === 0) return [];
 
-      try {
-        // Get entity IDs
-        const fromEntity = await this.connection.getQuery(
-          "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [relation.from, branchId]
-        );
+    const entityNames = Array.from(
+      new Set(validRelations.flatMap((relation) => [relation.from, relation.to]))
+    );
+    const placeholders = entityNames.map(() => "?").join(",");
+    const entityRows = await this.connection.runQuery(
+      `SELECT id, name FROM entities WHERE branch_id = ? AND name IN (${placeholders})`,
+      [branchId, ...entityNames]
+    );
+    const entityIds = new Map<string, number>(
+      (entityRows || []).map((row: any) => [row.name, row.id])
+    );
 
-        const toEntity = await this.connection.getQuery(
-          "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [relation.to, branchId]
-        );
+    await this.connection.withTransaction(async () => {
+      for (const relation of validRelations) {
+        const fromEntityId = entityIds.get(relation.from);
+        const toEntityId = entityIds.get(relation.to);
 
-        if (!fromEntity) {
+        if (!fromEntityId) {
           logger.warn(
             `From entity "${relation.from}" not found in branch ${
               branchName || "main"
@@ -47,7 +53,7 @@ export class SQLiteRelationOperations {
           continue;
         }
 
-        if (!toEntity) {
+        if (!toEntityId) {
           logger.warn(
             `To entity "${relation.to}" not found in branch ${
               branchName || "main"
@@ -56,23 +62,17 @@ export class SQLiteRelationOperations {
           continue;
         }
 
-        // Insert relation (ignore duplicates)
-        await this.connection.runQuery(
+        await this.connection.execute(
           `
           INSERT OR IGNORE INTO relations (from_entity_id, to_entity_id, relation_type, branch_id)
           VALUES (?, ?, ?, ?)
           `,
-          [fromEntity.id, toEntity.id, relation.relationType, branchId]
+          [fromEntityId, toEntityId, relation.relationType, branchId]
         );
 
         createdRelations.push(relation);
-      } catch (error) {
-        logger.error(
-          `Failed to create relation: ${relation.from} -> ${relation.to}:`,
-          error
-        );
       }
-    }
+    });
 
     // Demoted from INFO to DEBUG: this fires for every batch of
     // relations (including auto-detected pairs) and was the source
@@ -120,7 +120,7 @@ export class SQLiteRelationOperations {
         }
 
         // Delete relation
-        await this.connection.runQuery(
+        await this.connection.execute(
           `
           DELETE FROM relations 
           WHERE from_entity_id = ? AND to_entity_id = ? AND relation_type = ? AND branch_id = ?

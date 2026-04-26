@@ -241,7 +241,7 @@ export class VectorStore {
    * Delete a vector
    */
   async delete(id: string): Promise<void> {
-    await this.connection.runQuery(
+    await this.connection.execute(
       `DELETE FROM ${this.tableName} WHERE id = ?`,
       [id]
     );
@@ -250,11 +250,27 @@ export class VectorStore {
     this.isDirty = true;
   }
 
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    const placeholders = ids.map(() => "?").join(",");
+    await this.connection.execute(
+      `DELETE FROM ${this.tableName} WHERE id IN (${placeholders})`,
+      ids
+    );
+
+    for (const id of ids) {
+      this.vectorCache.delete(id);
+      this.metadataCache.delete(id);
+    }
+    this.isDirty = true;
+  }
+
   /**
    * Clear all vectors
    */
   async clear(): Promise<void> {
-    await this.connection.runQuery(`DELETE FROM ${this.tableName}`);
+    await this.connection.execute(`DELETE FROM ${this.tableName}`);
     this.vectorCache.clear();
     this.metadataCache.clear();
     this.idMap = [];
@@ -262,5 +278,16 @@ export class VectorStore {
       this.tensorIndex.dispose();
       this.tensorIndex = null;
     }
+  }
+
+  dispose(): void {
+    if (this.tensorIndex) {
+      this.tensorIndex.dispose();
+      this.tensorIndex = null;
+    }
+    this.vectorCache.clear();
+    this.metadataCache.clear();
+    this.idMap = [];
+    this.isDirty = false;
   }
 }

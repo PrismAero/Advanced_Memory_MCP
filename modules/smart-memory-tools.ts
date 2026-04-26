@@ -622,6 +622,12 @@ const CORE_TOOLS: Tool[] = [
           type: "boolean",
           description: "[patterns] Materialize the suggested branches.",
         },
+        memory_ignore_patterns: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Additional gitignore-style patterns to append to .memory/.memoryignore before scanning.",
+        },
       },
     },
   },

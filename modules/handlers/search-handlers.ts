@@ -27,7 +27,6 @@ export class SearchHandlers {
       );
     }
 
-    const contextDepth = args.context_depth || 2;
     const searchAllBranches = args.branch_name === "*";
     const branchToSearch = searchAllBranches
       ? undefined
@@ -139,7 +138,9 @@ export class SearchHandlers {
     }
 
     const maxObservations =
-      typeof args.max_observations === "number" ? args.max_observations : 5;
+      typeof args.max_observations === "number"
+        ? clampInteger(args.max_observations, 0, 100, 5)
+        : 5;
 
     return jsonResponse({
       entities: sanitizeEntities(searchResults.entities, {
@@ -158,4 +159,15 @@ export class SearchHandlers {
       },
     });
   }
+}
+
+function clampInteger(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(numeric)));
 }

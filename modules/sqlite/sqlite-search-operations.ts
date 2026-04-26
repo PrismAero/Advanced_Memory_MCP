@@ -347,8 +347,9 @@ export class SQLiteSearchOperations {
 
     // Word boundary search for more precise matching
     // Match whole words or parts of compound words
-    const searchPattern = `%${trimmedQuery}%`;
-    const wordBoundaryPattern = `% ${trimmedQuery} %`;
+    const escapedQuery = escapeLike(trimmedQuery);
+    const searchPattern = `%${escapedQuery}%`;
+    const wordBoundaryPattern = `% ${escapedQuery} %`;
 
     let whereClause = "WHERE 1=1";
     let params: any[] = [];
@@ -358,7 +359,7 @@ export class SQLiteSearchOperations {
     // filtered scan, not a text match.
     if (hasQuery) {
       whereClause +=
-        " AND (e.name LIKE ? OR e.name LIKE ? OR e.entity_type LIKE ? OR e.original_content LIKE ? OR e.original_content LIKE ? OR o.content LIKE ? OR o.content LIKE ?)";
+        " AND (e.name LIKE ? ESCAPE '\\' OR e.name LIKE ? ESCAPE '\\' OR e.entity_type LIKE ? ESCAPE '\\' OR e.original_content LIKE ? ESCAPE '\\' OR e.original_content LIKE ? ESCAPE '\\' OR o.content LIKE ? ESCAPE '\\' OR o.content LIKE ? ESCAPE '\\')";
       params.push(
         searchPattern,
         wordBoundaryPattern,
@@ -468,4 +469,8 @@ export class SQLiteSearchOperations {
 
     return this.entityOps.convertRowsToEntities(contextResults);
   }
+}
+
+function escapeLike(input: string): string {
+  return input.replace(/[\\%_]/g, (match) => `\\${match}`);
 }

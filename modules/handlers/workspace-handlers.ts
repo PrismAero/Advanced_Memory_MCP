@@ -3,6 +3,8 @@ import path from "path";
 import { Entity } from "../../memory-types.js";
 import { BackgroundProcessor } from "../background-processor.js";
 import { logger } from "../logger.js";
+import { resolveOwnedPath } from "../path-boundary.js";
+import { ensureMemoryIgnoreFile, IgnorePolicy, readMemoryIgnorePatterns } from "../project-analysis/ignore-policy.js";
 import { jsonResponse, sanitizeEntities } from "./response-utils.js";
 
 /**
@@ -44,8 +46,10 @@ export class WorkspaceHandlers {
   }
 
   async handleSyncWithWorkspace(args: any): Promise<any> {
-    const workspacePath =
-      args.workspace_path || process.env.MEMORY_PATH || process.cwd();
+    const workspacePath = await this.prepareWorkspacePath(
+      args.workspace_path || process.env.MEMORY_PATH || process.cwd(),
+      args.memory_ignore_patterns,
+    );
     const filePatterns = args.file_patterns || [
       "*.ts",
       "*.tsx",
@@ -62,6 +66,7 @@ export class WorkspaceHandlers {
     const workspaceAnalysis = await this.analyzeWorkspaceStructure(
       workspacePath,
       filePatterns,
+      args.memory_ignore_patterns || [],
     );
 
     let createdCount = 0;
@@ -90,6 +95,7 @@ export class WorkspaceHandlers {
       folders: workspaceAnalysis.folders.slice(0, 10).map((f: any) => f.path),
       important_files: workspaceAnalysis.importantFiles,
       file_types: workspaceAnalysis.fileTypes,
+      memory_ignore_patterns: await readMemoryIgnorePatterns(workspacePath),
     });
   }
 
@@ -99,11 +105,14 @@ export class WorkspaceHandlers {
     }
     const branchName = args.branch_name || "main";
     const contextRadius = args.context_radius || 2;
+    const currentFiles = args.current_files.map((filePath: string) =>
+      resolveOwnedPath(filePath, "current_files[]"),
+    );
 
     const relatedEntities: any[] = [];
     const fileConnections: any[] = [];
 
-    for (const filePath of args.current_files) {
+    for (const filePath of currentFiles) {
       const fileAnalysis = await this.analyzeFileContext(
         filePath,
         branchName,
@@ -120,15 +129,17 @@ export class WorkspaceHandlers {
     return jsonResponse({
       mode: "bridge",
       branch: branchName,
-      current_files: args.current_files,
+      current_files: currentFiles,
       related_entities: this.dedupeAndSort(relatedEntities).slice(0, 20),
       file_connections: fileConnections,
     });
   }
 
   async handleAnalyzeProjectStructure(args: any): Promise<any> {
-    const projectPath =
-      args.project_path || process.env.MEMORY_PATH || process.cwd();
+    const projectPath = await this.prepareWorkspacePath(
+      args.project_path || args.workspace_path || process.env.MEMORY_PATH || process.cwd(),
+      args.memory_ignore_patterns,
+    );
     const branchName = args.branch_name || "main";
 
     if (this.backgroundProcessor) {
@@ -149,6 +160,7 @@ export class WorkspaceHandlers {
           "*.go",
           "*.rs",
         ],
+        args.memory_ignore_patterns || [],
       );
       const structureEntities = await this.createWorkspaceStructureEntities(
         workspaceAnalysis,
@@ -162,6 +174,7 @@ export class WorkspaceHandlers {
         total_files: workspaceAnalysis.totalFiles,
         folder_count: workspaceAnalysis.folders.length,
         file_types: workspaceAnalysis.fileTypes,
+        memory_ignore_patterns: await readMemoryIgnorePatterns(projectPath),
       });
     } catch (error) {
       return jsonResponse({
@@ -173,8 +186,10 @@ export class WorkspaceHandlers {
   }
 
   async handleDetectProjectPatterns(args: any): Promise<any> {
-    const workspacePath =
-      args.workspace_path || process.env.MEMORY_PATH || process.cwd();
+    const workspacePath = await this.prepareWorkspacePath(
+      args.workspace_path || process.env.MEMORY_PATH || process.cwd(),
+      args.memory_ignore_patterns,
+    );
     const analysisDepth = args.analysis_depth || 2;
     const suggestBranches = args.suggest_branches !== false;
     const createSuggestedBranches = args.create_suggested_branches === true;
@@ -203,14 +218,29 @@ export class WorkspaceHandlers {
       complexity_metrics: patternAnalysis.complexityMetrics,
       branch_suggestions: branchSuggestions,
       created_branches: createdBranches,
+      memory_ignore_patterns: await readMemoryIgnorePatterns(workspacePath),
     });
   }
 
   // ---------- internal helpers (mostly unchanged) ----------
 
+  private async prepareWorkspacePath(
+    requestedPath: string,
+    memoryIgnorePatterns?: string[],
+  ): Promise<string> {
+    const workspacePath = resolveOwnedPath(requestedPath, "workspace_path");
+    await ensureMemoryIgnoreFile(workspacePath, {
+      patterns: Array.isArray(memoryIgnorePatterns) ? memoryIgnorePatterns : [],
+      appendPatterns: Array.isArray(memoryIgnorePatterns) && memoryIgnorePatterns.length > 0,
+      createIfMissing: true,
+    });
+    return workspacePath;
+  }
+
   private async analyzeWorkspaceStructure(
     workspacePath: string,
     filePatterns: string[],
+    additionalIgnorePatterns: string[] = [],
   ): Promise<any> {
     const analysis: any = {
       totalFiles: 0,
@@ -219,7 +249,12 @@ export class WorkspaceHandlers {
       fileTypes: {},
     };
     try {
-      await this.walkDirectory(workspacePath, workspacePath, analysis, 0, 3);
+      const ignorePolicy = new IgnorePolicy();
+      await ignorePolicy.load(workspacePath, {
+        additionalPatterns: additionalIgnorePatterns,
+        persistAdditionalPatterns: additionalIgnorePatterns.length > 0,
+      });
+      await this.walkDirectory(workspacePath, workspacePath, analysis, 0, 3, ignorePolicy);
       analysis.importantFiles =
         await this.identifyImportantFiles(workspacePath);
       return analysis;
@@ -235,6 +270,7 @@ export class WorkspaceHandlers {
     analysis: any,
     depth: number,
     maxDepth: number,
+    ignorePolicy: IgnorePolicy,
   ): Promise<void> {
     if (depth > maxDepth) return;
     try {
@@ -243,6 +279,7 @@ export class WorkspaceHandlers {
         if (item.name.startsWith(".") || item.name === "node_modules") continue;
         const itemPath = path.join(currentPath, item.name);
         const relativePath = path.relative(rootPath, itemPath);
+        if (ignorePolicy.ignores(relativePath)) continue;
         if (item.isDirectory()) {
           analysis.folders.push({
             name: item.name,
@@ -255,6 +292,7 @@ export class WorkspaceHandlers {
             analysis,
             depth + 1,
             maxDepth,
+            ignorePolicy,
           );
         } else if (item.isFile()) {
           analysis.totalFiles++;

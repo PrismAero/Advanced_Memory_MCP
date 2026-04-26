@@ -578,6 +578,22 @@ export class SQLiteConnection {
     });
   }
 
+  async withTransaction<T>(operation: () => Promise<T>): Promise<T> {
+    await this.execute("BEGIN IMMEDIATE TRANSACTION");
+    try {
+      const result = await operation();
+      await this.execute("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        await this.execute("ROLLBACK");
+      } catch (rollbackError) {
+        logger.error("Failed to rollback transaction:", rollbackError);
+      }
+      throw error;
+    }
+  }
+
   async getQuery(query: string, params: any[] = []): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
