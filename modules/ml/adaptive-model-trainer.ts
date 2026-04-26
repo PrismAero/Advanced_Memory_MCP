@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { logger } from "../logger.js";
 import { TensorFlowModelManager } from "../similarity/tensorflow-model-manager.js";
+import { buildBaselineSeedData } from "./seed-knowledge.js";
 
 /**
  * Training data point for model fine-tuning
@@ -25,6 +26,8 @@ export interface TrainingDataPoint {
     search_query?: string;
     user_rating?: number; // 1-5
     session_id?: string;
+    language?: string; // e.g. "c" | "cpp" | "go" | "typescript" | "any"
+    domain?: string; // free-form taxonomy hint, e.g. "go-concurrency"
   };
 }
 
@@ -90,14 +93,25 @@ export class AdaptiveModelTrainer {
   private modelCacheDir: string;
   private activeModel: tf.LayersModel | null = null;
   private isTraining = false;
+  private initializationPromise: Promise<void>;
 
   constructor(baseModelManager: TensorFlowModelManager, cacheDir?: string) {
     this.baseModelManager = baseModelManager;
     this.modelCacheDir =
       cacheDir || path.join(process.cwd(), ".memory", "trained-models");
-    this.initializeTrainer().catch((error) =>
-      logger.error("Failed to initialize adaptive model trainer:", error)
-    );
+    this.initializationPromise = this.initializeTrainer().catch((error) => {
+      logger.error("Failed to initialize adaptive model trainer:", error);
+    });
+  }
+
+  /**
+   * Awaits trainer initialization (loading existing model versions,
+   * applying baseline seed, etc.). Tests and any callers that need
+   * to read training data immediately after construction should
+   * `await trainer.ready()` first.
+   */
+  async ready(): Promise<void> {
+    return this.initializationPromise;
   }
 
   /**
@@ -108,11 +122,81 @@ export class AdaptiveModelTrainer {
       await fs.mkdir(this.modelCacheDir, { recursive: true });
       await this.loadExistingVersions();
       await this.loadActiveModel();
+      await this.maybeLoadBaselineSeed();
 
       logger.info("[SUCCESS] Adaptive model trainer initialized");
     } catch (error) {
       logger.error("Failed to initialize adaptive model trainer:", error);
       throw error;
+    }
+  }
+
+  /**
+   * On first run, prime the trainer with a curated set of canonical
+   * software-engineering concept pairs (see modules/ml/seed-knowledge).
+   * This gives the model meaningful baseline opinions about the
+   * domain before any user interactions exist.
+   *
+   * - Skipped if the user opts out via `DISABLE_BASELINE_SEED=1`.
+   * - Skipped if a `seed.lock` marker already exists in the model
+   *   cache dir (we only seed once per cache dir).
+   * - Skipped if the trainer already has training data loaded
+   *   (i.e., an in-memory caller added points before init finished).
+   *
+   * Seed points are added directly to `trainingData` so we don't
+   * trip the auto-train scheduler on startup.
+   */
+  private async maybeLoadBaselineSeed(): Promise<void> {
+    if (process.env.DISABLE_BASELINE_SEED === "1") {
+      logger.info(
+        "[SEED] Baseline seed disabled via DISABLE_BASELINE_SEED env var"
+      );
+      return;
+    }
+
+    const seedMarkerPath = path.join(this.modelCacheDir, "seed.lock");
+    if (await this.fileExists(seedMarkerPath)) {
+      logger.debug("[SEED] Baseline seed already applied; skipping");
+      return;
+    }
+
+    if (this.trainingData.size > 0) {
+      logger.debug(
+        "[SEED] Trainer already has data points; skipping baseline seed"
+      );
+      return;
+    }
+
+    try {
+      const seedPoints = buildBaselineSeedData();
+      for (const point of seedPoints) {
+        // Insert directly to bypass the auto-training scheduler in
+        // addTrainingData(); we don't want a fresh init to spawn a
+        // training job before the rest of the system is ready.
+        if (point.confidence >= 0.3) {
+          this.trainingData.set(point.id, point);
+        }
+      }
+
+      await fs.writeFile(
+        seedMarkerPath,
+        JSON.stringify(
+          {
+            seeded_at: new Date().toISOString(),
+            data_points: seedPoints.length,
+            note: "Delete this file (and re-init) to re-apply baseline seed.",
+          },
+          null,
+          2
+        )
+      );
+
+      logger.info(
+        `[SEED] Loaded ${seedPoints.length} baseline knowledge points`
+      );
+    } catch (error) {
+      // Seeding is best-effort; never fail init because of it.
+      logger.warn("[SEED] Failed to load baseline seed:", error);
     }
   }
 

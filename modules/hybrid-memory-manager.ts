@@ -28,7 +28,10 @@ export class HybridMemoryManager implements IMemoryOperations {
 
     this.sqliteOps = new ModularSQLiteOperations(memoryPath, similarityEngine);
     this.optimizer = new MemoryOptimizer({
-      compressionLevel: "aggressive", // Use aggressive for maximum compression
+      // "minimal" only normalizes whitespace; the optimized form is
+      // never read back for retrieval, so heavier compression just
+      // mangles observations. Keyword/entity extraction is still on.
+      compressionLevel: "minimal",
       extractKeywords: true,
       extractEntities: true,
     });
@@ -129,12 +132,18 @@ export class HybridMemoryManager implements IMemoryOperations {
   async searchEntities(
     query: string,
     branchName?: string,
-    includeStatuses?: EntityStatus[]
-  ): Promise<KnowledgeGraph> {
+    includeStatuses?: EntityStatus[],
+    options?: {
+      includeContext?: boolean;
+      workingContextOnly?: boolean;
+      includeConfidenceScores?: boolean;
+    }
+  ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
     return await this.sqliteOps.searchEntities(
       query,
       branchName,
-      includeStatuses
+      includeStatuses,
+      options
     );
   }
 

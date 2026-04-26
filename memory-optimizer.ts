@@ -124,8 +124,15 @@ export class MemoryOptimizer {
   ]);
 
   constructor(config: Partial<MemoryOptimizationConfig> = {}) {
+    // NOTE: Default is "minimal" (whitespace normalization only). The
+    // older "aggressive" level performed destructive substitutions
+    // ("is" -> "=", "and" -> "&", filler-word stripping) that mangled
+    // human-readable observations and broke FTS-style retrieval. None
+    // of the current handlers ever read the optimized form back, so
+    // aggressive compression cost CPU for no benefit. "balanced" and
+    // "aggressive" remain available for callers that explicitly opt in.
     this.config = {
-      compressionLevel: "aggressive", // Default to aggressive for better compression
+      compressionLevel: "minimal",
       extractKeywords: true,
       extractEntities: true,
       ...config,
@@ -231,28 +238,20 @@ export class MemoryOptimizer {
   }
 
   private aggressiveCompression(text: string): string {
+    // "Aggressive" used to apply destructive symbol substitutions
+    // (is -> =, and -> &, etc.) that corrupted observations and made
+    // text search useless. We now treat it as "balanced + extra filler
+    // stripping" -- still lossy, but no longer turns prose into ASCII
+    // soup. Callers who want the old behavior can extend this method.
     let result = this.balancedCompression(text);
 
-    // Remove more filler words aggressively
     const words = result.split(/\s+/);
     const filtered = words.filter((word) => {
       const cleanWord = word.toLowerCase().replace(/[^\w]/g, "");
       return !this.fillerWords.has(cleanWord);
     });
 
-    // Convert to more compact format
-    result = filtered.join(" ");
-
-    // Additional aggressive shortcuts
-    result = result
-      .replace(/\bis\s+/gi, "=")
-      .replace(/\bhas\s+/gi, ">")
-      .replace(/\bwith\s+/gi, "+")
-      .replace(/\band\s+/gi, "&")
-      .replace(/\bthat\s+/gi, ":")
-      .replace(/\bwhich\s+/gi, ":");
-
-    return result;
+    return filtered.join(" ");
   }
 
   private isImportantWord(word: string): boolean {

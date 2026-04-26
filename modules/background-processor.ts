@@ -29,6 +29,11 @@ export class BackgroundProcessor {
     { count: number; lastAccess: Date; coAccessors: Set<string> }
   > = new Map();
 
+  // Per-branch signature cache used to short-circuit background passes
+  // when nothing has changed in a branch since the previous run.
+  // Signature is `<entityCount>:<maxLastAccessedISO>:<maxRelationCount>`.
+  private branchSignatures: Map<string, string> = new Map();
+
   // New project analysis components
   private projectIndexer: ProjectIndexer;
   private fileWatcher: FileWatcher | null = null;
@@ -49,7 +54,7 @@ export class BackgroundProcessor {
     memoryManager: EnhancedMemoryManager,
     similarityEngine: ModernSimilarityEngine,
     projectAnalysisOps?: ProjectAnalysisOperations,
-    adaptiveModelTrainer?: AdaptiveModelTrainer
+    adaptiveModelTrainer?: AdaptiveModelTrainer,
   ) {
     this.memoryManager = memoryManager;
     this.similarityEngine = similarityEngine;
@@ -64,19 +69,19 @@ export class BackgroundProcessor {
 
     this.projectEmbeddingEngine = new ProjectEmbeddingEngine(
       this.similarityEngine.getModelManager(),
-      this.adaptiveModelTrainer
+      this.adaptiveModelTrainer,
     );
 
     if (this.projectAnalysisOps) {
       this.interfaceMapper = new InterfaceMapper(
         this.projectAnalysisOps,
-        this.projectEmbeddingEngine
+        this.projectEmbeddingEngine,
       );
 
       this.contextEngine = new ContextEngine(
         this.projectEmbeddingEngine,
         this.interfaceMapper,
-        this.projectAnalysisOps
+        this.projectAnalysisOps,
       );
     }
 
@@ -92,7 +97,7 @@ export class BackgroundProcessor {
     });
 
     logger.info(
-      "[BOT] Enhanced background processor initialized with ML-based project monitoring"
+      "[BOT] Enhanced background processor initialized with ML-based project monitoring",
     );
   }
 
@@ -133,7 +138,7 @@ export class BackgroundProcessor {
     }, intervalMs);
 
     logger.info(
-      `Background processor started with ${intervalMinutes} minute interval`
+      `Background processor started with ${intervalMinutes} minute interval`,
     );
 
     // Run initial background tasks after a short delay
@@ -194,13 +199,16 @@ export class BackgroundProcessor {
   private startProjectMonitoring(): void {
     if (!this.currentProjectPath) return;
 
-    this.projectMonitoringInterval = setInterval(async () => {
-      try {
-        await this.monitorProjectStructure();
-      } catch (error) {
-        logger.error("Project monitoring error:", error);
-      }
-    }, 3 * 60 * 1000); // 3 minutes
+    this.projectMonitoringInterval = setInterval(
+      async () => {
+        try {
+          await this.monitorProjectStructure();
+        } catch (error) {
+          logger.error("Project monitoring error:", error);
+        }
+      },
+      3 * 60 * 1000,
+    ); // 3 minutes
 
     // Start file watcher for real-time changes
     if (!this.fileWatcher) {
@@ -209,7 +217,7 @@ export class BackgroundProcessor {
 
       this.fileWatcher.on("significantChanges", (changes) => {
         logger.debug(
-          `[FOLDER] Detected ${changes.length} significant file changes`
+          `[FOLDER] Detected ${changes.length} significant file changes`,
         );
         this.handleFileChanges(changes);
       });
@@ -224,13 +232,16 @@ export class BackgroundProcessor {
   private startInterfaceAnalysis(): void {
     if (!this.projectAnalysisOps) return;
 
-    this.interfaceAnalysisInterval = setInterval(async () => {
-      try {
-        await this.analyzeProjectInterfaces();
-      } catch (error) {
-        logger.error("Interface analysis error:", error);
-      }
-    }, 10 * 60 * 1000); // 10 minutes
+    this.interfaceAnalysisInterval = setInterval(
+      async () => {
+        try {
+          await this.analyzeProjectInterfaces();
+        } catch (error) {
+          logger.error("Interface analysis error:", error);
+        }
+      },
+      10 * 60 * 1000,
+    ); // 10 minutes
 
     logger.info("[SEARCH] Interface analysis started (10-minute intervals)");
   }
@@ -251,17 +262,17 @@ export class BackgroundProcessor {
 
       if (shouldReanalyze) {
         const projectInfo = await this.projectIndexer.analyzeProject(
-          this.currentProjectPath
+          this.currentProjectPath,
         );
         await this.projectAnalysisOps.storeWorkspaceContext(projectInfo);
 
         // Full scan and embedding generation
         if (this.projectEmbeddingEngine) {
           const files = await this.projectIndexer.scanProjectFiles(
-            this.currentProjectPath
+            this.currentProjectPath,
           );
           logger.info(
-            `[ANALYSIS] Scanning ${files.length} files for embeddings...`
+            `[ANALYSIS] Scanning ${files.length} files for embeddings...`,
           );
 
           for (const file of files) {
@@ -272,7 +283,7 @@ export class BackgroundProcessor {
               await this.projectEmbeddingEngine.generateProjectEmbedding(
                 fileContext,
                 "documentation", // Treat file overview as documentation
-                { file_path: file.filePath }
+                { file_path: file.filePath },
               );
 
             if (embedding) {
@@ -293,7 +304,7 @@ export class BackgroundProcessor {
                       file_path: file.filePath,
                       interface_name: iface.name,
                       line_number: iface.line,
-                    }
+                    },
                   );
 
                 if (ifaceEmbedding) {
@@ -304,21 +315,20 @@ export class BackgroundProcessor {
           }
 
           // Store files with embeddings
-          const storedFiles = await this.projectAnalysisOps.storeProjectFiles(
-            files
-          );
+          const storedFiles =
+            await this.projectAnalysisOps.storeProjectFiles(files);
 
           // Store interfaces with embeddings
           for (const file of files) {
             if (file.interfaces && file.interfaces.length > 0) {
               // We need the file ID from the stored record
               const storedFile = storedFiles.find(
-                (f) => f.file_path === file.filePath
+                (f) => f.file_path === file.filePath,
               );
               if (storedFile && storedFile.id) {
                 await this.projectAnalysisOps.storeCodeInterfaces(
                   storedFile.id,
-                  file.interfaces
+                  file.interfaces,
                 );
               }
             }
@@ -327,7 +337,7 @@ export class BackgroundProcessor {
 
         this.lastProjectAnalysis = new Date();
         logger.info(
-          "[LOADING] Updated project structure analysis with embeddings"
+          "[LOADING] Updated project structure analysis with embeddings",
         );
       }
     } catch (error) {
@@ -370,7 +380,7 @@ export class BackgroundProcessor {
           await this.projectEmbeddingEngine!.generateProjectEmbedding(
             fileContext,
             "documentation",
-            {}
+            {},
           );
         return result?.embedding || null;
       };
@@ -378,7 +388,7 @@ export class BackgroundProcessor {
       const updatedFiles =
         await this.projectAnalysisOps.generateMissingFileEmbeddings(
           fileEmbeddingGenerator,
-          50
+          50,
         );
 
       // Generate embeddings for interfaces without them (batch of 50)
@@ -387,7 +397,7 @@ export class BackgroundProcessor {
           await this.projectEmbeddingEngine!.generateProjectEmbedding(
             interfaceContext,
             "interface_definition",
-            {}
+            {},
           );
         return result?.embedding || null;
       };
@@ -395,12 +405,12 @@ export class BackgroundProcessor {
       const updatedInterfaces =
         await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
           interfaceEmbeddingGenerator,
-          50
+          50,
         );
 
       if (updatedFiles.length > 0 || updatedInterfaces.length > 0) {
         logger.info(
-          `[VECTOR] Backfilled embeddings: ${updatedFiles.length} files, ${updatedInterfaces.length} interfaces`
+          `[VECTOR] Backfilled embeddings: ${updatedFiles.length} files, ${updatedInterfaces.length} interfaces`,
         );
       }
     } catch (error) {
@@ -456,7 +466,7 @@ export class BackgroundProcessor {
         fileName,
         undefined,
         undefined,
-        false
+        false,
       );
 
       for (const entity of searchResults.entities.slice(0, 5)) {
@@ -474,7 +484,7 @@ export class BackgroundProcessor {
    */
   recordEntityAccess(
     entityName: string,
-    coAccessedEntities: string[] = []
+    coAccessedEntities: string[] = [],
   ): void {
     const now = new Date();
 
@@ -543,6 +553,26 @@ export class BackgroundProcessor {
   }
 
   /**
+   * Compute a cheap signature for a branch graph. Used to skip
+   * background passes when nothing has changed since the last run.
+   */
+  private computeBranchSignature(branchGraph: {
+    entities: Entity[];
+    relations?: any[];
+  }): string {
+    const entityCount = branchGraph.entities.length;
+    const relationCount = branchGraph.relations?.length || 0;
+    let maxLastAccessed = 0;
+    for (const entity of branchGraph.entities) {
+      if (entity.lastAccessed) {
+        const t = new Date(entity.lastAccessed).getTime();
+        if (t > maxLastAccessed) maxLastAccessed = t;
+      }
+    }
+    return `${entityCount}:${maxLastAccessed}:${relationCount}`;
+  }
+
+  /**
    * Update relevance scores based on access patterns and recency
    */
   private async updateRelevanceScores(): Promise<void> {
@@ -555,6 +585,19 @@ export class BackgroundProcessor {
       for (const branch of branches) {
         const branchGraph = await this.memoryManager.exportBranch(branch.name);
 
+        // Short-circuit: if nothing changed in this branch since the
+        // last pass, the previously-computed relevance scores are
+        // still valid and we can skip the inner loop entirely.
+        const sig = this.computeBranchSignature(branchGraph);
+        const sigKey = `relevance:${branch.name}`;
+        if (this.branchSignatures.get(sigKey) === sig) {
+          logger.debug(
+            `Skipping relevance pass for unchanged branch '${branch.name}'`,
+          );
+          continue;
+        }
+        this.branchSignatures.set(sigKey, sig);
+
         for (const entity of branchGraph.entities) {
           const newRelevanceScore = this.calculateRelevanceScore(entity);
 
@@ -566,7 +609,7 @@ export class BackgroundProcessor {
             await this.updateEntityRelevanceScore(
               entity.name,
               newRelevanceScore,
-              branch.name
+              branch.name,
             );
           }
         }
@@ -599,8 +642,10 @@ export class BackgroundProcessor {
     const daysSinceAccess =
       (Date.now() - lastAccessed.getTime()) / (1000 * 60 * 60 * 24);
 
-    if (daysSinceAccess < 1) score += 0.2; // Very recent
-    else if (daysSinceAccess < 7) score += 0.1; // Recent
+    if (daysSinceAccess < 1)
+      score += 0.2; // Very recent
+    else if (daysSinceAccess < 7)
+      score += 0.1; // Recent
     else if (daysSinceAccess > 30) score -= 0.1; // Old
 
     // Factor 3: Working context status
@@ -634,9 +679,21 @@ export class BackgroundProcessor {
       for (const branch of branches) {
         const branchGraph = await this.memoryManager.exportBranch(branch.name);
 
+        // Short-circuit: skip the (expensive) similarity sweep if no
+        // entities have been added or touched since the last pass.
+        const sig = this.computeBranchSignature(branchGraph);
+        const sigKey = `relations:${branch.name}`;
+        if (this.branchSignatures.get(sigKey) === sig) {
+          logger.debug(
+            `Skipping relationship detection for unchanged branch '${branch.name}'`,
+          );
+          continue;
+        }
+        this.branchSignatures.set(sigKey, sig);
+
         // Find potential relationships using similarity and access patterns
         const newRelationships = await this.findPotentialRelationships(
-          branchGraph.entities
+          branchGraph.entities,
         );
 
         // Create relationships that meet confidence threshold
@@ -651,11 +708,11 @@ export class BackgroundProcessor {
                     relationType: relationship.type,
                   },
                 ],
-                branch.name
+                branch.name,
               );
 
               logger.debug(
-                `Created relationship: ${relationship.from} -> ${relationship.to} (${relationship.type})`
+                `Created relationship: ${relationship.from} -> ${relationship.to} (${relationship.type})`,
               );
             } catch (error) {
               // Ignore duplicate relationship errors
@@ -682,7 +739,7 @@ export class BackgroundProcessor {
     // Optimize for embeddings: Use batch processing for large entity sets
     if (entities.length > BATCH_CONFIG.size) {
       logger.debug(
-        `Using batch TensorFlow.js processing for ${entities.length} entities`
+        `Using batch TensorFlow.js processing for ${entities.length} entities`,
       );
       return this.findPotentialRelationshipsBatch(entities);
     }
@@ -770,13 +827,13 @@ export class BackgroundProcessor {
    * Optimized batch relationship detection for large entity sets using TensorFlow.js
    */
   private async findPotentialRelationshipsBatch(
-    entities: Entity[]
+    entities: Entity[],
   ): Promise<any[]> {
     const relationships: any[] = [];
     const batchSize = 20; // Process in smaller batches to avoid memory issues
 
     logger.debug(
-      `Processing ${entities.length} entities in batches of ${batchSize}`
+      `Processing ${entities.length} entities in batches of ${batchSize}`,
     );
 
     try {
@@ -805,14 +862,13 @@ export class BackgroundProcessor {
       // Add co-access and type-based relationships for batch entities
       for (let i = 0; i < entities.length; i += batchSize) {
         const batch = entities.slice(i, i + batchSize);
-        const batchRelationships = await this.findPatternBasedRelationships(
-          batch
-        );
+        const batchRelationships =
+          await this.findPatternBasedRelationships(batch);
         relationships.push(...batchRelationships);
       }
 
       logger.debug(
-        `Batch processing found ${relationships.length} potential relationships`
+        `Batch processing found ${relationships.length} potential relationships`,
       );
       return relationships;
     } catch (error) {
@@ -826,7 +882,7 @@ export class BackgroundProcessor {
    * Find pattern-based relationships (co-access, type-based) for batch processing
    */
   private async findPatternBasedRelationships(
-    entities: Entity[]
+    entities: Entity[],
   ): Promise<any[]> {
     const relationships: any[] = [];
 
@@ -855,7 +911,7 @@ export class BackgroundProcessor {
         // Enhanced type-based relationship detection
         const typeRelationship = this.detectTypeBasedRelationship(
           entity1,
-          entity2
+          entity2,
         );
         if (typeRelationship) {
           relationships.push(typeRelationship);
@@ -871,7 +927,7 @@ export class BackgroundProcessor {
    */
   private detectTypeBasedRelationship(
     entity1: Entity,
-    entity2: Entity
+    entity2: Entity,
   ): any | null {
     // Enhanced type relationship rules
     const typeRules = [
@@ -923,7 +979,7 @@ export class BackgroundProcessor {
    * Normal (non-batch) relationship processing for fallback
    */
   private async findPotentialRelationshipsNormal(
-    entities: Entity[]
+    entities: Entity[],
   ): Promise<any[]> {
     const relationships: any[] = [];
 
@@ -935,7 +991,7 @@ export class BackgroundProcessor {
         // Basic similarity check
         const similarity = await this.similarityEngine.calculateSimilarity(
           entity1,
-          entity2
+          entity2,
         );
 
         if (similarity > 0.7) {
@@ -961,7 +1017,7 @@ export class BackgroundProcessor {
 
     try {
       const recentCutoff = new Date(
-        Date.now() - BACKGROUND_CONFIG.recentAccessDays * 24 * 60 * 60 * 1000
+        Date.now() - BACKGROUND_CONFIG.recentAccessDays * 24 * 60 * 60 * 1000,
       );
       const branches = await this.memoryManager.listBranches();
 
@@ -971,21 +1027,21 @@ export class BackgroundProcessor {
         for (const entity of branchGraph.entities) {
           const shouldBeWorkingContext = this.shouldBeInWorkingContext(
             entity,
-            recentCutoff
+            recentCutoff,
           );
 
           if (shouldBeWorkingContext && !entity.workingContext) {
             await this.updateEntityWorkingContext(
               entity.name,
               true,
-              branch.name
+              branch.name,
             );
             logger.debug(`Added ${entity.name} to working context`);
           } else if (!shouldBeWorkingContext && entity.workingContext) {
             await this.updateEntityWorkingContext(
               entity.name,
               false,
-              branch.name
+              branch.name,
             );
             logger.debug(`Removed ${entity.name} from working context`);
           }
@@ -1003,7 +1059,7 @@ export class BackgroundProcessor {
    */
   private shouldBeInWorkingContext(
     entity: Entity,
-    recentCutoff: Date
+    recentCutoff: Date,
   ): boolean {
     // Always include if explicitly marked as current status or blocker
     if (
@@ -1048,7 +1104,7 @@ export class BackgroundProcessor {
     try {
       const oldCutoff = new Date(
         Date.now() -
-          BACKGROUND_CONFIG.workingContextTimeoutDays * 24 * 60 * 60 * 1000
+          BACKGROUND_CONFIG.workingContextTimeoutDays * 24 * 60 * 60 * 1000,
       );
       const branches = await this.memoryManager.listBranches();
 
@@ -1069,7 +1125,7 @@ export class BackgroundProcessor {
             await this.updateEntityWorkingContext(
               entity.name,
               false,
-              branch.name
+              branch.name,
             );
             logger.debug(`Cleaned up outdated working context: ${entity.name}`);
           }
@@ -1079,7 +1135,7 @@ export class BackgroundProcessor {
             await this.updateEntityRelevanceScore(
               entity.name,
               0.5,
-              branch.name
+              branch.name,
             );
           }
         }
@@ -1106,16 +1162,16 @@ export class BackgroundProcessor {
   private async updateEntityRelevanceScore(
     entityName: string,
     score: number,
-    branchName: string
+    branchName: string,
   ): Promise<void> {
     try {
       await this.memoryManager.updateEntityRelevanceScore(
         entityName,
         score,
-        branchName
+        branchName,
       );
       logger.debug(
-        `Updated relevance score for ${entityName} to ${score.toFixed(2)}`
+        `Updated relevance score for ${entityName} to ${score.toFixed(2)}`,
       );
     } catch (error) {
       logger.warn(`Failed to update relevance score for ${entityName}:`, error);
@@ -1125,13 +1181,13 @@ export class BackgroundProcessor {
   private async updateEntityWorkingContext(
     entityName: string,
     isWorking: boolean,
-    branchName: string
+    branchName: string,
   ): Promise<void> {
     try {
       await this.memoryManager.updateEntityWorkingContext(
         entityName,
         isWorking,
-        branchName
+        branchName,
       );
       logger.debug(`Updated working context for ${entityName} to ${isWorking}`);
     } catch (error) {

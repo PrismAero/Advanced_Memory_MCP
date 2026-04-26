@@ -1,6 +1,7 @@
 import { Entity, EntityStatus, Relation } from "../../memory-types.js";
 import { logger } from "../logger.js";
 import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
+import { jsonResponse, sanitizeEntities } from "./response-utils.js";
 
 /**
  * Search and Query Handlers
@@ -22,7 +23,7 @@ export class SearchHandlers {
 
     if (!args.branch_name) {
       throw new Error(
-        "branch_name is required. Use '*' to search all branches."
+        "branch_name is required. Use '*' to search all branches.",
       );
     }
 
@@ -42,7 +43,7 @@ export class SearchHandlers {
         searchAllBranches
           ? "across all branches"
           : `isolated to branch: "${args.branch_name}"`
-      } (context: ${includeContext}, working_only: ${workingContextOnly})`
+      } (context: ${includeContext}, working_only: ${workingContextOnly})`,
     );
 
     // AI-optimized search with enhanced context awareness
@@ -54,14 +55,14 @@ export class SearchHandlers {
         includeContext,
         workingContextOnly,
         includeConfidenceScores,
-      }
+      },
     );
 
     // Enhance with similarity engine for related entity detection
     // Disable similarity enhancement for global search to avoid performance issues
     if (!searchAllBranches && searchResults.entities.length > 0) {
       logger.info(
-        `Smart search enhancing results with similarity detection...`
+        `Smart search enhancing results with similarity detection...`,
       );
 
       try {
@@ -69,7 +70,7 @@ export class SearchHandlers {
         const allBranchEntities = await this.memoryManager.readGraph(
           args.branch_name as string,
           args.include_statuses as EntityStatus[],
-          false // Don't include cross-context for similarity processing
+          false, // Don't include cross-context for similarity processing
         );
 
         const additionalEntities = new Set<string>();
@@ -83,9 +84,9 @@ export class SearchHandlers {
                 (e: Entity) =>
                   e.name !== foundEntity.name &&
                   !searchResults.entities.some(
-                    (se: Entity) => se.name === e.name
-                  )
-              )
+                    (se: Entity) => se.name === e.name,
+                  ),
+              ),
             );
 
           // Add medium and high confidence similar entities to context
@@ -102,15 +103,15 @@ export class SearchHandlers {
             Array.from(additionalEntities),
             args.branch_name as string,
             args.include_statuses as EntityStatus[],
-            true
+            true,
           );
 
           // Merge additional entities into search results
           const entityNames = new Set(
-            searchResults.entities.map((e: Entity) => e.name)
+            searchResults.entities.map((e: Entity) => e.name),
           );
           const newEntities = additionalResults.entities.filter(
-            (e: Entity) => !entityNames.has(e.name)
+            (e: Entity) => !entityNames.has(e.name),
           );
           const newRelations = additionalResults.relations.filter(
             (r: Relation) =>
@@ -118,56 +119,43 @@ export class SearchHandlers {
                 (sr: Relation) =>
                   sr.from === r.from &&
                   sr.to === r.to &&
-                  sr.relationType === r.relationType
-              )
+                  sr.relationType === r.relationType,
+              ),
           );
 
           searchResults.entities.push(...newEntities);
           searchResults.relations.push(...newRelations);
 
           logger.info(
-            `Smart search added ${newEntities.length} similar entities via similarity engine`
+            `Smart search added ${newEntities.length} similar entities via similarity engine`,
           );
         }
       } catch (error) {
         logger.warn(
           "Similarity enhancement failed, using standard search results:",
-          error
+          error,
         );
       }
     }
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              results: searchResults,
-              branch_searched: args.branch_name,
-              query: args.query,
-              context_depth: contextDepth,
-              search_type: "ai_optimized_smart_search",
-              branch_isolation: searchAllBranches ? "none" : "enforced",
-              ai_features: {
-                context_expansion: includeContext,
-                working_context_filter: workingContextOnly,
-                confidence_scoring: includeConfidenceScores,
-              },
-              confidence_scores: searchResults.confidence_scores || [],
-              summary: `AI-optimized search found ${
-                searchResults.entities.length
-              } entities and ${searchResults.relations.length} relations in ${
-                searchAllBranches
-                  ? "all branches"
-                  : `branch "${args.branch_name}"`
-              }${workingContextOnly ? " (working context only)" : ""}`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    const maxObservations =
+      typeof args.max_observations === "number" ? args.max_observations : 5;
+
+    return jsonResponse({
+      entities: sanitizeEntities(searchResults.entities, {
+        maxObservations,
+        keepSearchMeta: includeConfidenceScores,
+      }),
+      relations: searchResults.relations,
+      branch: args.branch_name,
+      query: args.query,
+      ...(includeConfidenceScores && searchResults.confidence_scores?.length
+        ? { confidence_scores: searchResults.confidence_scores }
+        : {}),
+      counts: {
+        entities: searchResults.entities.length,
+        relations: searchResults.relations.length,
+      },
+    });
   }
 }

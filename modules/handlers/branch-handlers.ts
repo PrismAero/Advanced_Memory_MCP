@@ -1,4 +1,5 @@
 import { Entity, MemoryBranchInfo } from "../../memory-types.js";
+import { jsonResponse, sanitizeEntities } from "./response-utils.js";
 
 /**
  * Branch Management Handlers
@@ -13,25 +14,7 @@ export class BranchHandlers {
 
   async handleListMemoryBranches(): Promise<any> {
     const branches = await this.memoryManager.listBranches();
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              branches,
-              summary: `Found ${
-                branches.length
-              } memory branches. Main branch has ${
-                branches.find((b: any) => b.name === "main")?.entityCount || 0
-              } entities.`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({ branches });
   }
 
   async handleCreateMemoryBranch(args: any): Promise<any> {
@@ -42,21 +25,10 @@ export class BranchHandlers {
       args.branch_name as string,
       args.purpose as string
     );
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              message: `Created branch "${args.branch_name}"`,
-              branch: newBranch,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      created: true,
+      branch: newBranch,
+    });
   }
 
   async handleDeleteMemoryBranch(args: any): Promise<any> {
@@ -64,20 +36,10 @@ export class BranchHandlers {
       throw new Error("branch_name is required");
     }
     await this.memoryManager.deleteBranch(args.branch_name as string);
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              message: `Deleted branch "${args.branch_name}"`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      deleted: true,
+      branch_name: args.branch_name,
+    });
   }
 
   async handleReadMemoryBranch(args: any): Promise<any> {
@@ -86,23 +48,17 @@ export class BranchHandlers {
       args.include_statuses,
       args.include_auto_context !== false
     );
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              graph: branchGraph,
-              branch: args.branch_name || "main",
-              summary: `Branch "${args.branch_name || "main"}" contains ${
-                branchGraph.entities.length
-              } entities and ${branchGraph.relations.length} relations`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    const maxObservations = typeof args.max_observations === "number"
+      ? args.max_observations
+      : 5;
+    return jsonResponse({
+      branch: args.branch_name || "main",
+      entities: sanitizeEntities(branchGraph.entities, { maxObservations }),
+      relations: branchGraph.relations,
+      counts: {
+        entities: branchGraph.entities.length,
+        relations: branchGraph.relations.length,
+      },
+    });
   }
 }

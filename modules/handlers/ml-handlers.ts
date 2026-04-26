@@ -3,10 +3,16 @@ import { AdaptiveModelTrainer } from "../ml/adaptive-model-trainer.js";
 import { ProjectEmbeddingEngine } from "../ml/project-embedding-engine.js";
 import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
 import { ProjectAnalysisOperations } from "../sqlite/project-analysis-operations.js";
+import { jsonResponse } from "./response-utils.js";
 
 /**
- * Machine Learning Handlers
- * Handles advanced ML operations like model training, embedding generation, and semantic code search
+ * Machine Learning Handlers.
+ *
+ * Three previously-separate tools (`generate_interface_embedding`,
+ * `find_similar_code`, `backfill_embeddings`) are now grouped under
+ * a single `embeddings` tool with `action: "generate" | "find_similar" | "backfill"`.
+ * `train_project_model` remains its own tool because it has a long
+ * lifetime and a distinct return shape (training session id + status).
  */
 export class MLHandlers {
   private adaptiveModelTrainer: AdaptiveModelTrainer;
@@ -18,7 +24,7 @@ export class MLHandlers {
     adaptiveModelTrainer: AdaptiveModelTrainer,
     projectEmbeddingEngine: ProjectEmbeddingEngine,
     similarityEngine: ModernSimilarityEngine,
-    projectAnalysisOps: ProjectAnalysisOperations
+    projectAnalysisOps: ProjectAnalysisOperations,
   ) {
     this.adaptiveModelTrainer = adaptiveModelTrainer;
     this.projectEmbeddingEngine = projectEmbeddingEngine;
@@ -26,15 +32,27 @@ export class MLHandlers {
     this.projectAnalysisOps = projectAnalysisOps;
   }
 
-  /**
-   * Train project-specific model
-   */
-  async handleTrainProjectModel(args: any): Promise<any> {
-    const epochs = args.epochs || 10;
-    const batchSize = args.batch_size || 16;
-    const learningRate = args.learning_rate || 0.001;
+  async handleEmbeddings(args: any): Promise<any> {
+    const action = args.action || "find_similar";
+    switch (action) {
+      case "generate":
+        return this.handleGenerateInterfaceEmbedding(args);
+      case "find_similar":
+        return this.handleFindSimilarCode(args);
+      case "backfill":
+        return this.handleBackfillEmbeddings(args);
+      default:
+        throw new Error(
+          `Unknown embeddings action "${action}". Expected one of: generate, find_similar, backfill.`,
+        );
+    }
+  }
 
-    logger.info("Starting project model training...");
+  async handleTrainProjectModel(args: any): Promise<any> {
+    const epochs = args.epochs ?? args.training_config?.epochs ?? 10;
+    const batchSize = args.batch_size ?? args.training_config?.batch_size ?? 16;
+    const learningRate =
+      args.learning_rate ?? args.training_config?.learning_rate ?? 0.001;
 
     try {
       const session = await this.adaptiveModelTrainer.startTraining({
@@ -42,332 +60,160 @@ export class MLHandlers {
         batch_size: batchSize,
         learning_rate: learningRate,
       });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: "Training session started successfully",
-                session_id: session.id,
-                config: session.config,
-                status: session.status,
-                data_points: session.data_points_count,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      return jsonResponse({
+        session_id: session.id,
+        status: session.status,
+        config: session.config,
+        data_points: session.data_points_count,
+      });
     } catch (error) {
       logger.error("Failed to start training:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                error: error instanceof Error ? error.message : String(error),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+      return jsonResponse({
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  /**
-   * Generate embedding for an interface
-   */
   async handleGenerateInterfaceEmbedding(args: any): Promise<any> {
     const interfaceNames = args.interface_names;
-    const branchName = args.branch_name || "main";
-    const updateDatabase = args.update_database !== false;
-
-    if (!interfaceNames || !Array.isArray(interfaceNames)) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { error: "interface_names must be an array of strings" },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+    if (!Array.isArray(interfaceNames)) {
+      return jsonResponse({
+        error: "interface_names must be an array of strings",
+      });
     }
 
-    logger.info(
-      `Generating embeddings for ${interfaceNames.length} interfaces`
-    );
-
-    try {
-      const results = [];
-
-      for (const name of interfaceNames) {
-        // Find interface definition
-        const interfaces = await this.projectAnalysisOps.getCodeInterfaces({
-          name,
-          limit: 1,
-        });
-
-        const iface = interfaces.length > 0 ? interfaces[0] : null;
-
-        if (!iface) {
-          results.push({ name, status: "not_found" });
-          continue;
-        }
-
-        // Generate embedding
-        const embedding =
-          await this.projectEmbeddingEngine.generateProjectEmbedding(
-            iface.definition,
-            "interface_definition",
-            {
-              interface_name: iface.name,
-              file_path: "unknown", // We might need to fetch file path
-              line_number: iface.line_number,
-            }
-          );
-
-        if (embedding && updateDatabase) {
-          // Update database with new embedding
-          // Note: We need a method to update interface embedding in projectAnalysisOps
-          // For now, we'll assume it's handled or just return the embedding
-        }
-
-        results.push({
-          name,
-          status: "success",
-          embedding_preview: embedding?.embedding.slice(0, 5),
-          confidence: embedding?.confidence,
-        });
+    const results: any[] = [];
+    for (const name of interfaceNames) {
+      const interfaces = await this.projectAnalysisOps.getCodeInterfaces({
+        name,
+        limit: 1,
+      });
+      const iface = interfaces[0];
+      if (!iface) {
+        results.push({ name, status: "not_found" });
+        continue;
       }
-
-      return {
-        content: [
+      const embedding =
+        await this.projectEmbeddingEngine.generateProjectEmbedding(
+          iface.definition,
+          "interface_definition",
           {
-            type: "text",
-            text: JSON.stringify(
-              {
-                results,
-                count: results.length,
-              },
-              null,
-              2
-            ),
+            interface_name: iface.name,
+            file_path: "unknown",
+            line_number: iface.line_number,
           },
-        ],
-      };
-    } catch (error) {
-      logger.error("Failed to generate interface embeddings:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                error: error instanceof Error ? error.message : String(error),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+        );
+      results.push({
+        name,
+        status: "success",
+        embedding_preview: embedding?.embedding.slice(0, 5),
+        confidence: embedding?.confidence,
+      });
     }
+    return jsonResponse({ action: "generate", results, count: results.length });
   }
 
-  /**
-   * Find similar code using semantic search
-   */
   async handleFindSimilarCode(args: any): Promise<any> {
-    const codeSnippet = args.code_snippet;
-    const language = args.language || "typescript";
-    const limit = args.limit || 5;
-
-    if (!codeSnippet) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { error: "code_snippet is required" },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+    if (!args.code_snippet) {
+      return jsonResponse({ error: "code_snippet is required" });
     }
-
-    logger.info("Finding similar code...");
+    const limit = args.limit ?? args.max_results ?? 5;
 
     try {
-      // 1. Generate embedding for query
       const queryEmbedding =
         await this.projectEmbeddingEngine.generateProjectEmbedding(
-          codeSnippet,
-          "business_logic" // Default type
+          args.code_snippet,
+          "business_logic",
         );
-
       if (!queryEmbedding) {
         throw new Error("Failed to generate embedding for query");
       }
-
-      // 2. Search for similar interfaces using vector similarity
-      const similarInterfaces =
-        await this.projectAnalysisOps.findSimilarInterfaces(
-          queryEmbedding.embedding,
-          limit
-        );
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: "Semantic code search completed",
-                query_embedding_generated: true,
-                results: similarInterfaces.map((r) => ({
-                  name: r.interface.name,
-                  similarity: r.similarity,
-                  file_id: r.interface.file_id,
-                  line_number: r.interface.line_number,
-                  definition: r.interface.definition.substring(0, 100) + "...",
-                })),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      const similar = await this.projectAnalysisOps.findSimilarInterfaces(
+        queryEmbedding.embedding,
+        limit,
+      );
+      return jsonResponse({
+        action: "find_similar",
+        results: similar.map((r) => ({
+          name: r.interface.name,
+          similarity: r.similarity,
+          file_id: r.interface.file_id,
+          line_number: r.interface.line_number,
+          definition_preview: r.interface.definition.substring(0, 200),
+        })),
+        count: similar.length,
+      });
     } catch (error) {
       logger.error("Failed to find similar code:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                error: error instanceof Error ? error.message : String(error),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+      return jsonResponse({
+        action: "find_similar",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  /**
-   * Backfill embeddings for existing data
-   */
   async handleBackfillEmbeddings(args: any): Promise<any> {
     const fileLimit = args.file_limit || 100;
     const interfaceLimit = args.interface_limit || 100;
 
-    logger.info("Starting embedding backfill process...");
-
     try {
-      // Check current status
       const status = await this.projectAnalysisOps.backfillMissingEmbeddings();
 
-      // Generate embeddings for files
-      const fileEmbeddingGenerator = async (fileContext: string) => {
-        const result =
-          await this.projectEmbeddingEngine.generateProjectEmbedding(
-            fileContext,
-            "documentation",
-            {}
-          );
-        return result?.embedding || null;
+      const fileGen = async (fileContext: string) => {
+        const r = await this.projectEmbeddingEngine.generateProjectEmbedding(
+          fileContext,
+          "documentation",
+          {},
+        );
+        return r?.embedding || null;
+      };
+      const interfaceGen = async (interfaceContext: string) => {
+        const r = await this.projectEmbeddingEngine.generateProjectEmbedding(
+          interfaceContext,
+          "interface_definition",
+          {},
+        );
+        return r?.embedding || null;
       };
 
       const updatedFiles =
         await this.projectAnalysisOps.generateMissingFileEmbeddings(
-          fileEmbeddingGenerator,
-          fileLimit
+          fileGen,
+          fileLimit,
         );
-
-      // Generate embeddings for interfaces
-      const interfaceEmbeddingGenerator = async (interfaceContext: string) => {
-        const result =
-          await this.projectEmbeddingEngine.generateProjectEmbedding(
-            interfaceContext,
-            "interface_definition",
-            {}
-          );
-        return result?.embedding || null;
-      };
-
       const updatedInterfaces =
         await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
-          interfaceEmbeddingGenerator,
-          interfaceLimit
+          interfaceGen,
+          interfaceLimit,
         );
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: "Embedding backfill completed",
-                before: {
-                  files_without_embeddings: status.filesWithoutEmbeddings,
-                  interfaces_without_embeddings:
-                    status.interfacesWithoutEmbeddings,
-                },
-                processed: {
-                  files_updated: updatedFiles.length,
-                  interfaces_updated: updatedInterfaces.length,
-                },
-                remaining: {
-                  files: status.filesWithoutEmbeddings - updatedFiles.length,
-                  interfaces:
-                    status.interfacesWithoutEmbeddings -
-                    updatedInterfaces.length,
-                },
-                note: "Run again to process more items. Background processor will also handle this automatically.",
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      return jsonResponse({
+        action: "backfill",
+        before: {
+          files_without_embeddings: status.filesWithoutEmbeddings,
+          interfaces_without_embeddings: status.interfacesWithoutEmbeddings,
+        },
+        processed: {
+          files: updatedFiles.length,
+          interfaces: updatedInterfaces.length,
+        },
+        remaining: {
+          files: Math.max(
+            0,
+            status.filesWithoutEmbeddings - updatedFiles.length,
+          ),
+          interfaces: Math.max(
+            0,
+            status.interfacesWithoutEmbeddings - updatedInterfaces.length,
+          ),
+        },
+      });
     } catch (error) {
       logger.error("Failed to backfill embeddings:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                error: error instanceof Error ? error.message : String(error),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+      return jsonResponse({
+        action: "backfill",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

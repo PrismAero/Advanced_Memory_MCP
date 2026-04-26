@@ -91,12 +91,18 @@ export class ModularSQLiteOperations implements IMemoryOperations {
   async searchEntities(
     query: string,
     branchName?: string,
-    includeStatuses?: EntityStatus[]
-  ): Promise<KnowledgeGraph> {
+    includeStatuses?: EntityStatus[],
+    options?: {
+      includeContext?: boolean;
+      workingContextOnly?: boolean;
+      includeConfidenceScores?: boolean;
+    }
+  ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
     return await this.searchOps.searchEntities(
       query,
       branchName,
-      includeStatuses
+      includeStatuses,
+      options
     );
   }
 

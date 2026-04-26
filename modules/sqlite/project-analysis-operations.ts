@@ -144,7 +144,7 @@ export class ProjectAnalysisOperations {
 
       // Count files without embeddings in vector store
       const allFiles = await this.connection.runQuery(
-        "SELECT id, file_path, relative_path, file_type, language FROM project_files"
+        "SELECT id, file_path, relative_path, file_type, language FROM project_files",
       );
 
       let filesWithoutEmbeddings = 0;
@@ -153,7 +153,7 @@ export class ProjectAnalysisOperations {
           // Check if vector exists
           const vectorExists = await this.connection.getQuery(
             "SELECT id FROM vectors WHERE id = ?",
-            [`file_${file.id}`]
+            [`file_${file.id}`],
           );
 
           if (!vectorExists) {
@@ -164,16 +164,16 @@ export class ProjectAnalysisOperations {
 
       // Count interfaces without embeddings
       const allInterfaces = await this.connection.runQuery(
-        "SELECT id, name, file_id FROM code_interfaces WHERE embedding IS NULL"
+        "SELECT id, name, file_id FROM code_interfaces WHERE embedding IS NULL",
       );
       const interfacesWithoutEmbeddings = allInterfaces?.length || 0;
 
       if (filesWithoutEmbeddings > 0 || interfacesWithoutEmbeddings > 0) {
         logger.info(
-          `[VECTOR] Found ${filesWithoutEmbeddings} files and ${interfacesWithoutEmbeddings} interfaces without embeddings`
+          `[VECTOR] Found ${filesWithoutEmbeddings} files and ${interfacesWithoutEmbeddings} interfaces without embeddings`,
         );
         logger.info(
-          "[VECTOR] These will be populated during next project analysis cycle"
+          "[VECTOR] These will be populated during next project analysis cycle",
         );
       } else {
         logger.info("[VECTOR] All existing data has embeddings ✓");
@@ -197,7 +197,7 @@ export class ProjectAnalysisOperations {
    */
   async storeProjectFiles(
     files: FileAnalysis[],
-    branchName?: string
+    branchName?: string,
   ): Promise<ProjectFileRecord[]> {
     const branchId = await this.connection.getBranchId(branchName);
     const storedFiles: ProjectFileRecord[] = [];
@@ -216,7 +216,7 @@ export class ProjectAnalysisOperations {
     }
 
     logger.info(
-      `[SUCCESS] Stored ${storedFiles.length} project files successfully`
+      `[SUCCESS] Stored ${storedFiles.length} project files successfully`,
     );
     return storedFiles;
   }
@@ -226,13 +226,13 @@ export class ProjectAnalysisOperations {
    */
   async storeOrUpdateProjectFile(
     file: FileAnalysis,
-    branchId: number
+    branchId: number,
   ): Promise<ProjectFileRecord | null> {
     try {
       // Check if file already exists
       const existing = await this.connection.getQuery(
         "SELECT id FROM project_files WHERE file_path = ? AND branch_id = ?",
-        [file.filePath, branchId]
+        [file.filePath, branchId],
       );
 
       const now = new Date().toISOString();
@@ -282,7 +282,7 @@ export class ProjectAnalysisOperations {
             record.analysis_metadata,
             now,
             existing.id,
-          ]
+          ],
         );
 
         record.id = existing.id;
@@ -313,7 +313,7 @@ export class ProjectAnalysisOperations {
             record.analysis_metadata,
             now,
             now,
-          ]
+          ],
         );
         record.id = result.lastID;
       }
@@ -345,7 +345,7 @@ export class ProjectAnalysisOperations {
   async storeCodeInterfaces(
     fileId: number,
     interfaces: InterfaceInfo[],
-    embedding?: number[]
+    embedding?: number[],
   ): Promise<CodeInterfaceRecord[]> {
     const storedInterfaces: CodeInterfaceRecord[] = [];
 
@@ -369,7 +369,7 @@ export class ProjectAnalysisOperations {
   async storeCodeInterface(
     fileId: number,
     iface: InterfaceInfo,
-    embedding?: number[]
+    embedding?: number[],
   ): Promise<CodeInterfaceRecord | null> {
     try {
       const now = new Date().toISOString();
@@ -381,7 +381,7 @@ export class ProjectAnalysisOperations {
       // Check if interface already exists
       const existing = await this.connection.getQuery(
         "SELECT id FROM code_interfaces WHERE name = ? AND file_id = ? AND line_number = ?",
-        [iface.name, fileId, iface.line]
+        [iface.name, fileId, iface.line],
       );
 
       const record: CodeInterfaceRecord = {
@@ -415,7 +415,7 @@ export class ProjectAnalysisOperations {
             record.embedding,
             now,
             existing.id,
-          ]
+          ],
         );
 
         record.id = existing.id;
@@ -442,7 +442,7 @@ export class ProjectAnalysisOperations {
             record.embedding,
             now,
             now,
-          ]
+          ],
         );
         record.id = result.lastID;
       }
@@ -474,7 +474,7 @@ export class ProjectAnalysisOperations {
   async storeProjectDependencies(
     fromFileId: number,
     imports: ImportInfo[],
-    exports: ExportInfo[]
+    exports: ExportInfo[],
   ): Promise<ProjectDependencyRecord[]> {
     const storedDependencies: ProjectDependencyRecord[] = [];
 
@@ -484,7 +484,7 @@ export class ProjectAnalysisOperations {
         const record = await this.storeProjectDependency(
           fromFileId,
           imp,
-          "import"
+          "import",
         );
         if (record) {
           storedDependencies.push(record);
@@ -500,7 +500,7 @@ export class ProjectAnalysisOperations {
         const record = await this.storeProjectDependency(
           fromFileId,
           exp,
-          "export"
+          "export",
         );
         if (record) {
           storedDependencies.push(record);
@@ -519,7 +519,7 @@ export class ProjectAnalysisOperations {
   async storeProjectDependency(
     fromFileId: number,
     dependency: ImportInfo | ExportInfo,
-    type: "import" | "export"
+    type: "import" | "export",
   ): Promise<ProjectDependencyRecord | null> {
     try {
       const now = new Date().toISOString();
@@ -555,7 +555,7 @@ export class ProjectAnalysisOperations {
         // This is simplified - could be enhanced with better resolution logic
         const targetFile = await this.connection.getQuery(
           "SELECT id FROM project_files WHERE relative_path LIKE ?",
-          [`%${imp.source}%`]
+          [`%${imp.source}%`],
         );
         if (targetFile) {
           toFileId = targetFile.id;
@@ -575,8 +575,8 @@ export class ProjectAnalysisOperations {
         resolution_status: toFileId
           ? "resolved"
           : externalPackage
-          ? "resolved"
-          : "unresolved",
+            ? "resolved"
+            : "unresolved",
       };
 
       // Insert record
@@ -600,7 +600,7 @@ export class ProjectAnalysisOperations {
           record.resolution_status,
           now,
           now,
-        ]
+        ],
       );
 
       return record;
@@ -615,7 +615,7 @@ export class ProjectAnalysisOperations {
    */
   async storeWorkspaceContext(
     projectInfo: ProjectInfo,
-    branchName?: string
+    branchName?: string,
   ): Promise<WorkspaceContextRecord | null> {
     try {
       const branchId = await this.connection.getBranchId(branchName);
@@ -642,7 +642,7 @@ export class ProjectAnalysisOperations {
       // Check if workspace already exists
       const existing = await this.connection.getQuery(
         "SELECT id FROM workspace_context WHERE workspace_path = ? AND branch_id = ?",
-        [record.workspace_path, record.branch_id]
+        [record.workspace_path, record.branch_id],
       );
 
       if (existing) {
@@ -666,7 +666,7 @@ export class ProjectAnalysisOperations {
             record.indexing_status,
             now,
             existing.id,
-          ]
+          ],
         );
 
         record.id = existing.id;
@@ -698,12 +698,12 @@ export class ProjectAnalysisOperations {
             record.branch_id,
             now,
             now,
-          ]
+          ],
         );
 
         const newRecord = await this.connection.getQuery(
           "SELECT * FROM workspace_context WHERE workspace_path = ? AND branch_id = ?",
-          [record.workspace_path, record.branch_id]
+          [record.workspace_path, record.branch_id],
         );
 
         if (newRecord) {
@@ -822,7 +822,7 @@ export class ProjectAnalysisOperations {
   async updateInterfaceUsage(interfaceId: number): Promise<void> {
     await this.connection.runQuery(
       "UPDATE code_interfaces SET usage_count = usage_count + 1, last_used = ? WHERE id = ?",
-      [new Date().toISOString(), interfaceId]
+      [new Date().toISOString(), interfaceId],
     );
   }
 
@@ -874,7 +874,7 @@ export class ProjectAnalysisOperations {
    */
   async cleanupDeletedFiles(
     existingPaths: string[],
-    branchName?: string
+    branchName?: string,
   ): Promise<number> {
     const branchId = await this.connection.getBranchId(branchName);
 
@@ -885,7 +885,7 @@ export class ProjectAnalysisOperations {
     const placeholders = existingPaths.map(() => "?").join(",");
     const result = await this.connection.runQuery(
       `DELETE FROM project_files WHERE branch_id = ? AND file_path NOT IN (${placeholders})`,
-      [branchId, ...existingPaths]
+      [branchId, ...existingPaths],
     );
 
     const deletedCount = result?.changes || 0;
@@ -901,7 +901,7 @@ export class ProjectAnalysisOperations {
   async findSimilarInterfaces(
     queryEmbedding: number[],
     limit: number = 5,
-    minSimilarity: number = 0.7
+    minSimilarity: number = 0.7,
   ): Promise<Array<{ interface: CodeInterfaceRecord; similarity: number }>> {
     try {
       // 1. Fetch all interfaces with embeddings
@@ -909,7 +909,7 @@ export class ProjectAnalysisOperations {
       // an SQLite extension like sqlite-vss. For this local implementation,
       // we fetch embeddings and calculate similarity in memory.
       const rows = await this.connection.runQuery(
-        "SELECT * FROM code_interfaces WHERE embedding IS NOT NULL"
+        "SELECT * FROM code_interfaces WHERE embedding IS NOT NULL",
       );
 
       if (!rows || rows.length === 0) {
@@ -931,7 +931,7 @@ export class ProjectAnalysisOperations {
         // Calculate similarity
         const similarity = this.calculateCosineSimilarity(
           queryEmbedding,
-          embedding
+          embedding,
         );
 
         if (similarity >= minSimilarity) {
@@ -957,7 +957,7 @@ export class ProjectAnalysisOperations {
    */
   private calculateCosineSimilarity(
     vecA: number[] | Float32Array,
-    vecB: number[] | Float32Array
+    vecB: number[] | Float32Array,
   ): number {
     let dotProduct = 0;
     let normA = 0;
@@ -979,7 +979,7 @@ export class ProjectAnalysisOperations {
    */
   async generateMissingFileEmbeddings(
     embeddingGenerator: (fileContext: string) => Promise<number[] | null>,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<number[]> {
     try {
       // Find files without vector embeddings
@@ -997,7 +997,7 @@ export class ProjectAnalysisOperations {
       }
 
       logger.info(
-        `[VECTOR] Generating embeddings for ${files.length} files...`
+        `[VECTOR] Generating embeddings for ${files.length} files...`,
       );
 
       const updatedIds: number[] = [];
@@ -1023,14 +1023,14 @@ export class ProjectAnalysisOperations {
         } catch (error) {
           logger.warn(
             `Failed to generate embedding for file ${file.file_path}:`,
-            error
+            error,
           );
         }
       }
 
       if (updatedIds.length > 0) {
         logger.info(
-          `[SUCCESS] Generated embeddings for ${updatedIds.length} files`
+          `[SUCCESS] Generated embeddings for ${updatedIds.length} files`,
         );
       }
 
@@ -1047,14 +1047,14 @@ export class ProjectAnalysisOperations {
    */
   async generateMissingInterfaceEmbeddings(
     embeddingGenerator: (interfaceContext: string) => Promise<number[] | null>,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<number[]> {
     try {
       const interfaces = await this.connection.runQuery(
         `SELECT id, name, definition, file_id FROM code_interfaces 
          WHERE embedding IS NULL 
          LIMIT ?`,
-        [limit]
+        [limit],
       );
 
       if (!interfaces || interfaces.length === 0) {
@@ -1062,7 +1062,7 @@ export class ProjectAnalysisOperations {
       }
 
       logger.info(
-        `[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`
+        `[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`,
       );
 
       const updatedIds: number[] = [];
@@ -1074,12 +1074,12 @@ export class ProjectAnalysisOperations {
 
           if (embedding) {
             const embeddingBuffer = Buffer.from(
-              new Float32Array(embedding).buffer
+              new Float32Array(embedding).buffer,
             );
 
             await this.connection.execute(
               "UPDATE code_interfaces SET embedding = ?, updated_at = ? WHERE id = ?",
-              [embeddingBuffer, new Date().toISOString(), iface.id]
+              [embeddingBuffer, new Date().toISOString(), iface.id],
             );
 
             // Also add to vector store
@@ -1098,14 +1098,14 @@ export class ProjectAnalysisOperations {
         } catch (error) {
           logger.warn(
             `Failed to generate embedding for interface ${iface.name}:`,
-            error
+            error,
           );
         }
       }
 
       if (updatedIds.length > 0) {
         logger.info(
-          `[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`
+          `[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`,
         );
       }
 

@@ -3,10 +3,17 @@ import path from "path";
 import { Entity } from "../../memory-types.js";
 import { BackgroundProcessor } from "../background-processor.js";
 import { logger } from "../logger.js";
+import { jsonResponse, sanitizeEntities } from "./response-utils.js";
 
 /**
- * Workspace Integration Handlers
- * Connects memory system with Cursor/IDE workspace for enhanced context awareness
+ * Workspace Integration Handlers.
+ *
+ * The previous version exposed four overlapping tools (sync_with_workspace,
+ * workspace_context_bridge, detect_project_patterns, analyze_project_structure)
+ * plus two stubs (find_interface_usage, navigate_codebase) that always
+ * returned placeholder text. The stubs are gone. The four real handlers
+ * remain accessible via a single `analyze_workspace` tool with a
+ * `mode` parameter: "sync" | "bridge" | "patterns" | "structure".
  */
 export class WorkspaceHandlers {
   private memoryManager: any;
@@ -17,9 +24,25 @@ export class WorkspaceHandlers {
     this.backgroundProcessor = backgroundProcessor || null;
   }
 
-  /**
-   * Sync memory entities with workspace structure
-   */
+  /** Unified `analyze_workspace` dispatcher. */
+  async handleAnalyzeWorkspace(args: any): Promise<any> {
+    const mode = args.mode || "sync";
+    switch (mode) {
+      case "sync":
+        return this.handleSyncWithWorkspace(args);
+      case "bridge":
+        return this.handleWorkspaceContextBridge(args);
+      case "patterns":
+        return this.handleDetectProjectPatterns(args);
+      case "structure":
+        return this.handleAnalyzeProjectStructure(args);
+      default:
+        throw new Error(
+          `Unknown workspace mode "${mode}". Expected one of: sync, bridge, patterns, structure.`,
+        );
+    }
+  }
+
   async handleSyncWithWorkspace(args: any): Promise<any> {
     const workspacePath =
       args.workspace_path || process.env.MEMORY_PATH || process.cwd();
@@ -33,188 +56,86 @@ export class WorkspaceHandlers {
       "*.py",
     ];
     const branchName = args.branch_name || "main";
-    const createStructureEntities = args.create_structure_entities !== false; // Default true
-    const linkExistingEntities = args.link_existing_entities !== false; // Default true
+    const createStructure = args.create_structure_entities !== false;
+    const linkExisting = args.link_existing_entities !== false;
 
-    logger.info(`Syncing memory with workspace: ${workspacePath}`);
+    const workspaceAnalysis = await this.analyzeWorkspaceStructure(
+      workspacePath,
+      filePatterns,
+    );
 
-    try {
-      // Analyze workspace structure
-      const workspaceAnalysis = await this.analyzeWorkspaceStructure(
-        workspacePath,
-        filePatterns
+    let createdCount = 0;
+    let linkedCount = 0;
+    if (createStructure) {
+      const entities = await this.createWorkspaceStructureEntities(
+        workspaceAnalysis,
+        branchName,
       );
-
-      const syncResults = {
-        workspace_path: workspacePath,
-        structure_entities_created: 0,
-        existing_entities_linked: 0,
-        total_files_analyzed: workspaceAnalysis.totalFiles,
-        folders_analyzed: workspaceAnalysis.folders.length,
-      };
-
-      // Create structure entities if requested
-      if (createStructureEntities) {
-        const structureEntities = await this.createWorkspaceStructureEntities(
-          workspaceAnalysis,
-          branchName
-        );
-        syncResults.structure_entities_created = structureEntities.length;
-      }
-
-      // Link existing entities to files if requested
-      if (linkExistingEntities) {
-        const linkedCount = await this.linkEntitiesToFiles(
-          workspaceAnalysis,
-          branchName
-        );
-        syncResults.existing_entities_linked = linkedCount;
-      }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                workspace_sync: syncResults,
-                workspace_structure: {
-                  root_path: workspacePath,
-                  major_folders: workspaceAnalysis.folders.slice(0, 10),
-                  important_files: workspaceAnalysis.importantFiles,
-                  file_types: workspaceAnalysis.fileTypes,
-                },
-                ai_insights: {
-                  project_complexity:
-                    this.assessProjectComplexity(workspaceAnalysis),
-                  suggested_memory_organization:
-                    this.suggestMemoryOrganization(workspaceAnalysis),
-                  integration_readiness:
-                    syncResults.structure_entities_created > 0 ||
-                    syncResults.existing_entities_linked > 0,
-                },
-                summary: `Synced workspace: ${syncResults.structure_entities_created} entities created, ${syncResults.existing_entities_linked} entities linked`,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      logger.error("Error syncing with workspace:", error);
-      throw error;
+      createdCount = entities.length;
     }
+    if (linkExisting) {
+      linkedCount = await this.linkEntitiesToFiles(
+        workspaceAnalysis,
+        branchName,
+      );
+    }
+
+    return jsonResponse({
+      mode: "sync",
+      workspace_path: workspacePath,
+      branch: branchName,
+      structure_entities_created: createdCount,
+      existing_entities_linked: linkedCount,
+      total_files: workspaceAnalysis.totalFiles,
+      folders: workspaceAnalysis.folders.slice(0, 10).map((f: any) => f.path),
+      important_files: workspaceAnalysis.importantFiles,
+      file_types: workspaceAnalysis.fileTypes,
+    });
   }
 
-  /**
-   * Bridge workspace context with memory entities
-   */
   async handleWorkspaceContextBridge(args: any): Promise<any> {
-    if (!args.current_files || args.current_files.length === 0) {
+    if (!args.current_files?.length) {
       throw new Error("current_files is required and must not be empty");
     }
-
-    const currentFiles = args.current_files;
     const branchName = args.branch_name || "main";
     const contextRadius = args.context_radius || 2;
 
-    logger.info(`Bridging context for files: ${currentFiles.join(", ")}`);
+    const relatedEntities: any[] = [];
+    const fileConnections: any[] = [];
 
-    try {
-      const contextBridge: any = {
-        current_files: currentFiles,
-        related_entities: [],
-        file_connections: [],
-        context_suggestions: [],
-      };
-
-      // Analyze each current file
-      for (const filePath of currentFiles) {
-        const fileAnalysis = await this.analyzeFileContext(
-          filePath,
-          branchName,
-          contextRadius
-        );
-
-        contextBridge.related_entities.push(...fileAnalysis.relatedEntities);
-        contextBridge.file_connections.push({
-          file: filePath,
-          connections: fileAnalysis.connections,
-          relevance_score: fileAnalysis.relevanceScore,
-        });
-        contextBridge.context_suggestions.push(...fileAnalysis.suggestions);
-      }
-
-      // Remove duplicates and sort by relevance
-      contextBridge.related_entities = this.deduplicateAndSort(
-        contextBridge.related_entities
+    for (const filePath of args.current_files) {
+      const fileAnalysis = await this.analyzeFileContext(
+        filePath,
+        branchName,
+        contextRadius,
       );
-      contextBridge.context_suggestions = this.deduplicateAndSort(
-        contextBridge.context_suggestions
-      );
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                workspace_context_bridge: contextBridge,
-                ai_recommendations: {
-                  immediate_context: contextBridge.related_entities.slice(0, 5),
-                  high_relevance_entities:
-                    contextBridge.related_entities.filter(
-                      (e: any) => e.relevance_score > 0.8
-                    ),
-                  context_completeness:
-                    this.calculateContextCompleteness(contextBridge),
-                  missing_context_areas: this.identifyMissingContext(
-                    currentFiles,
-                    contextBridge
-                  ),
-                },
-                summary: `Context bridge established: ${contextBridge.related_entities.length} related entities found for ${currentFiles.length} files`,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      logger.error("Error bridging workspace context:", error);
-      throw error;
+      relatedEntities.push(...fileAnalysis.relatedEntities);
+      fileConnections.push({
+        file: filePath,
+        relevance_score: fileAnalysis.relevanceScore,
+        match_count: fileAnalysis.relatedEntities.length,
+      });
     }
+
+    return jsonResponse({
+      mode: "bridge",
+      branch: branchName,
+      current_files: args.current_files,
+      related_entities: this.dedupeAndSort(relatedEntities).slice(0, 20),
+      file_connections: fileConnections,
+    });
   }
 
-  /**
-   * Detect project patterns and suggest memory organization
-   */
-  /**
-   * Analyze project structure and start background monitoring
-   */
   async handleAnalyzeProjectStructure(args: any): Promise<any> {
     const projectPath =
       args.project_path || process.env.MEMORY_PATH || process.cwd();
-    const analysisDepth = args.analysis_depth || "basic";
-    const includeDependencies = args.include_dependencies !== false;
-    const includeInterfaces = args.include_interfaces !== false;
     const branchName = args.branch_name || "main";
 
-    logger.info(`Analyzing project structure: ${projectPath}`);
+    if (this.backgroundProcessor) {
+      this.backgroundProcessor.setMonitoredProject(projectPath);
+    }
 
     try {
-      // 1. Start background monitoring if available
-      if (this.backgroundProcessor) {
-        this.backgroundProcessor.setMonitoredProject(projectPath);
-      } else {
-        logger.warn(
-          "Background processor not available for project monitoring"
-        );
-      }
-
-      // 2. Perform immediate analysis
       const workspaceAnalysis = await this.analyzeWorkspaceStructure(
         projectPath,
         [
@@ -227,59 +148,27 @@ export class WorkspaceHandlers {
           "*.cs",
           "*.go",
           "*.rs",
-        ]
+        ],
       );
-
-      // 3. Create structure entities
       const structureEntities = await this.createWorkspaceStructureEntities(
         workspaceAnalysis,
-        branchName
+        branchName,
       );
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                project_path: projectPath,
-                analysis_status: "completed",
-                background_monitoring: this.backgroundProcessor
-                  ? "active"
-                  : "inactive",
-                structure_entities_created: structureEntities.length,
-                project_stats: {
-                  total_files: workspaceAnalysis.totalFiles,
-                  folders: workspaceAnalysis.folders.length,
-                  file_types: workspaceAnalysis.fileTypes,
-                },
-                message:
-                  "Project structure analyzed and background monitoring started.",
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      return jsonResponse({
+        mode: "structure",
+        project_path: projectPath,
+        background_monitoring: this.backgroundProcessor ? "active" : "inactive",
+        structure_entities_created: structureEntities.length,
+        total_files: workspaceAnalysis.totalFiles,
+        folder_count: workspaceAnalysis.folders.length,
+        file_types: workspaceAnalysis.fileTypes,
+      });
     } catch (error) {
-      logger.error("Error analyzing project structure:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                error: error instanceof Error ? error.message : String(error),
-                project_path: projectPath,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
+      return jsonResponse({
+        mode: "structure",
+        project_path: projectPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -287,228 +176,41 @@ export class WorkspaceHandlers {
     const workspacePath =
       args.workspace_path || process.env.MEMORY_PATH || process.cwd();
     const analysisDepth = args.analysis_depth || 2;
-    const suggestBranches = args.suggest_branches !== false; // Default true
-    const createSuggestedBranches = args.create_suggested_branches === true; // Default false
+    const suggestBranches = args.suggest_branches !== false;
+    const createSuggestedBranches = args.create_suggested_branches === true;
 
-    logger.info(`Detecting project patterns in: ${workspacePath}`);
+    const patternAnalysis = await this.detectPatterns(
+      workspacePath,
+      analysisDepth,
+    );
 
-    try {
-      // Analyze project structure patterns
-      const patternAnalysis = await this.detectPatterns(
-        workspacePath,
-        analysisDepth
-      );
-
-      let branchSuggestions: any[] = [];
-      let createdBranches: any[] = [];
-
-      if (suggestBranches) {
-        branchSuggestions = this.generateBranchSuggestions(patternAnalysis);
-
-        // Create branches if requested
-        if (createSuggestedBranches) {
-          createdBranches = await this.createSuggestedBranches(
-            branchSuggestions
-          );
-        }
+    let branchSuggestions: any[] = [];
+    let createdBranches: any[] = [];
+    if (suggestBranches) {
+      branchSuggestions = this.generateBranchSuggestions(patternAnalysis);
+      if (createSuggestedBranches) {
+        createdBranches = await this.createSuggestedBranches(branchSuggestions);
       }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                project_patterns: {
-                  workspace_path: workspacePath,
-                  analysis_depth: analysisDepth,
-                  detected_patterns: patternAnalysis.patterns,
-                  project_type: patternAnalysis.projectType,
-                  architecture_style: patternAnalysis.architectureStyle,
-                  complexity_metrics: patternAnalysis.complexityMetrics,
-                },
-                memory_organization: {
-                  branch_suggestions: branchSuggestions,
-                  created_branches: createdBranches,
-                  organization_rationale: patternAnalysis.organizationRationale,
-                },
-                ai_insights: {
-                  optimal_branch_count: branchSuggestions.length,
-                  project_maturity: this.assessProjectMaturity(patternAnalysis),
-                  memory_strategy:
-                    this.recommendMemoryStrategy(patternAnalysis),
-                  integration_opportunities:
-                    this.identifyIntegrationOpportunities(patternAnalysis),
-                },
-                summary: `Detected ${patternAnalysis.patterns.length} project patterns, suggested ${branchSuggestions.length} memory branches`,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      logger.error("Error detecting project patterns:", error);
-      throw error;
     }
+
+    return jsonResponse({
+      mode: "patterns",
+      workspace_path: workspacePath,
+      analysis_depth: analysisDepth,
+      project_type: patternAnalysis.projectType,
+      architecture_style: patternAnalysis.architectureStyle,
+      patterns: patternAnalysis.patterns,
+      complexity_metrics: patternAnalysis.complexityMetrics,
+      branch_suggestions: branchSuggestions,
+      created_branches: createdBranches,
+    });
   }
 
-  /**
-   * Find usages of an interface across the project
-   */
-  async handleFindInterfaceUsage(args: any): Promise<any> {
-    const interfaceName = args.interface_name;
-    const branchName = args.branch_name || "main";
-    const includeImplementations = args.include_implementations !== false;
-    const includeRelated = args.include_related_interfaces !== false;
+  // ---------- internal helpers (mostly unchanged) ----------
 
-    if (!interfaceName) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { error: "interface_name is required" },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-
-    logger.info(`Finding usage of interface: ${interfaceName}`);
-
-    try {
-      const mapper = this.backgroundProcessor?.getInterfaceMapper();
-      if (!mapper) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error:
-                    "Interface mapper not available. Ensure background processor is running.",
-                },
-                null,
-                2
-              ),
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      // Note: InterfaceMapper currently has analyzeProjectInterfaces but not a direct findUsage method exposed publicly
-      // We will simulate it by analyzing the project and filtering
-      // In a real implementation, we would add a specific method to InterfaceMapper
-
-      // For now, we'll return a placeholder or try to use what's available
-      // Assuming we can get the interface info from the database via mapper (if exposed) or just analyze
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                interface: interfaceName,
-                status: "analysis_queued",
-                message:
-                  "Deep interface analysis requires full project indexing. This feature is currently in beta.",
-                usages: [], // Placeholder
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      logger.error("Error finding interface usage:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { error: error instanceof Error ? error.message : String(error) },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-
-  /**
-   * Navigate codebase based on semantic query
-   */
-  async handleNavigateCodebase(args: any): Promise<any> {
-    const query = args.query;
-    const limit = args.limit || 5;
-
-    if (!query) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ error: "query is required" }, null, 2),
-          },
-        ],
-        isError: true,
-      };
-    }
-
-    logger.info(`Navigating codebase with query: ${query}`);
-
-    try {
-      // This would ideally use the ContextEngine or ProjectEmbeddingEngine
-      // For now, we'll perform a basic file search or return a placeholder
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                query,
-                suggested_files: [], // Placeholder
-                message:
-                  "Codebase navigation requires active project embedding index.",
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      logger.error("Error navigating codebase:", error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { error: error instanceof Error ? error.message : String(error) },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-
-  // Helper methods for workspace analysis
   private async analyzeWorkspaceStructure(
     workspacePath: string,
-    filePatterns: string[]
+    filePatterns: string[],
   ): Promise<any> {
     const analysis: any = {
       totalFiles: 0,
@@ -516,19 +218,13 @@ export class WorkspaceHandlers {
       importantFiles: [],
       fileTypes: {},
     };
-
     try {
-      // Recursively analyze directory structure
       await this.walkDirectory(workspacePath, workspacePath, analysis, 0, 3);
-
-      // Identify important files
-      analysis.importantFiles = await this.identifyImportantFiles(
-        workspacePath
-      );
-
+      analysis.importantFiles =
+        await this.identifyImportantFiles(workspacePath);
       return analysis;
     } catch (error) {
-      logger.warn(`Error analyzing workspace structure:`, error);
+      logger.warn("Error analyzing workspace structure:", error);
       return analysis;
     }
   }
@@ -538,36 +234,30 @@ export class WorkspaceHandlers {
     rootPath: string,
     analysis: any,
     depth: number,
-    maxDepth: number
+    maxDepth: number,
   ): Promise<void> {
     if (depth > maxDepth) return;
-
     try {
       const items = await fs.readdir(currentPath, { withFileTypes: true });
-
       for (const item of items) {
-        // Skip hidden files and node_modules
         if (item.name.startsWith(".") || item.name === "node_modules") continue;
-
         const itemPath = path.join(currentPath, item.name);
         const relativePath = path.relative(rootPath, itemPath);
-
         if (item.isDirectory()) {
           analysis.folders.push({
             name: item.name,
             path: relativePath,
-            depth: depth,
+            depth,
           });
           await this.walkDirectory(
             itemPath,
             rootPath,
             analysis,
             depth + 1,
-            maxDepth
+            maxDepth,
           );
         } else if (item.isFile()) {
           analysis.totalFiles++;
-
           const extension = path.extname(item.name);
           analysis.fileTypes[extension] =
             (analysis.fileTypes[extension] || 0) + 1;
@@ -579,9 +269,8 @@ export class WorkspaceHandlers {
   }
 
   private async identifyImportantFiles(
-    workspacePath: string
+    workspacePath: string,
   ): Promise<string[]> {
-    const importantFiles = [];
     const importantNames = [
       "package.json",
       "tsconfig.json",
@@ -595,205 +284,145 @@ export class WorkspaceHandlers {
       "Cargo.toml",
       "go.mod",
     ];
-
+    const importantFiles: string[] = [];
     for (const filename of importantNames) {
-      const filePath = path.join(workspacePath, filename);
       try {
-        await fs.access(filePath);
+        await fs.access(path.join(workspacePath, filename));
         importantFiles.push(filename);
-      } catch (error) {
-        // File doesn't exist, continue
+      } catch {
+        // missing
       }
     }
-
     return importantFiles;
   }
 
   private async createWorkspaceStructureEntities(
     workspaceAnalysis: any,
-    branchName: string
+    branchName: string,
   ): Promise<Entity[]> {
     const entities: Entity[] = [];
-
     try {
-      // Create folder structure entities for major folders
       const majorFolders = workspaceAnalysis.folders.filter(
-        (f: any) => f.depth <= 1
+        (f: any) => f.depth <= 1,
       );
-
       for (const folder of majorFolders.slice(0, 10)) {
-        // Limit to prevent spam
-        const folderEntity: Entity = {
+        entities.push({
           name: `Folder: ${folder.name}`,
           entityType: "reference",
           observations: [
             `Workspace folder: ${folder.path}`,
             `Depth: ${folder.depth}`,
-            `Part of project structure`,
           ],
           status: "active",
           relevanceScore: 0.6,
-        };
-
-        entities.push(folderEntity);
+        });
       }
-
-      // Create important files entities
       for (const file of workspaceAnalysis.importantFiles) {
-        const fileEntity: Entity = {
+        entities.push({
           name: `Config: ${file}`,
           entityType: "reference",
-          observations: [
-            `Important configuration file: ${file}`,
-            `Located at workspace root`,
-            `Critical for project setup`,
-          ],
+          observations: [`Important configuration file: ${file}`],
           status: "active",
           relevanceScore: 0.8,
-        };
-
-        entities.push(fileEntity);
+        });
       }
-
-      // Create entities in batch
       if (entities.length > 0) {
         return await this.memoryManager.createEntities(entities, branchName);
       }
     } catch (error) {
       logger.warn("Error creating workspace structure entities:", error);
     }
-
     return entities;
   }
 
   private async linkEntitiesToFiles(
     workspaceAnalysis: any,
-    branchName: string
+    branchName: string,
   ): Promise<number> {
     let linkedCount = 0;
-
     try {
-      // Get existing entities to link
-      const existingEntities = await this.memoryManager.exportBranch(
-        branchName
-      );
-
-      // Try to link entities to workspace elements
-      for (const entity of existingEntities.entities) {
+      const existing = await this.memoryManager.exportBranch(branchName);
+      for (const entity of existing.entities) {
         const entityName = entity.name.toLowerCase();
-
-        // Check if entity name matches any folder or file
         const matchingFolder = workspaceAnalysis.folders.find(
           (f: any) =>
             entityName.includes(f.name.toLowerCase()) ||
-            f.name.toLowerCase().includes(entityName)
+            f.name.toLowerCase().includes(entityName),
         );
-
         const matchingFile = workspaceAnalysis.importantFiles.find(
           (f: string) =>
             entityName.includes(f.toLowerCase()) ||
-            f.toLowerCase().includes(entityName)
+            f.toLowerCase().includes(entityName),
         );
-
         if (matchingFolder || matchingFile) {
-          // Add workspace connection observation
-          const connectionNote = matchingFolder
+          const note = matchingFolder
             ? `Linked to workspace folder: ${matchingFolder.path}`
             : `Linked to workspace file: ${matchingFile}`;
-
           await this.memoryManager.addObservations(
-            [
-              {
-                entityName: entity.name,
-                contents: [connectionNote],
-              },
-            ],
-            branchName
+            [{ entityName: entity.name, contents: [note] }],
+            branchName,
           );
-
           linkedCount++;
         }
       }
     } catch (error) {
       logger.warn("Error linking entities to files:", error);
     }
-
     return linkedCount;
   }
 
   private async analyzeFileContext(
     filePath: string,
     branchName: string,
-    contextRadius: number
+    contextRadius: number,
   ): Promise<any> {
     const fileAnalysis: any = {
       relatedEntities: [],
-      connections: [],
-      suggestions: [],
       relevanceScore: 0.5,
     };
-
     try {
-      // Extract keywords from file path for context search
-      const pathSegments = filePath.split(/[/\\]/).filter(Boolean);
+      const segments = filePath.split(/[/\\]/).filter(Boolean);
       const fileName = path.basename(filePath, path.extname(filePath));
-      const searchKeywords = [...pathSegments, fileName];
+      const keywords = [...segments, fileName].filter((k) => k.length > 2);
 
-      // Search for entities related to file path components
-      for (const keyword of searchKeywords) {
-        if (keyword.length > 2) {
-          // Skip very short segments
-          const searchResults = await this.memoryManager.searchEntities(
-            keyword,
-            branchName,
-            ["active"],
-            { includeConfidenceScores: true }
-          );
-
-          for (const entity of searchResults.entities) {
-            fileAnalysis.relatedEntities.push({
-              entity_name: entity.name,
-              entity_type: entity.entityType,
-              relevance_score: entity.relevanceScore || 0.5,
-              connection_reason: `Matches file path component: ${keyword}`,
-            });
-          }
+      for (const keyword of keywords.slice(0, contextRadius * 2)) {
+        const results = await this.memoryManager.searchEntities(
+          keyword,
+          branchName,
+          ["active"],
+          { includeConfidenceScores: true },
+        );
+        for (const entity of results.entities) {
+          fileAnalysis.relatedEntities.push({
+            entity_name: entity.name,
+            entity_type: entity.entityType,
+            relevance_score: entity.relevanceScore || 0.5,
+            matched_keyword: keyword,
+          });
         }
       }
-
-      // Generate context suggestions
-      fileAnalysis.suggestions.push({
-        suggestion: `Consider creating entities for components in ${fileName}`,
-        confidence: 0.6,
-        type: "entity_creation",
-      });
-
-      // Calculate overall relevance
       if (fileAnalysis.relatedEntities.length > 0) {
         fileAnalysis.relevanceScore = Math.min(
           0.9,
-          0.5 + fileAnalysis.relatedEntities.length * 0.1
+          0.5 + fileAnalysis.relatedEntities.length * 0.1,
         );
       }
     } catch (error) {
       logger.warn(`Error analyzing file context for ${filePath}:`, error);
     }
-
     return fileAnalysis;
   }
 
   private async detectPatterns(
     workspacePath: string,
-    analysisDepth: number
+    analysisDepth: number,
   ): Promise<any> {
-    const patterns = [];
+    const patterns: any[] = [];
     let projectType = "unknown";
     let architectureStyle = "unknown";
 
     try {
-      // Detect project type from files
       const importantFiles = await this.identifyImportantFiles(workspacePath);
-
       if (importantFiles.includes("package.json")) {
         projectType = "node.js";
         patterns.push({
@@ -802,7 +431,6 @@ export class WorkspaceHandlers {
           confidence: 0.9,
         });
       }
-
       if (
         importantFiles.includes("pyproject.toml") ||
         importantFiles.includes("requirements.txt")
@@ -815,20 +443,18 @@ export class WorkspaceHandlers {
         });
       }
 
-      // Detect architecture patterns from folder structure
       const structureAnalysis = await this.analyzeWorkspaceStructure(
         workspacePath,
-        []
+        [],
       );
-
       const hasComponents = structureAnalysis.folders.some((f: any) =>
-        f.name.toLowerCase().includes("component")
+        f.name.toLowerCase().includes("component"),
       );
       const hasServices = structureAnalysis.folders.some((f: any) =>
-        f.name.toLowerCase().includes("service")
+        f.name.toLowerCase().includes("service"),
       );
       const hasMVC = structureAnalysis.folders.some((f: any) =>
-        ["model", "view", "controller"].includes(f.name.toLowerCase())
+        ["model", "view", "controller"].includes(f.name.toLowerCase()),
       );
 
       if (hasComponents) {
@@ -857,11 +483,10 @@ export class WorkspaceHandlers {
         complexityMetrics: {
           folder_count: structureAnalysis.folders.length,
           file_count: structureAnalysis.totalFiles,
-          depth: Math.max(
-            ...structureAnalysis.folders.map((f: any) => f.depth)
-          ),
+          depth: structureAnalysis.folders.length
+            ? Math.max(...structureAnalysis.folders.map((f: any) => f.depth))
+            : 0,
         },
-        organizationRationale: `Detected ${projectType} project with ${architectureStyle} architecture`,
       };
     } catch (error) {
       logger.warn("Error detecting patterns:", error);
@@ -870,79 +495,8 @@ export class WorkspaceHandlers {
         projectType,
         architectureStyle,
         complexityMetrics: {},
-        organizationRationale: "",
       };
     }
-  }
-
-  // Helper utility methods
-  private deduplicateAndSort(items: any[]): any[] {
-    const seen = new Set();
-    return items
-      .filter((item) => {
-        const key = item.entity_name || item.suggestion || JSON.stringify(item);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort(
-        (a, b) =>
-          (b.relevance_score || b.confidence || 0) -
-          (a.relevance_score || a.confidence || 0)
-      );
-  }
-
-  private calculateContextCompleteness(contextBridge: any): number {
-    const fileCount = contextBridge.current_files.length;
-    const entityCount = contextBridge.related_entities.length;
-    const connectionCount = contextBridge.file_connections.length;
-
-    // Simple heuristic for completeness
-    return Math.min(1.0, (entityCount + connectionCount) / (fileCount * 3));
-  }
-
-  private identifyMissingContext(
-    currentFiles: string[],
-    contextBridge: any
-  ): string[] {
-    const missing = [];
-
-    if (contextBridge.related_entities.length === 0) {
-      missing.push(
-        "No related entities found - consider creating entities for current work"
-      );
-    }
-
-    if (contextBridge.context_suggestions.length === 0) {
-      missing.push(
-        "No context suggestions available - workspace may need better integration"
-      );
-    }
-
-    return missing;
-  }
-
-  private assessProjectComplexity(workspaceAnalysis: any): string {
-    const fileCount = workspaceAnalysis.totalFiles;
-    const folderCount = workspaceAnalysis.folders.length;
-
-    if (fileCount > 1000 || folderCount > 50) return "high";
-    if (fileCount > 100 || folderCount > 20) return "medium";
-    return "low";
-  }
-
-  private suggestMemoryOrganization(workspaceAnalysis: any): any {
-    return {
-      recommended_branches: Math.min(
-        5,
-        Math.max(2, Math.floor(workspaceAnalysis.folders.length / 10))
-      ),
-      organization_strategy:
-        workspaceAnalysis.folders.length > 20 ? "feature-based" : "simple",
-      priority_areas: workspaceAnalysis.folders
-        .slice(0, 5)
-        .map((f: any) => f.name),
-    };
   }
 
   private generateBranchSuggestions(patternAnalysis: any): any[] {
@@ -953,8 +507,6 @@ export class WorkspaceHandlers {
         priority: "essential",
       },
     ];
-
-    // Add suggestions based on detected patterns
     if (patternAnalysis.architectureStyle === "component-based") {
       suggestions.push({
         name: "components",
@@ -962,7 +514,6 @@ export class WorkspaceHandlers {
         priority: "high",
       });
     }
-
     if (patternAnalysis.architectureStyle === "service-oriented") {
       suggestions.push({
         name: "services",
@@ -970,7 +521,6 @@ export class WorkspaceHandlers {
         priority: "high",
       });
     }
-
     if (patternAnalysis.projectType === "node.js") {
       suggestions.push({
         name: "build-config",
@@ -978,65 +528,44 @@ export class WorkspaceHandlers {
         priority: "medium",
       });
     }
-
     return suggestions;
   }
 
   private async createSuggestedBranches(
-    branchSuggestions: any[]
+    branchSuggestions: any[],
   ): Promise<any[]> {
-    const createdBranches = [];
-
+    const created: any[] = [];
     for (const suggestion of branchSuggestions) {
-      if (suggestion.name === "main") continue; // Main branch already exists
-
+      if (suggestion.name === "main") continue;
       try {
         await this.memoryManager.createBranch(
           suggestion.name,
-          suggestion.purpose
+          suggestion.purpose,
         );
-        createdBranches.push(suggestion);
+        created.push(suggestion);
       } catch (error) {
         logger.warn(
           `Failed to create suggested branch ${suggestion.name}:`,
-          error
+          error,
         );
       }
     }
-
-    return createdBranches;
+    return created;
   }
 
-  private assessProjectMaturity(patternAnalysis: any): string {
-    const patternCount = patternAnalysis.patterns.length;
-    const complexity = patternAnalysis.complexityMetrics.file_count || 0;
-
-    if (patternCount > 3 && complexity > 500) return "mature";
-    if (patternCount > 1 && complexity > 50) return "developing";
-    return "early";
-  }
-
-  private recommendMemoryStrategy(patternAnalysis: any): string {
-    if (patternAnalysis.architectureStyle === "component-based") {
-      return "component-focused";
-    } else if (patternAnalysis.architectureStyle === "service-oriented") {
-      return "service-focused";
-    } else {
-      return "feature-focused";
-    }
-  }
-
-  private identifyIntegrationOpportunities(patternAnalysis: any): string[] {
-    const opportunities = [];
-
-    if (patternAnalysis.projectType === "node.js") {
-      opportunities.push("Package.json dependency tracking");
-    }
-
-    if (patternAnalysis.patterns.some((p: any) => p.type === "architecture")) {
-      opportunities.push("Architectural decision recording");
-    }
-
-    return opportunities;
+  private dedupeAndSort(items: any[]): any[] {
+    const seen = new Set<string>();
+    return items
+      .filter((item) => {
+        const key = item.entity_name || JSON.stringify(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          (b.relevance_score || b.confidence || 0) -
+          (a.relevance_score || a.confidence || 0),
+      );
   }
 }

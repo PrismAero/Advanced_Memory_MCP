@@ -11,11 +11,11 @@ export class SQLiteBranchOperations {
 
   async createBranch(
     branchName: string,
-    purpose?: string
+    purpose?: string,
   ): Promise<MemoryBranchInfo> {
     await this.connection.runQuery(
       "INSERT INTO memory_branches (name, purpose) VALUES (?, ?)",
-      [branchName, purpose || `Custom branch: ${branchName}`]
+      [branchName, purpose || `Custom branch: ${branchName}`],
     );
 
     return {
@@ -108,7 +108,7 @@ export class SQLiteBranchOperations {
       // Score based on common keywords
       if (
         searchTerms.some((term) =>
-          ["doc", "documentation", "spec", "guide"].includes(term)
+          ["doc", "documentation", "spec", "guide"].includes(term),
         ) &&
         (branchName.includes("doc") || branchPurpose.includes("doc"))
       ) {
@@ -117,7 +117,7 @@ export class SQLiteBranchOperations {
 
       if (
         searchTerms.some((term) =>
-          ["demo", "example", "sample", "test"].includes(term)
+          ["demo", "example", "sample", "test"].includes(term),
         ) &&
         (branchName.includes("demo") || branchPurpose.includes("demo"))
       ) {

@@ -4,10 +4,23 @@ import { logger } from "../logger.js";
 import { RelationshipIndexer } from "../relationship-indexer.js";
 import { THRESHOLDS } from "../similarity/similarity-config.js";
 import { ModernSimilarityEngine } from "../similarity/similarity-engine.js";
+import { jsonResponse, sanitizeEntities } from "./response-utils.js";
 
 /**
- * Entity Management Handlers
- * Handles entity creation, updates, and deletion with automatic similarity detection
+ * Entity Management Handlers.
+ *
+ * Note on similarity / auto-relations:
+ * The default path is now NON-blocking. Newly created entities are
+ * registered with the RelationshipIndexer which computes similarity
+ * and stores suggested relations in the background. This keeps the
+ * `create_entities` request fast (a previous version loaded the
+ * entire branch graph and ran TF.js similarity inline against every
+ * existing entity, which was O(N) and slow for large branches).
+ *
+ * If a caller explicitly opts in via `auto_create_relations: true`
+ * AND `sync: true`, we still run synchronous similarity, but with a
+ * candidate filter (same entity_type or recently-accessed) instead
+ * of scanning every entity in the branch.
  */
 export class EntityHandlers {
   private memoryManager: EnhancedMemoryManager;
@@ -27,7 +40,6 @@ export class EntityHandlers {
   async handleCreateEntities(args: any): Promise<any> {
     let createBranch = args.branch_name as string;
     if (!createBranch && args.entities && (args.entities as any[]).length > 0) {
-      // Auto-suggest branch based on first entity
       const firstEntity = (args.entities as any[])[0];
       createBranch = await this.memoryManager.suggestBranch(
         firstEntity.entityType,
@@ -40,165 +52,114 @@ export class EntityHandlers {
       createBranch
     );
 
-    let autoRelationsResults: any[] = [];
+    const autoRelations = args.auto_create_relations !== false;
+    const syncMode = args.sync_relations === true;
+    let syncResult: any = null;
 
-    // Handle auto_create_relations if enabled (defaults to true in SMART_MEMORY_TOOLS)
-    if (args.auto_create_relations !== false) {
-      logger.info("Starting automatic relationship detection...");
-
-      try {
-        // Get existing entities from the branch to compare against
-        const branchGraph = await this.memoryManager.readGraph(
-          createBranch,
-          ["active", "draft"], // Include both active and draft entities for comparison
-          false // Don't include cross-context for similarity detection
-        );
-
-        const existingEntities = branchGraph.entities;
-        let totalRelationsCreated = 0;
-
-        // Process each created entity for similarity detection
-        for (const newEntity of createdEntities) {
-          logger.debug(`Analyzing "${newEntity.name}" for similar entities...`);
-
-          // Use statistical similarity engine to detect similar entities
-          const similarEntities =
-            await this.modernSimilarity.detectSimilarEntities(
-              newEntity,
-              existingEntities.filter((e: Entity) => e.name !== newEntity.name) // Exclude self
-            );
-
-          if (similarEntities.length > 0) {
-            logger.info(
-              `Found ${similarEntities.length} similar entities for "${newEntity.name}"`
-            );
-
-            // Create relationships with high-confidence matches
-            const relationsToCreate: Relation[] = [];
-
-            for (const match of similarEntities) {
-              // Only auto-create relationships for high confidence matches
-              logger.debug(
-                `Match: "${
-                  match.entity.name
-                }" similarity=${match.similarity.toFixed(3)} confidence=${
-                  match.confidence
-                } type=${match.suggestedRelationType}`
-              );
-              if (
-                match.confidence === "high" ||
-                match.similarity > THRESHOLDS.minimum
-              ) {
-                relationsToCreate.push({
-                  from: newEntity.name,
-                  to: match.entity.name,
-                  relationType: match.suggestedRelationType,
-                });
-
-                autoRelationsResults.push({
-                  from: newEntity.name,
-                  to: match.entity.name,
-                  relationType: match.suggestedRelationType,
-                  similarity_score: match.similarity,
-                  confidence: match.confidence,
-                  reasoning: match.reasoning,
-                  auto_created: true,
-                });
-              } else {
-                // Log medium/low confidence matches for reference
-                autoRelationsResults.push({
-                  from: newEntity.name,
-                  to: match.entity.name,
-                  relationType: match.suggestedRelationType,
-                  similarity_score: match.similarity,
-                  confidence: match.confidence,
-                  reasoning: match.reasoning,
-                  auto_created: false,
-                  note: "Low confidence - relation suggested but not auto-created",
-                });
-              }
-            }
-
-            // Create the high-confidence relations
-            if (relationsToCreate.length > 0) {
-              const createdRelations = await this.memoryManager.createRelations(
-                relationsToCreate,
-                createBranch
-              );
-              totalRelationsCreated += createdRelations.length;
-              logger.info(
-                `Auto-created ${createdRelations.length} high-confidence relations for "${newEntity.name}"`
-              );
-            }
-          } else {
-            logger.info(`No similar entities found for "${newEntity.name}"`);
-            logger.debug(
-              `Similarity analysis for "${newEntity.name}": found ${similarEntities.length} candidates, threshold: 0.78`
-            );
-            autoRelationsResults.push({
-              entity: newEntity.name,
-              message: "No similar entities found above similarity threshold",
-              similarity_threshold: THRESHOLDS.minimum,
-              candidates_analyzed: existingEntities.length,
-              similarity_results: similarEntities.length,
-            });
-          }
+    if (autoRelations) {
+      if (syncMode) {
+        syncResult = await this.detectRelationsSync(createdEntities, createBranch);
+      } else if (this.relationshipIndexer) {
+        for (const entity of createdEntities) {
+          this.relationshipIndexer.onEntityCreated(entity.name, createBranch);
         }
-
-        logger.info(
-          `Auto-relationship detection complete: ${totalRelationsCreated} relations created`
-        );
-
-        // Add summary to results
-        autoRelationsResults.unshift({
-          summary: `Auto-relationship detection complete`,
-          total_relations_created: totalRelationsCreated,
-          entities_processed: createdEntities.length,
-          similarity_engine: "ModernSimilarityEngine",
-          similarity_threshold: THRESHOLDS.minimum,
-          high_confidence_threshold: THRESHOLDS.high,
-        });
-
-        // Notify background indexer about new entities
-        if (this.relationshipIndexer) {
-          for (const entity of createdEntities) {
-            this.relationshipIndexer.onEntityCreated(entity.name, createBranch);
-          }
-        }
-      } catch (error) {
-        logger.error("Error during automatic relationship detection:", error);
-        autoRelationsResults.push({
-          error: "Auto-relationship detection failed",
-          message: error instanceof Error ? error.message : String(error),
-          fallback: "Relations can still be created manually",
-        });
       }
     }
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              created_entities: createdEntities,
-              branch: createBranch || "main",
-              auto_relations_enabled: args.auto_create_relations !== false,
-              auto_relations_results: autoRelationsResults,
-              message: `Created ${createdEntities.length} entities in branch "${
-                createBranch || "main"
-              }"${
-                args.auto_create_relations !== false
-                  ? " with auto-relationship detection enabled"
-                  : ""
-              }`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      created_count: createdEntities.length,
+      branch: createBranch || "main",
+      entities: sanitizeEntities(createdEntities, { maxObservations: 5 }),
+      relations_mode: autoRelations
+        ? syncMode
+          ? "synchronous"
+          : "deferred-to-indexer"
+        : "off",
+      ...(syncResult ? { sync_relations: syncResult } : {}),
+    });
+  }
+
+  /**
+   * Synchronous relation detection. Only used when caller explicitly
+   * sets `sync_relations: true`. Filters candidates by:
+   *   1) same entity_type, or
+   *   2) accessed in the last 7 days,
+   * which keeps the comparison O(k) instead of O(N).
+   */
+  private async detectRelationsSync(
+    createdEntities: Entity[],
+    branch?: string
+  ): Promise<{
+    candidates_considered: number;
+    relations_created: number;
+    relations: Relation[];
+  }> {
+    try {
+      const branchGraph = await this.memoryManager.readGraph(
+        branch,
+        ["active", "draft"],
+        false
+      );
+      const allExisting = branchGraph.entities;
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      const created: Relation[] = [];
+      const newNames = new Set(createdEntities.map((e) => e.name));
+
+      for (const newEntity of createdEntities) {
+        const candidates = allExisting.filter((e: Entity) => {
+          if (newNames.has(e.name)) return false;
+          if (e.entityType === newEntity.entityType) return true;
+          if (e.lastAccessed && new Date(e.lastAccessed).getTime() > sevenDaysAgo) {
+            return true;
+          }
+          return false;
+        });
+
+        if (candidates.length === 0) continue;
+
+        const matches = await this.modernSimilarity.detectSimilarEntities(
+          newEntity,
+          candidates
+        );
+
+        const toCreate: Relation[] = matches
+          .filter(
+            (m) =>
+              m.confidence === "high" || m.similarity > THRESHOLDS.minimum
+          )
+          .map((m) => ({
+            from: newEntity.name,
+            to: m.entity.name,
+            relationType: m.suggestedRelationType,
+          }));
+
+        if (toCreate.length > 0) {
+          await this.memoryManager.createRelations(toCreate, branch);
+          created.push(...toCreate);
+        }
+      }
+
+      // Still notify indexer so it can index the embeddings.
+      if (this.relationshipIndexer) {
+        for (const e of createdEntities) {
+          this.relationshipIndexer.onEntityCreated(e.name, branch);
+        }
+      }
+
+      return {
+        candidates_considered: allExisting.length,
+        relations_created: created.length,
+        relations: created,
+      };
+    } catch (err) {
+      logger.error("Synchronous relation detection failed:", err);
+      return {
+        candidates_considered: 0,
+        relations_created: 0,
+        relations: [],
+      };
+    }
   }
 
   async handleAddObservations(args: any): Promise<any> {
@@ -209,24 +170,11 @@ export class EntityHandlers {
       args.observations,
       args.branch_name as string
     );
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              results,
-              branch: args.branch_name || "main",
-              message: `Added observations to ${
-                results.length
-              } entities in branch "${args.branch_name || "main"}"`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      branch: args.branch_name || "main",
+      updated_count: Array.isArray(results) ? results.length : 0,
+      results,
+    });
   }
 
   async handleUpdateEntityStatus(args: any): Promise<any> {
@@ -239,26 +187,13 @@ export class EntityHandlers {
       args.status_reason as string,
       args.branch_name as string
     );
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              message: `Updated entity "${args.entity_name}" status to "${
-                args.status
-              }" in branch "${args.branch_name || "main"}"`,
-              entity_name: args.entity_name,
-              new_status: args.status,
-              status_reason: args.status_reason,
-              branch: args.branch_name || "main",
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      updated: true,
+      entity_name: args.entity_name,
+      new_status: args.status,
+      status_reason: args.status_reason,
+      branch: args.branch_name || "main",
+    });
   }
 
   async handleDeleteEntities(args: any): Promise<any> {
@@ -269,23 +204,11 @@ export class EntityHandlers {
       args.entity_names as string[],
       args.branch_name as string
     );
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              message: `Deleted ${
-                (args.entity_names as string[]).length
-              } entities from branch "${args.branch_name || "main"}"`,
-              deleted_entities: args.entity_names,
-              branch: args.branch_name || "main",
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      deleted: true,
+      deleted_count: (args.entity_names as string[]).length,
+      deleted_entities: args.entity_names,
+      branch: args.branch_name || "main",
+    });
   }
 }

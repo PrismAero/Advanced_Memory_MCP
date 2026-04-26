@@ -38,7 +38,7 @@ export class EnhancedMemoryManager {
   // Entity operations
   async createEntities(
     entities: Entity[],
-    branchName?: string
+    branchName?: string,
   ): Promise<Entity[]> {
     return await this.sqliteManager.createEntities(entities, branchName);
   }
@@ -49,7 +49,7 @@ export class EnhancedMemoryManager {
 
   async deleteEntities(
     entityNames: string[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.deleteEntities(entityNames, branchName);
   }
@@ -57,14 +57,14 @@ export class EnhancedMemoryManager {
   // Relation operations
   async createRelations(
     relations: Relation[],
-    branchName?: string
+    branchName?: string,
   ): Promise<Relation[]> {
     return await this.sqliteManager.createRelations(relations, branchName);
   }
 
   async deleteRelations(
     relations: Relation[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.deleteRelations(relations, branchName);
   }
@@ -73,18 +73,24 @@ export class EnhancedMemoryManager {
   async searchEntities(
     query: string,
     branchName?: string,
-    includeStatuses?: EntityStatus[]
-  ): Promise<KnowledgeGraph> {
+    includeStatuses?: EntityStatus[],
+    options?: {
+      includeContext?: boolean;
+      workingContextOnly?: boolean;
+      includeConfidenceScores?: boolean;
+    },
+  ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
     return await this.sqliteManager.searchEntities(
       query,
       branchName,
-      includeStatuses
+      includeStatuses,
+      options,
     );
   }
 
   async findEntityByName(
     name: string,
-    branchName?: string
+    branchName?: string,
   ): Promise<Entity | null> {
     return await this.sqliteManager.findEntityByName(name, branchName);
   }
@@ -92,7 +98,7 @@ export class EnhancedMemoryManager {
   // Branch operations
   async createBranch(
     branchName: string,
-    purpose?: string
+    purpose?: string,
   ): Promise<MemoryBranchInfo> {
     return await this.sqliteManager.createBranch(branchName, purpose);
   }
@@ -123,12 +129,12 @@ export class EnhancedMemoryManager {
   async readGraph(
     branchName?: string,
     includeStatuses?: EntityStatus[],
-    autoCrossContext: boolean = true
+    autoCrossContext: boolean = true,
   ): Promise<KnowledgeGraph> {
     return await this.sqliteManager.readGraph(
       branchName,
       includeStatuses,
-      autoCrossContext
+      autoCrossContext,
     );
   }
 
@@ -136,13 +142,13 @@ export class EnhancedMemoryManager {
     query: string,
     branchName?: string,
     includeStatuses?: EntityStatus[],
-    autoCrossContext: boolean = true
+    autoCrossContext: boolean = true,
   ): Promise<KnowledgeGraph> {
     return await this.sqliteManager.searchNodes(
       query,
       branchName,
       includeStatuses,
-      autoCrossContext
+      autoCrossContext,
     );
   }
 
@@ -150,19 +156,19 @@ export class EnhancedMemoryManager {
     names: string[],
     branchName?: string,
     includeStatuses?: EntityStatus[],
-    autoCrossContext: boolean = true
+    autoCrossContext: boolean = true,
   ): Promise<KnowledgeGraph> {
     return await this.sqliteManager.openNodes(
       names,
       branchName,
       includeStatuses,
-      autoCrossContext
+      autoCrossContext,
     );
   }
 
   async addObservations(
     observations: { entityName: string; contents: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     return await this.sqliteManager.addObservations(observations, branchName);
   }
@@ -171,19 +177,19 @@ export class EnhancedMemoryManager {
     entityName: string,
     newStatus: EntityStatus,
     statusReason?: string,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.updateEntityStatus(
       entityName,
       newStatus,
       statusReason,
-      branchName
+      branchName,
     );
   }
 
   async deleteObservations(
     deletions: { entityName: string; observations: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.deleteObservations(deletions, branchName);
   }
@@ -192,19 +198,19 @@ export class EnhancedMemoryManager {
     entityName: string,
     targetBranch: string,
     targetEntityNames: string[],
-    sourceBranch?: string
+    sourceBranch?: string,
   ): Promise<void> {
     return await this.sqliteManager.createCrossReference(
       entityName,
       targetBranch,
       targetEntityNames,
-      sourceBranch
+      sourceBranch,
     );
   }
 
   async getCrossContext(
     entityNames: string[],
-    sourceBranch?: string
+    sourceBranch?: string,
   ): Promise<KnowledgeGraph> {
     return await this.sqliteManager.getCrossContext(entityNames, sourceBranch);
   }
@@ -213,34 +219,34 @@ export class EnhancedMemoryManager {
   async updateEntityRelevanceScore(
     entityName: string,
     score: number,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.updateEntityRelevanceScore(
       entityName,
       score,
-      branchName
+      branchName,
     );
   }
 
   async updateEntityWorkingContext(
     entityName: string,
     isWorkingContext: boolean,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.updateEntityWorkingContext(
       entityName,
       isWorkingContext,
-      branchName
+      branchName,
     );
   }
 
   async updateEntityLastAccessed(
     entityName: string,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteManager.updateEntityLastAccessed(
       entityName,
-      branchName
+      branchName,
     );
   }
 }

@@ -342,22 +342,33 @@ export class SQLiteSearchOperations {
       ? await this.connection.getBranchId(branchName)
       : null;
 
+    const trimmedQuery = (query || "").trim();
+    const hasQuery = trimmedQuery.length > 0;
+
     // Word boundary search for more precise matching
     // Match whole words or parts of compound words
-    const searchPattern = `%${query}%`;
-    const wordBoundaryPattern = `% ${query} %`; // Exact word with spaces
+    const searchPattern = `%${trimmedQuery}%`;
+    const wordBoundaryPattern = `% ${trimmedQuery} %`;
 
-    let whereClause =
-      "WHERE (e.name LIKE ? OR e.name LIKE ? OR e.entity_type LIKE ? OR e.original_content LIKE ? OR e.original_content LIKE ? OR o.content LIKE ? OR o.content LIKE ?)";
-    let params: any[] = [
-      searchPattern,
-      wordBoundaryPattern, // name
-      searchPattern, // entity_type
-      searchPattern,
-      wordBoundaryPattern, // original_content
-      searchPattern,
-      wordBoundaryPattern, // observations
-    ];
+    let whereClause = "WHERE 1=1";
+    let params: any[] = [];
+
+    // Empty query short-circuit: skip the seven LIKE clauses entirely.
+    // This is used by context/working-context tools that just want a
+    // filtered scan, not a text match.
+    if (hasQuery) {
+      whereClause +=
+        " AND (e.name LIKE ? OR e.name LIKE ? OR e.entity_type LIKE ? OR e.original_content LIKE ? OR e.original_content LIKE ? OR o.content LIKE ? OR o.content LIKE ?)";
+      params.push(
+        searchPattern,
+        wordBoundaryPattern,
+        searchPattern,
+        searchPattern,
+        wordBoundaryPattern,
+        searchPattern,
+        wordBoundaryPattern
+      );
+    }
 
     if (branchId) {
       whereClause += " AND e.branch_id = ?";
