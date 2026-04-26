@@ -17,29 +17,40 @@ class Logger {
     this.level = LOG_LEVELS[logLevel] ?? LOG_LEVELS.info;
   }
 
+  private formatArg(arg: unknown): string {
+    if (arg === null) return "null";
+    if (arg instanceof Error) {
+      return arg.stack ?? `${arg.name}: ${arg.message}`;
+    }
+    if (typeof arg === "object") {
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }
+    return String(arg);
+  }
+
   private log(level: LogLevel, message: string, ...args: any[]) {
     if (LOG_LEVELS[level] >= this.level) {
       const timestamp = `[${new Date().toISOString().substr(11, 8)}]`;
       const formattedMessage = `${timestamp} [${level.toUpperCase()}] ${message}`;
 
-      // For MCP compatibility: only send actual errors to stderr
-      // Info/debug/warn go to stderr but with process.stderr.write to avoid MCP error flagging
+      // Drop undefined entries so callers passing optional values
+      // don't end up writing literal " undefined" to the log stream.
+      const cleanArgs = args.filter((arg) => arg !== undefined);
+      const suffix =
+        cleanArgs.length > 0
+          ? " " + cleanArgs.map((arg) => this.formatArg(arg)).join(" ")
+          : "";
+      const fullMessage = formattedMessage + suffix;
+
+      // For MCP compatibility: only send actual errors to stderr via console.error.
+      // Other levels go through process.stderr.write so the host doesn't flag them.
       if (level === "error" || level === "fatal") {
-        if (args.length > 0) {
-          console.error(formattedMessage, ...args);
-        } else {
-          console.error(formattedMessage);
-        }
+        console.error(fullMessage);
       } else {
-        // Use process.stderr.write directly for non-errors to avoid MCP treating them as errors
-        const fullMessage =
-          args.length > 0
-            ? `${formattedMessage} ${args
-                .map((arg) =>
-                  typeof arg === "object" ? JSON.stringify(arg) : String(arg)
-                )
-                .join(" ")}`
-            : formattedMessage;
         process.stderr.write(fullMessage + "\n");
       }
     }

@@ -5,6 +5,7 @@ import type { Ignore } from "ignore";
 import ignoreLib from "ignore";
 import path from "node:path";
 import { logger } from "../logger.js";
+import { buildWatcherIgnoreGlobs } from "./exclusion-patterns.js";
 import { ProjectIndexer, ProjectInfo } from "./project-indexer.js";
 
 /**
@@ -103,34 +104,7 @@ export class FileWatcher extends EventEmitter {
     this.projectIndexer = projectIndexer || new ProjectIndexer();
 
     this.config = {
-      ignored: [
-        "**/node_modules/**",
-        "**/.git/**",
-        "**/dist/**",
-        "**/build/**",
-        "**/coverage/**",
-        "**/.next/**",
-        "**/.cache/**",
-        "**/.vscode/**",
-        "**/.idea/**",
-        "**/__pycache__/**",
-        "**/target/**",
-        "**/bin/**",
-        "**/.pytest_cache/**",
-        "**/.DS_Store",
-        "**/*.log",
-        "**/_codeql/**",
-        "**/.github/**",
-        "**/.gitlab/**",
-        "**/tmp/**",
-        "**/temp/**",
-        "**/.sass-cache/**",
-        "**/.terraform/**",
-        "**/vendor/**",
-        "**/.nuxt/**",
-        "**/.docusaurus/**",
-        "**/public/build/**",
-      ],
+      ignored: buildWatcherIgnoreGlobs(),
       interval: 3000, // 3 seconds
       debounceDelay: 500, // 500ms
       followSymlinks: false,

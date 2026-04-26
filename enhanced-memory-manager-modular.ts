@@ -14,6 +14,7 @@ import {
 } from "./memory-types.js";
 import { HybridMemoryManager } from "./modules/hybrid-memory-manager.js";
 import { ModernSimilarityEngine } from "./modules/similarity/similarity-engine.js";
+import { SQLiteConnection } from "./modules/sqlite/sqlite-connection.js";
 
 /**
  * Enhanced Memory Manager - Thin wrapper around the SQLite memory manager
@@ -22,8 +23,15 @@ import { ModernSimilarityEngine } from "./modules/similarity/similarity-engine.j
 export class EnhancedMemoryManager {
   private sqliteManager: HybridMemoryManager;
 
-  constructor(similarityEngine?: ModernSimilarityEngine) {
-    this.sqliteManager = new HybridMemoryManager(undefined, similarityEngine);
+  constructor(
+    similarityEngine?: ModernSimilarityEngine,
+    sharedConnection?: SQLiteConnection,
+  ) {
+    this.sqliteManager = new HybridMemoryManager(
+      undefined,
+      similarityEngine,
+      sharedConnection,
+    );
   }
 
   // Core operations - simple delegation

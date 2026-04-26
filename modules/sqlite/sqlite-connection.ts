@@ -12,6 +12,8 @@ export class SQLiteConnection {
   private dbPath: string;
   private branchesPath: string;
   private basePath: string;
+  private initialized: boolean = false;
+  private initializePromise: Promise<void> | null = null;
 
   constructor(basePath: string) {
     this.basePath = path.resolve(basePath);
@@ -20,6 +22,15 @@ export class SQLiteConnection {
   }
 
   async initialize(): Promise<void> {
+    if (this.initialized) return;
+    if (this.initializePromise) return this.initializePromise;
+    this.initializePromise = this.doInitialize().then(() => {
+      this.initialized = true;
+    });
+    return this.initializePromise;
+  }
+
+  private async doInitialize(): Promise<void> {
     // Ensure directories exist (skip creating drive roots on Windows)
     const parsedBase = path.parse(this.basePath);
     const isDriveRoot = parsedBase.root === this.basePath;
@@ -38,6 +49,10 @@ export class SQLiteConnection {
     await this.runQuery("PRAGMA journal_mode = WAL");
     await this.runQuery("PRAGMA synchronous = NORMAL");
     await this.runQuery("PRAGMA cache_size = 10000");
+    // Block writers for up to 5s on contention before raising SQLITE_BUSY.
+    // We still share a single connection, but background analysis and
+    // tool-driven writes can occasionally overlap.
+    await this.runQuery("PRAGMA busy_timeout = 5000");
 
     // Create schema
     await this.createSchema();

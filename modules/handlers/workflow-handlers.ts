@@ -106,17 +106,27 @@ export class WorkflowHandlers {
     }
 
     const updateResults: any[] = [];
-    const entityOps = this.memoryManager.sqliteManager?.entityOps;
 
     for (const entityName of args.focus_entities) {
       try {
-        await entityOps.updateEntityWorkingContext(
+        // Use the public memory-manager API instead of poking at a
+        // private `entityOps` field on the SQLite layer. The legacy
+        // `sqliteManager?.entityOps` access resolved to undefined on
+        // HybridMemoryManager and made these calls silently throw.
+        await this.memoryManager.updateEntityWorkingContext(
           entityName,
           true,
           branchName,
         );
-        await entityOps.updateEntityRelevanceScore(entityName, 0.9, branchName);
-        await entityOps.updateEntityLastAccessed(entityName, branchName);
+        await this.memoryManager.updateEntityRelevanceScore(
+          entityName,
+          0.9,
+          branchName,
+        );
+        await this.memoryManager.updateEntityLastAccessed(
+          entityName,
+          branchName,
+        );
         updateResults.push({ entity: entityName, marked: true });
       } catch (error) {
         updateResults.push({
@@ -261,7 +271,6 @@ export class WorkflowHandlers {
     }
 
     const archiveResults: any[] = [];
-    const entityOps = this.memoryManager.sqliteManager?.entityOps;
     for (const entityName of args.entity_names) {
       try {
         await this.memoryManager.updateEntityStatus(
@@ -270,12 +279,16 @@ export class WorkflowHandlers {
           "Completed work - archived",
           branchName,
         );
-        await entityOps.updateEntityWorkingContext(
+        await this.memoryManager.updateEntityWorkingContext(
           entityName,
           false,
           branchName,
         );
-        await entityOps.updateEntityRelevanceScore(entityName, 0.3, branchName);
+        await this.memoryManager.updateEntityRelevanceScore(
+          entityName,
+          0.3,
+          branchName,
+        );
         archiveResults.push({ entity: entityName, archived: true });
       } catch (error) {
         archiveResults.push({
@@ -364,10 +377,9 @@ export class WorkflowHandlers {
       ["active", "draft"],
       { workingContextOnly: true },
     );
-    const entityOps = this.memoryManager.sqliteManager?.entityOps;
     for (const entity of working.entities) {
       try {
-        await entityOps.updateEntityWorkingContext(
+        await this.memoryManager.updateEntityWorkingContext(
           entity.name,
           false,
           branchName,

@@ -12,6 +12,7 @@ import { logger } from "./logger.js";
 import { IMemoryOperations } from "./memory-core.js";
 import { ModernSimilarityEngine } from "./similarity/similarity-engine.js";
 import { ModularSQLiteOperations } from "./sqlite/index.js";
+import { SQLiteConnection } from "./sqlite/sqlite-connection.js";
 
 /**
  * SQLite Memory Manager - Lightweight SQLite-only storage
@@ -21,12 +22,19 @@ export class HybridMemoryManager implements IMemoryOperations {
   private sqliteOps: ModularSQLiteOperations;
   private optimizer: MemoryOptimizer;
 
-  constructor(basePath?: string, similarityEngine?: ModernSimilarityEngine) {
+  constructor(
+    basePath?: string,
+    similarityEngine?: ModernSimilarityEngine,
+    sharedConnection?: SQLiteConnection
+  ) {
     // MEMORY_PATH should point to your project root
     // The .memory folder will be created inside it
     const memoryPath = basePath || process.env.MEMORY_PATH || process.cwd();
 
-    this.sqliteOps = new ModularSQLiteOperations(memoryPath, similarityEngine);
+    this.sqliteOps = new ModularSQLiteOperations(
+      sharedConnection ?? memoryPath,
+      similarityEngine
+    );
     this.optimizer = new MemoryOptimizer({
       // "minimal" only normalizes whitespace; the optimized form is
       // never read back for retrieval, so heavier compression just

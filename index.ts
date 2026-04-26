@@ -65,16 +65,23 @@ if (process.env.LOG_LEVEL === "debug") {
 // TensorFlow.js is the core ML feature of this Advanced Memory Server
 const modernSimilarity = new ModernSimilarityEngine();
 
+// One SQLite connection is shared across the memory manager and the
+// project-analysis operations. WAL allows many readers but only a
+// single writer, so opening two handles against the same file leads
+// to SQLITE_BUSY whenever both sides try to write at once.
+const projectPath = process.env.MEMORY_PATH || process.cwd();
+const sqliteConnection = new SQLiteConnection(projectPath);
+
 // Initialize modular system with TensorFlow.js integration
-const memoryManager = new EnhancedMemoryManager(modernSimilarity);
+const memoryManager = new EnhancedMemoryManager(
+  modernSimilarity,
+  sqliteConnection,
+);
 const relationshipIndexer = new RelationshipIndexer(
   memoryManager,
   modernSimilarity,
 );
 
-// Initialize SQLite connection for project analysis
-const projectPath = process.env.MEMORY_PATH || process.cwd();
-const sqliteConnection = new SQLiteConnection(projectPath);
 const projectAnalysisOps = new ProjectAnalysisOperations(sqliteConnection);
 
 // Initialize specialized handlers

@@ -256,6 +256,8 @@ export class ProjectAnalysisOperations {
           exports_count: file.exports.length,
           interfaces_count: file.interfaces.length,
           dependencies_count: file.dependencies.length,
+          is_generated: file.analysisMetadata.isGenerated ?? false,
+          skipped_reason: file.analysisMetadata.skippedReason,
         }),
       };
 

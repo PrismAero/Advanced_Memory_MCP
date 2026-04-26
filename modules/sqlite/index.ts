@@ -25,8 +25,14 @@ export class ModularSQLiteOperations implements IMemoryOperations {
   private branchOps: SQLiteBranchOperations;
   private searchOps: SQLiteSearchOperations;
 
-  constructor(basePath: string, similarityEngine?: ModernSimilarityEngine) {
-    this.connection = new SQLiteConnection(basePath);
+  constructor(
+    basePathOrConnection: string | SQLiteConnection,
+    similarityEngine?: ModernSimilarityEngine
+  ) {
+    this.connection =
+      typeof basePathOrConnection === "string"
+        ? new SQLiteConnection(basePathOrConnection)
+        : basePathOrConnection;
     this.entityOps = new SQLiteEntityOperations(this.connection);
     this.relationOps = new SQLiteRelationOperations(this.connection);
     this.branchOps = new SQLiteBranchOperations(this.connection);

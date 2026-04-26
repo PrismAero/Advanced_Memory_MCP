@@ -1,6 +1,22 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { logger } from "../logger.js";
+import {
+  buildIndexerExcludePatterns,
+  isLikelyGeneratedSource,
+  normalizeRelativePath,
+} from "./exclusion-patterns.js";
+
+/**
+ * Hard caps used to keep large repositories tractable. Files larger
+ * than the byte cap are still recorded (so the dependency graph
+ * remains complete) but their contents are never read off disk.
+ * Files smaller than that cap but with more lines than the line cap
+ * skip per-line interface/import/export extraction.
+ */
+const MAX_FILE_BYTES_FOR_DETAIL = 1 * 1024 * 1024; // 1 MB
+const MAX_LINES_FOR_DETAIL = 5000;
+const MAX_FILE_BYTES_FOR_ANY_READ = 5 * 1024 * 1024; // 5 MB
 
 /**
  * Project file types and their characteristics
@@ -46,6 +62,8 @@ export interface FileAnalysis {
     hasTests: boolean;
     complexity: "low" | "medium" | "high";
     documentation: number; // percentage of documented code
+    isGenerated?: boolean;
+    skippedReason?: "too-large" | "generated" | "too-many-lines";
   };
   embedding?: number[];
 }
@@ -140,24 +158,7 @@ export class ProjectIndexer {
 
   constructor() {
     this.fileTypeMap = this.initializeFileTypeMap();
-    this.excludePatterns = [
-      /node_modules/,
-      /\.git/,
-      /dist/,
-      /build/,
-      /coverage/,
-      /\.next/,
-      /\.cache/,
-      /\.vscode/,
-      /\.idea/,
-      /__pycache__/,
-      /target/, // Rust build
-      /bin/, // Go build
-      /\.pytest_cache/,
-      /\.DS_Store/,
-      /\.env/,
-      /\.log$/,
-    ];
+    this.excludePatterns = buildIndexerExcludePatterns();
   }
 
   /**
@@ -248,11 +249,22 @@ export class ProjectIndexer {
       const fileType =
         this.fileTypeMap.get(ext) || this.fileTypeMap.get(".unknown")!;
 
-      // Skip non-source files for detailed analysis
+      // Drop binary-ish assets entirely once they exceed 1 MB; we
+      // already exclude most by extension, this is the safety net
+      // for unknown blobs that slip through.
       if (fileType.category === "asset" && stats.size > 1024 * 1024) {
-        // Skip large assets
         return null;
       }
+
+      // Files larger than ANY_READ are recorded as metadata only.
+      // No content is loaded so the indexer can't OOM on a
+      // multi-gig generated artefact.
+      const tooLargeToRead = stats.size > MAX_FILE_BYTES_FOR_ANY_READ;
+
+      // Files between MAX_DETAIL and ANY_READ are loaded just enough
+      // to count lines / detect generation, but parsed shallowly.
+      const tooLargeForDetail =
+        !tooLargeToRead && stats.size > MAX_FILE_BYTES_FOR_DETAIL;
 
       let content = "";
       let imports: ImportInfo[] = [];
@@ -263,36 +275,70 @@ export class ProjectIndexer {
       let hasTests = false;
       let complexity: "low" | "medium" | "high" = "low";
       let documentation = 0;
+      let isGenerated = false;
 
       // Analyze source files
-      if (fileType.category === "source" || fileType.category === "test") {
+      if (
+        (fileType.category === "source" || fileType.category === "test") &&
+        !tooLargeToRead
+      ) {
         try {
           content = await fs.readFile(filePath, "utf-8");
           lineCount = content.split("\n").length;
           hasTests = this.detectTestFile(relativePath, content);
+          isGenerated = isLikelyGeneratedSource(content);
 
-          if (fileType.hasImports) {
-            imports = this.extractImports(content, fileType.language);
-            dependencies = imports.map((imp) => imp.source);
+          // Skip per-line parsing for generated, oversized, or
+          // pathologically long files. We still keep the row plus
+          // line/size metadata, but we don't add interfaces or
+          // imports from "do not edit" blobs to avoid polluting
+          // the entity / dependency tables.
+          const skipDetailedParsing =
+            tooLargeForDetail ||
+            isGenerated ||
+            lineCount > MAX_LINES_FOR_DETAIL;
+
+          if (!skipDetailedParsing) {
+            if (fileType.hasImports) {
+              imports = this.extractImports(content, fileType.language);
+              dependencies = imports.map((imp) => imp.source);
+            }
+
+            if (fileType.hasExports) {
+              exports = this.extractExports(content, fileType.language);
+            }
+
+            if (fileType.canDefineInterfaces) {
+              interfaces = this.extractInterfaces(content, fileType.language);
+            }
+
+            complexity = this.calculateComplexity(content);
+            documentation = this.calculateDocumentation(
+              content,
+              fileType.language,
+            );
+          } else {
+            logger.debug(
+              `[INDEX] Skipping detailed parse for ${relativePath} (size=${stats.size}, lines=${lineCount}, generated=${isGenerated})`,
+            );
           }
-
-          if (fileType.hasExports) {
-            exports = this.extractExports(content, fileType.language);
-          }
-
-          if (fileType.canDefineInterfaces) {
-            interfaces = this.extractInterfaces(content, fileType.language);
-          }
-
-          complexity = this.calculateComplexity(content);
-          documentation = this.calculateDocumentation(
-            content,
-            fileType.language
-          );
         } catch (error) {
           logger.warn(`Failed to analyze file content ${filePath}:`, error);
         }
+      } else if (tooLargeToRead) {
+        logger.debug(
+          `[INDEX] Recording ${relativePath} as metadata-only (size=${stats.size})`,
+        );
       }
+
+      const skippedReason: "too-large" | "generated" | "too-many-lines" | undefined =
+        tooLargeToRead || tooLargeForDetail
+          ? "too-large"
+          : isGenerated
+          ? "generated"
+          : lineCount > MAX_LINES_FOR_DETAIL
+          ? "too-many-lines"
+          : undefined;
 
       return {
         filePath,
@@ -310,6 +356,8 @@ export class ProjectIndexer {
           hasTests,
           complexity,
           documentation,
+          isGenerated,
+          skippedReason,
         },
       };
     } catch (error) {
@@ -1034,14 +1082,31 @@ export class ProjectIndexer {
           });
         }
 
-        // Traditional C/C++ includes
-        const includeMatch = line.match(/^#include\s+[<"]([^>"]+)[>"]/);
-        if (includeMatch) {
-          const [, source] = includeMatch;
+        // Traditional C/C++ includes. We tag system headers (<...>)
+        // by setting isNamespace=true so downstream consumers can
+        // treat them as external dependencies, while project-local
+        // includes ("...") get isDefault=true to flag them as
+        // candidates for resolution to a sibling project_files row.
+        const sysIncludeMatch = line.match(/^#\s*include\s*<([^>]+)>/);
+        if (sysIncludeMatch) {
+          const [, source] = sysIncludeMatch;
           imports.push({
             source,
             specifiers: [],
             isDefault: false,
+            isNamespace: true,
+            line: i + 1,
+          });
+          continue;
+        }
+
+        const localIncludeMatch = line.match(/^#\s*include\s*"([^"]+)"/);
+        if (localIncludeMatch) {
+          const [, source] = localIncludeMatch;
+          imports.push({
+            source,
+            specifiers: [],
+            isDefault: true,
             isNamespace: false,
             line: i + 1,
           });
@@ -1268,7 +1333,7 @@ export class ProjectIndexer {
           });
         }
 
-        // C++ enum class declarations
+        // C++ enum class / enum struct declarations
         const enumClassMatch = line.match(
           /^(?:enum\s+class|enum\s+struct)\s+([a-zA-Z_][a-zA-Z0-9_:]*)\s*(?::\s*([^{]+))?\s*{?/
         );
@@ -1286,6 +1351,127 @@ export class ProjectIndexer {
             line: i + 1,
             isExported: true,
           });
+          continue;
+        }
+
+        // Plain C/C++ enum (anonymous enums skipped)
+        const plainEnumMatch = line.match(
+          /^enum\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?::\s*([^{]+))?\s*{?/
+        );
+        if (plainEnumMatch && !line.startsWith("enum class") && !line.startsWith("enum struct")) {
+          const [, name, underlyingType] = plainEnumMatch;
+          const fullName = currentNamespace
+            ? `${currentNamespace}::${name}`
+            : name;
+          interfaces.push({
+            name: fullName,
+            properties: [],
+            extends: underlyingType ? [underlyingType.trim()] : [],
+            line: i + 1,
+            isExported: true,
+          });
+          continue;
+        }
+
+        // C/C++ typedefs: `typedef <stuff> NewName;`
+        const typedefMatch = line.match(
+          /^typedef\s+.+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;\s*$/
+        );
+        if (typedefMatch) {
+          const [, name] = typedefMatch;
+          interfaces.push({
+            name: currentNamespace ? `${currentNamespace}::${name}` : name,
+            properties: [],
+            extends: [],
+            line: i + 1,
+            isExported: true,
+          });
+          continue;
+        }
+
+        // C++11+ type aliases: `using NewName = ...;`
+        // (skip `using namespace ...;` and `using base::method;`)
+        const usingAliasMatch = line.match(
+          /^using\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*[^;]+;/
+        );
+        if (usingAliasMatch) {
+          const [, name] = usingAliasMatch;
+          interfaces.push({
+            name: currentNamespace ? `${currentNamespace}::${name}` : name,
+            properties: [],
+            extends: [],
+            line: i + 1,
+            isExported: true,
+          });
+          continue;
+        }
+
+        // Preprocessor macros that look like constants or
+        // function-like macros: `#define NAME ...`. We only capture
+        // macros whose name is uppercase to avoid pulling in ad-hoc
+        // include-guards like `_FOO_BAR_H_`.
+        const macroMatch = line.match(
+          /^#\s*define\s+([A-Z][A-Z0-9_]{1,})(?:\s|\(|$)/
+        );
+        if (macroMatch) {
+          const [, name] = macroMatch;
+          // Skip include guards (heuristic: ends with `_H`, `_HPP`, or `_INCLUDED`)
+          if (
+            !name.endsWith("_H") &&
+            !name.endsWith("_HPP") &&
+            !name.endsWith("_HXX") &&
+            !name.endsWith("_INCLUDED") &&
+            !name.endsWith("_GUARD")
+          ) {
+            interfaces.push({
+              name,
+              properties: [],
+              extends: [],
+              line: i + 1,
+              isExported: true,
+            });
+          }
+          continue;
+        }
+
+        // Free functions at namespace / file scope. We only attempt
+        // a match when the brace depth BEFORE processing this line
+        // equals the current namespace nesting -- i.e. we're not
+        // inside a class, struct, function body, or other block.
+        // This keeps us from re-recording every method inside a
+        // class as a stray "free function".
+        const priorBraceDepth = braceDepth - openBraces + closeBraces;
+        if (
+          priorBraceDepth === namespaceStack.length &&
+          !line.startsWith("//") &&
+          !line.startsWith("*") &&
+          !line.startsWith("#")
+        ) {
+          const fnMatch = line.match(
+            /^(?:(?:static|inline|constexpr|extern|virtual|explicit|friend|export|template\s*<[^>]+>)\s+)*[a-zA-Z_][\w:<>,\s\*&]*\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*(?:\([^)]*\))?\s*)?(?:override\s*)?(?:final\s*)?(?:->[^;{}]+)?\s*[{;]/
+          );
+          if (
+            fnMatch &&
+            !/\b(?:class|struct|namespace|enum|union|typedef|using|return|if|for|while|switch|else|do|case|sizeof|new|delete|throw)\b/.test(
+              line.split(fnMatch[1])[0] || ""
+            )
+          ) {
+            const [, name] = fnMatch;
+            if (
+              name.length >= 2 &&
+              !/^(if|for|while|switch|return|case|do)$/.test(name)
+            ) {
+              interfaces.push({
+                name: currentNamespace
+                  ? `${currentNamespace}::${name}`
+                  : name,
+                properties: [],
+                extends: [],
+                line: i + 1,
+                isExported: true,
+              });
+            }
+          }
         }
       }
     } else if (language === "csharp") {
@@ -1356,7 +1542,8 @@ export class ProjectIndexer {
 
   // Helper methods
   private shouldExclude(relativePath: string): boolean {
-    return this.excludePatterns.some((pattern) => pattern.test(relativePath));
+    const normalized = normalizeRelativePath(relativePath);
+    return this.excludePatterns.some((pattern) => pattern.test(normalized));
   }
 
   private async fileExists(filePath: string): Promise<boolean> {

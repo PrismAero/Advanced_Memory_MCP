@@ -74,7 +74,12 @@ export class SQLiteRelationOperations {
       }
     }
 
-    logger.info(
+    // Demoted from INFO to DEBUG: this fires for every batch of
+    // relations (including auto-detected pairs) and was the source
+    // of "Created 1 of 1 relations" log spam in large workspaces.
+    // Operators who want the visibility can still get it via
+    // LOG_LEVEL=debug.
+    logger.debug(
       `Created ${createdRelations.length} of ${
         relations.length
       } relations in branch ${branchName || "main"}`

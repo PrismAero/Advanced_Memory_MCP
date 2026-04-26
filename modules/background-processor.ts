@@ -181,6 +181,9 @@ export class BackgroundProcessor {
    */
   setMonitoredProject(projectPath: string): void {
     this.currentProjectPath = projectPath;
+    // Force the next monitorProjectStructure() to actually run,
+    // even if the process previously ran one for a different path.
+    this.lastProjectAnalysis = null;
     logger.info(`[BACKGROUND] Set monitored project path: ${projectPath}`);
 
     // Start monitoring if not already running
@@ -191,6 +194,13 @@ export class BackgroundProcessor {
     if (!this.interfaceAnalysisInterval) {
       this.startInterfaceAnalysis();
     }
+
+    // Kick off an immediate scan so a freshly-opened project starts
+    // populating the database within seconds instead of waiting for
+    // the 3-minute interval to fire.
+    this.monitorProjectStructure().catch((error) => {
+      logger.error("Initial project scan error:", error);
+    });
   }
 
   /**
@@ -247,7 +257,14 @@ export class BackgroundProcessor {
   }
 
   /**
-   * Monitor project structure changes
+   * Monitor project structure changes.
+   *
+   * Persistence runs in two phases so an interrupted scan still leaves
+   * the database in a useful state:
+   *   1. Cheap: scan files, write project_files / code_interfaces /
+   *      project_dependencies / workspace_context rows.
+   *   2. Expensive: embed files+interfaces and back-fill the vectors
+   *      table. This is allowed to be slow / interrupted.
    */
   private async monitorProjectStructure(): Promise<void> {
     if (!this.currentProjectPath || !this.projectAnalysisOps) return;
@@ -260,85 +277,75 @@ export class BackgroundProcessor {
         !this.lastProjectAnalysis ||
         Date.now() - this.lastProjectAnalysis.getTime() > 30 * 60 * 1000; // 30 minutes
 
-      if (shouldReanalyze) {
-        const projectInfo = await this.projectIndexer.analyzeProject(
-          this.currentProjectPath,
-        );
-        await this.projectAnalysisOps.storeWorkspaceContext(projectInfo);
+      if (!shouldReanalyze) return;
 
-        // Full scan and embedding generation
-        if (this.projectEmbeddingEngine) {
-          const files = await this.projectIndexer.scanProjectFiles(
-            this.currentProjectPath,
+      const projectInfo = await this.projectIndexer.analyzeProject(
+        this.currentProjectPath,
+      );
+      await this.projectAnalysisOps.storeWorkspaceContext(projectInfo);
+
+      const files = await this.projectIndexer.scanProjectFiles(
+        this.currentProjectPath,
+      );
+      logger.info(
+        `[ANALYSIS] Persisting ${files.length} project files (embeddings will follow)`,
+      );
+
+      // Phase 1 — persist file + interface + dependency metadata before
+      // doing any embedding work, so even a short-lived process leaves
+      // a useful snapshot in the database.
+      const storedFiles =
+        await this.projectAnalysisOps.storeProjectFiles(files);
+      const storedFilesByPath = new Map(
+        storedFiles
+          .filter((f) => typeof f.id === "number")
+          .map((f) => [f.file_path, f.id as number]),
+      );
+
+      for (const file of files) {
+        const storedId = storedFilesByPath.get(file.filePath);
+        if (!storedId) continue;
+
+        if (file.interfaces && file.interfaces.length > 0) {
+          await this.projectAnalysisOps.storeCodeInterfaces(
+            storedId,
+            file.interfaces,
           );
-          logger.info(
-            `[ANALYSIS] Scanning ${files.length} files for embeddings...`,
-          );
-
-          for (const file of files) {
-            // Generate file embedding
-            // We use the file path and some metadata as context
-            const fileContext = `File: ${file.relativePath}\nType: ${file.fileType.category}\nLanguage: ${file.fileType.language}`;
-            const embedding =
-              await this.projectEmbeddingEngine.generateProjectEmbedding(
-                fileContext,
-                "documentation", // Treat file overview as documentation
-                { file_path: file.filePath },
-              );
-
-            if (embedding) {
-              file.embedding = embedding.embedding;
-            }
-
-            // Generate interface embeddings
-            if (file.interfaces && file.interfaces.length > 0) {
-              for (const iface of file.interfaces) {
-                const ifaceContext = `Interface: ${
-                  iface.name
-                }\nProperties: ${iface.properties.join(", ")}`;
-                const ifaceEmbedding =
-                  await this.projectEmbeddingEngine.generateProjectEmbedding(
-                    ifaceContext,
-                    "interface_definition",
-                    {
-                      file_path: file.filePath,
-                      interface_name: iface.name,
-                      line_number: iface.line,
-                    },
-                  );
-
-                if (ifaceEmbedding) {
-                  iface.embedding = ifaceEmbedding.embedding;
-                }
-              }
-            }
-          }
-
-          // Store files with embeddings
-          const storedFiles =
-            await this.projectAnalysisOps.storeProjectFiles(files);
-
-          // Store interfaces with embeddings
-          for (const file of files) {
-            if (file.interfaces && file.interfaces.length > 0) {
-              // We need the file ID from the stored record
-              const storedFile = storedFiles.find(
-                (f) => f.file_path === file.filePath,
-              );
-              if (storedFile && storedFile.id) {
-                await this.projectAnalysisOps.storeCodeInterfaces(
-                  storedFile.id,
-                  file.interfaces,
-                );
-              }
-            }
-          }
         }
 
-        this.lastProjectAnalysis = new Date();
-        logger.info(
-          "[LOADING] Updated project structure analysis with embeddings",
+        if (
+          (file.imports && file.imports.length > 0) ||
+          (file.exports && file.exports.length > 0)
+        ) {
+          await this.projectAnalysisOps.storeProjectDependencies(
+            storedId,
+            file.imports || [],
+            file.exports || [],
+          );
+        }
+      }
+
+      // Drop rows for files that no longer exist on disk.
+      try {
+        await this.projectAnalysisOps.cleanupDeletedFiles(
+          files.map((f) => f.filePath),
         );
+      } catch (error) {
+        logger.warn("Cleanup of deleted files failed:", error);
+      }
+
+      this.lastProjectAnalysis = new Date();
+      logger.info(
+        `[LOADING] Project structure persisted (${storedFiles.length}/${files.length} files)`,
+      );
+
+      // Phase 2 — kick off embedding back-fill in the background. Any
+      // already-persisted row simply gets its vector populated when the
+      // model finishes; we don't block this scan on it.
+      if (this.projectEmbeddingEngine) {
+        this.backfillMissingEmbeddings().catch((error) => {
+          logger.debug("Embedding backfill error:", error);
+        });
       }
     } catch (error) {
       logger.error("Failed to monitor project structure:", error);
@@ -696,33 +703,35 @@ export class BackgroundProcessor {
           branchGraph.entities,
         );
 
-        // Create relationships that meet confidence threshold
-        for (const relationship of newRelationships) {
-          if (relationship.confidence > 0.7) {
-            try {
-              await this.memoryManager.createRelations(
-                [
-                  {
-                    from: relationship.from,
-                    to: relationship.to,
-                    relationType: relationship.type,
-                  },
-                ],
-                branch.name,
-              );
+        // Batch all qualifying relationships into a single
+        // createRelations call. The legacy implementation looped and
+        // called createRelations once per pair, which produced
+        // hundreds of "[INFO] Created 1 of 1 relations" log lines
+        // and hammered SQLite with one transaction per relation.
+        const candidates = newRelationships
+          .filter((rel) => rel.confidence > 0.7)
+          .map((rel) => ({
+            from: rel.from,
+            to: rel.to,
+            relationType: rel.type,
+          }));
 
-              logger.debug(
-                `Created relationship: ${relationship.from} -> ${relationship.to} (${relationship.type})`,
-              );
-            } catch (error) {
-              // Ignore duplicate relationship errors
-              const errorMessage =
-                error instanceof Error ? error.message : String(error);
-              if (!errorMessage.includes("UNIQUE constraint")) {
-                logger.warn("Error creating relationship:", error);
-              }
-            }
+        if (candidates.length === 0) continue;
+
+        try {
+          const created = await this.memoryManager.createRelations(
+            candidates,
+            branch.name,
+          );
+          if (created.length > 0) {
+            logger.debug(
+              `Created ${created.length} relationships in branch ${branch.name}`,
+            );
           }
+        } catch (error) {
+          // INSERT OR IGNORE inside createRelations swallows duplicates,
+          // so anything that surfaces here is a real failure.
+          logger.warn("Error creating relationship batch:", error);
         }
       }
 
