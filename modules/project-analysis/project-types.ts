@@ -1,10 +1,23 @@
 export interface FileTypeInfo {
   extension: string;
   language: string;
-  category: "source" | "config" | "documentation" | "asset" | "test" | "build";
+  category:
+    | "source"
+    | "config"
+    | "documentation"
+    | "asset"
+    | "test"
+    | "build"
+    | "schema"
+    | "protocol"
+    | "generated"
+    | "data";
   hasImports: boolean;
   hasExports: boolean;
   canDefineInterfaces: boolean;
+  fileKind?: string;
+  contextRole?: "code" | "dependency" | "metadata" | "none";
+  shouldParseContent?: boolean;
 }
 
 export interface ProjectInfo {
@@ -60,6 +73,41 @@ export interface InterfaceInfo {
   line: number;
   isExported: boolean;
   embedding?: number[];
+  qualifiedName?: string;
+  namespace?: string;
+  language?: string;
+  kind?: string;
+  signature?: string;
+  definition?: string;
+  documentation?: string;
+  visibility?: "public" | "protected" | "private" | "internal" | "package";
+  startLine?: number;
+  endLine?: number;
+  containerName?: string;
+  stableId?: string;
+  bodyHash?: string;
+  parameters?: Array<{ name: string; type?: string; defaultValue?: string }>;
+  returnType?: string;
+  members?: Array<{
+    name: string;
+    kind: string;
+    type?: string;
+    signature?: string;
+    visibility?: string;
+    isOptional?: boolean;
+    isReadonly?: boolean;
+    line?: number;
+  }>;
+  templateParameters?: string[];
+  attributes?: string[];
+  modifiers?: string[];
+  macroParameters?: string[];
+  macroReplacement?: string;
+  relationships?: Array<{ type: string; target: string; confidence?: number }>;
+  summary?: string;
+  rankText?: string;
+  sourceHash?: string;
+  diagnostics?: string[];
 }
 
 export interface WorkspaceInfo {

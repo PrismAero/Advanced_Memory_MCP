@@ -677,6 +677,62 @@ const CORE_TOOLS: Tool[] = [
           type: "number",
           description: "[find_similar] Max results (default: 5).",
         },
+        offset: {
+          type: "number",
+          description: "[find_similar] Pagination offset (default: 0).",
+        },
+        language: {
+          type: "string",
+          description:
+            "[find_similar] Restrict results to a language such as cpp, c, python, typescript, or javascript.",
+        },
+        kind: {
+          type: "string",
+          description:
+            "[find_similar] Restrict results to a symbol kind such as class, struct, function, method, macro, interface, or type.",
+        },
+        file_path: {
+          type: "string",
+          description:
+            "[find_similar] Restrict results to matching file paths.",
+        },
+        qualified_name: {
+          type: "string",
+          description:
+            "[find_similar] Restrict or boost results matching a qualified symbol name.",
+        },
+        min_similarity: {
+          type: "number",
+          description: "[find_similar] Minimum cosine similarity threshold.",
+        },
+        dedupe: {
+          type: "boolean",
+          description:
+            "[find_similar] Dedupe repeated symbols by stable id/qualified name (default: true).",
+        },
+        include_docs: {
+          type: "boolean",
+          description:
+            "[find_similar] Include full bounded documentation text.",
+        },
+        include_members: {
+          type: "boolean",
+          description:
+            "[find_similar] Include bounded member/property details.",
+        },
+        include_snippet: {
+          type: "boolean",
+          description: "[find_similar] Include bounded definition snippets.",
+        },
+        max_members: {
+          type: "number",
+          description: "[find_similar] Max members when include_members=true.",
+        },
+        max_definition_chars: {
+          type: "number",
+          description:
+            "[find_similar] Max characters for documentation/definition fields.",
+        },
         file_limit: {
           type: "number",
           description:

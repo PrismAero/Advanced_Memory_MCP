@@ -3,6 +3,7 @@ import path from "path";
 import { logger } from "../logger.js";
 import { isLikelyGeneratedSource } from "./exclusion-patterns.js";
 import { buildFileTypeMap } from "./file-type-map.js";
+import { InterfaceExtractorRunner } from "./interfaces/interface-extractor-runner.js";
 import { SourceParser } from "./source-parser.js";
 import type { FileAnalysis, FileTypeInfo } from "./project-types.js";
 
@@ -13,6 +14,7 @@ const MAX_FILE_BYTES_FOR_ANY_READ = 5 * 1024 * 1024;
 export class FileAnalyzer {
   private fileTypeMap = buildFileTypeMap();
   private parser = new SourceParser();
+  private interfaceRunner = new InterfaceExtractorRunner();
 
   async analyzeFile(
     filePath: string,
@@ -42,7 +44,8 @@ export class FileAnalyzer {
       let isGenerated = false;
 
       if (
-        (fileType.category === "source" || fileType.category === "test") &&
+        (fileType.shouldParseContent !== false) &&
+        (fileType.category === "source" || fileType.category === "test" || fileType.category === "schema" || fileType.category === "protocol") &&
         !tooLargeToRead
       ) {
         try {
@@ -65,7 +68,13 @@ export class FileAnalyzer {
               exports = this.parser.extractExports(content, fileType.language);
             }
             if (fileType.canDefineInterfaces) {
-              interfaces = this.parser.extractInterfaces(content, fileType.language);
+              const extraction = await this.interfaceRunner.extract(content, {
+                language: fileType.language,
+                filePath,
+                relativePath,
+                extension: fileType.extension,
+              });
+              interfaces = extraction.interfaces;
             }
             complexity = this.parser.calculateComplexity(content);
             documentation = this.parser.calculateDocumentation(
@@ -133,6 +142,33 @@ export class FileAnalyzer {
 
   getFileType(filePath: string): FileTypeInfo {
     const fileName = path.basename(filePath);
+    const specialName = fileName.toLowerCase();
+    if (specialName === "dockerfile") {
+      return {
+        extension: "Dockerfile",
+        language: "dockerfile",
+        category: "build",
+        hasImports: false,
+        hasExports: false,
+        canDefineInterfaces: false,
+        fileKind: "build",
+        contextRole: "dependency",
+        shouldParseContent: false,
+      };
+    }
+    if (specialName === "makefile" || specialName === "cmakelists.txt") {
+      return {
+        extension: fileName,
+        language: specialName === "makefile" ? "make" : "cmake",
+        category: "build",
+        hasImports: false,
+        hasExports: false,
+        canDefineInterfaces: false,
+        fileKind: "build",
+        contextRole: "dependency",
+        shouldParseContent: false,
+      };
+    }
     const specialMatch = [".test.ts", ".spec.ts", ".test.js", ".spec.js"].find(
       (suffix) => fileName.endsWith(suffix),
     );

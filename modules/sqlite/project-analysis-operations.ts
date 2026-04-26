@@ -1,6 +1,16 @@
-import { ExportInfo, FileAnalysis, ImportInfo, InterfaceInfo, ProjectInfo } from "../project-analysis/project-indexer.js";
+import {
+  ExportInfo,
+  FileAnalysis,
+  ImportInfo,
+  InterfaceInfo,
+  ProjectInfo,
+} from "../project-analysis/project-indexer.js";
 import { VectorStore } from "../vector-store.js";
-import { CodeInterfaceOperations } from "./code-interface-operations.js";
+import {
+  CodeInterfaceOperations,
+  type CodeInterfaceQueryCriteria,
+  type CodeInterfaceSimilarityOptions,
+} from "./code-interface-operations.js";
 import { ProjectCleanupOperations } from "./project-cleanup-operations.js";
 import { ProjectDependencyOperations } from "./project-dependency-operations.js";
 import { ProjectFileOperations } from "./project-file-operations.js";
@@ -40,10 +50,16 @@ export class ProjectAnalysisOperations {
   constructor(private connection: SQLiteConnection) {
     this.vectorStore = new VectorStore(connection);
     this.fileOps = new ProjectFileOperations(connection, this.vectorStore);
-    this.interfaceOps = new CodeInterfaceOperations(connection, this.vectorStore);
+    this.interfaceOps = new CodeInterfaceOperations(
+      connection,
+      this.vectorStore,
+    );
     this.dependencyOps = new ProjectDependencyOperations(connection);
     this.workspaceOps = new WorkspaceContextOperations(connection);
-    this.cleanupOps = new ProjectCleanupOperations(connection, this.vectorStore);
+    this.cleanupOps = new ProjectCleanupOperations(
+      connection,
+      this.vectorStore,
+    );
   }
 
   async initialize(): Promise<void> {
@@ -119,7 +135,10 @@ export class ProjectAnalysisOperations {
     embeddingGenerator: (fileContext: string) => Promise<number[] | null>,
     limit = 50,
   ): Promise<number[]> {
-    return this.fileOps.generateMissingFileEmbeddings(embeddingGenerator, limit);
+    return this.fileOps.generateMissingFileEmbeddings(
+      embeddingGenerator,
+      limit,
+    );
   }
 
   storeCodeInterfaces(
@@ -138,13 +157,9 @@ export class ProjectAnalysisOperations {
     return this.interfaceOps.storeCodeInterface(fileId, iface, embedding);
   }
 
-  getCodeInterfaces(criteria: {
-    fileId?: number;
-    name?: string;
-    interfaceType?: string;
-    isExported?: boolean;
-    limit?: number;
-  }): Promise<CodeInterfaceRecord[]> {
+  getCodeInterfaces(
+    criteria: CodeInterfaceQueryCriteria,
+  ): Promise<CodeInterfaceRecord[]> {
     return this.interfaceOps.getCodeInterfaces(criteria);
   }
 
@@ -152,15 +167,21 @@ export class ProjectAnalysisOperations {
     return this.interfaceOps.updateInterfaceUsage(interfaceId);
   }
 
+  refreshInterfaceRelationships(limit = 1000): Promise<number> {
+    return this.interfaceOps.refreshInterfaceRelationships(limit);
+  }
+
   findSimilarInterfaces(
     queryEmbedding: number[],
     limit = 5,
     minSimilarity = -1,
+    options: CodeInterfaceSimilarityOptions = {},
   ): Promise<Array<{ interface: CodeInterfaceRecord; similarity: number }>> {
     return this.interfaceOps.findSimilarInterfaces(
       queryEmbedding,
       limit,
       minSimilarity,
+      options,
     );
   }
 
@@ -191,7 +212,11 @@ export class ProjectAnalysisOperations {
     dependency: ImportInfo | ExportInfo,
     type: "import" | "export",
   ): Promise<ProjectDependencyRecord | null> {
-    return this.dependencyOps.storeProjectDependency(fromFileId, dependency, type);
+    return this.dependencyOps.storeProjectDependency(
+      fromFileId,
+      dependency,
+      type,
+    );
   }
 
   getProjectDependencies(criteria: {
@@ -222,6 +247,9 @@ export class ProjectAnalysisOperations {
     retainedPaths: string[],
     branchName?: string,
   ): Promise<number> {
-    return this.cleanupOps.cleanupIgnoredOrDeletedFiles(retainedPaths, branchName);
+    return this.cleanupOps.cleanupIgnoredOrDeletedFiles(
+      retainedPaths,
+      branchName,
+    );
   }
 }

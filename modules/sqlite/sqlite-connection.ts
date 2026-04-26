@@ -196,6 +196,21 @@ export class SQLiteConnection {
         definition TEXT NOT NULL, -- Full interface definition
         properties TEXT, -- JSON array of property names and types
         extends_interfaces TEXT, -- JSON array of extended interface names
+        language TEXT,
+        qualified_name TEXT,
+        namespace TEXT,
+        kind TEXT,
+        signature TEXT,
+        documentation TEXT,
+        visibility TEXT,
+        start_line INTEGER,
+        end_line INTEGER,
+        container_name TEXT,
+        stable_id TEXT,
+        source_hash TEXT,
+        metadata TEXT,
+        summary TEXT,
+        rank_text TEXT,
         is_exported INTEGER DEFAULT 0,
         is_generic INTEGER DEFAULT 0,
         usage_count INTEGER DEFAULT 0,
@@ -326,6 +341,10 @@ export class SQLiteConnection {
       "CREATE INDEX IF NOT EXISTS idx_code_interfaces_name ON code_interfaces(name)",
       "CREATE INDEX IF NOT EXISTS idx_code_interfaces_file ON code_interfaces(file_id)",
       "CREATE INDEX IF NOT EXISTS idx_code_interfaces_type ON code_interfaces(interface_type)",
+      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_language ON code_interfaces(language)",
+      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_qualified ON code_interfaces(qualified_name)",
+      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_kind ON code_interfaces(kind)",
+      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_stable ON code_interfaces(stable_id)",
       "CREATE INDEX IF NOT EXISTS idx_code_interfaces_exported ON code_interfaces(is_exported)",
       "CREATE INDEX IF NOT EXISTS idx_code_interfaces_usage ON code_interfaces(usage_count)",
 
@@ -424,6 +443,26 @@ export class SQLiteConnection {
         "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB"
       );
 
+      for (const column of [
+        "language TEXT",
+        "qualified_name TEXT",
+        "namespace TEXT",
+        "kind TEXT",
+        "signature TEXT",
+        "documentation TEXT",
+        "visibility TEXT",
+        "start_line INTEGER",
+        "end_line INTEGER",
+        "container_name TEXT",
+        "stable_id TEXT",
+        "source_hash TEXT",
+        "metadata TEXT",
+        "summary TEXT",
+        "rank_text TEXT",
+      ]) {
+        await this.safeAlterTable(`ALTER TABLE code_interfaces ADD COLUMN ${column}`);
+      }
+
       // Create project analysis tables if they don't exist
       const projectTables = [
         `CREATE TABLE IF NOT EXISTS project_files (
@@ -457,6 +496,21 @@ export class SQLiteConnection {
           definition TEXT NOT NULL,
           properties TEXT,
           extends_interfaces TEXT,
+          language TEXT,
+          qualified_name TEXT,
+          namespace TEXT,
+          kind TEXT,
+          signature TEXT,
+          documentation TEXT,
+          visibility TEXT,
+          start_line INTEGER,
+          end_line INTEGER,
+          container_name TEXT,
+          stable_id TEXT,
+          source_hash TEXT,
+          metadata TEXT,
+          summary TEXT,
+          rank_text TEXT,
           is_exported INTEGER DEFAULT 0,
           is_generic INTEGER DEFAULT 0,
           usage_count INTEGER DEFAULT 0,
@@ -529,6 +583,17 @@ export class SQLiteConnection {
       for (const tableQuery of projectTables) {
         await this.runQuery(tableQuery).catch((error) => {
           logger.warn("Failed to create project analysis table:", error);
+        });
+      }
+
+      for (const indexQuery of [
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_language ON code_interfaces(language)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_qualified ON code_interfaces(qualified_name)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_kind ON code_interfaces(kind)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_stable ON code_interfaces(stable_id)",
+      ]) {
+        await this.runQuery(indexQuery).catch((error) => {
+          logger.warn("Failed to create code interface index:", error);
         });
       }
 

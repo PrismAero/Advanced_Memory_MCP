@@ -189,7 +189,9 @@ export class BackgroundProcessor {
     // Force the next monitorProjectStructure() to actually run,
     // even if the process previously ran one for a different path.
     this.lastProjectAnalysis = null;
-    logger.info(`[BACKGROUND] Set monitored project path: ${this.currentProjectPath}`);
+    logger.info(
+      `[BACKGROUND] Set monitored project path: ${this.currentProjectPath}`,
+    );
 
     // Start monitoring if not already running
     if (!this.projectMonitoringInterval) {
@@ -330,6 +332,8 @@ export class BackgroundProcessor {
         }
       }
 
+      await this.projectAnalysisOps.refreshInterfaceRelationships();
+
       // Drop rows for files that no longer exist on disk.
       try {
         await this.projectAnalysisOps.cleanupDeletedFiles(
@@ -371,9 +375,13 @@ export class BackgroundProcessor {
         await this.backfillMissingEmbeddings();
       }
 
-      // This would trigger interface analysis and relationship mapping
-      // For now, just log that it would run
-      logger.debug("Interface analysis would run here");
+      if (this.projectAnalysisOps) {
+        const created =
+          await this.projectAnalysisOps.refreshInterfaceRelationships();
+        logger.debug(
+          `Interface relationship refresh created ${created} relationships`,
+        );
+      }
     } catch (error) {
       logger.error("Failed to analyze project interfaces:", error);
     }

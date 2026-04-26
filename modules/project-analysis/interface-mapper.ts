@@ -9,6 +9,7 @@ import {
   ProjectAnalysisOperations,
   ProjectFileRecord,
 } from "../sqlite/project-analysis-operations.js";
+import { InterfaceExtractorRunner } from "./interfaces/interface-extractor-runner.js";
 
 /**
  * Interface analysis result
@@ -157,6 +158,7 @@ export interface InterfaceRelationshipGraph {
 export class InterfaceMapper {
   private projectAnalysisOps: ProjectAnalysisOperations;
   private embeddingEngine: ProjectEmbeddingEngine;
+  private extractorRunner = new InterfaceExtractorRunner();
   private interfaceCache = new Map<string, EnhancedInterfaceInfo>();
   private relationshipCache = new Map<string, RelatedInterface[]>();
 
@@ -177,7 +179,7 @@ export class InterfaceMapper {
 
   constructor(
     projectAnalysisOps: ProjectAnalysisOperations,
-    embeddingEngine: ProjectEmbeddingEngine
+    embeddingEngine: ProjectEmbeddingEngine,
   ) {
     this.projectAnalysisOps = projectAnalysisOps;
     this.embeddingEngine = embeddingEngine;
@@ -189,36 +191,28 @@ export class InterfaceMapper {
    * Analyze all interfaces in project files
    */
   async analyzeProjectInterfaces(
-    branchName?: string
+    branchName?: string,
   ): Promise<InterfaceAnalysisResult[]> {
     logger.info("[SEARCH] Starting comprehensive interface analysis");
 
-    // Get all TypeScript/JavaScript files
+    // Get all source files. Language-specific extraction is delegated to
+    // InterfaceExtractorRunner so C/C++/Python/TS/JS can share the same pipeline.
     const sourceFiles = await this.projectAnalysisOps.getProjectFiles({
       branchName,
-      language: "typescript",
       category: "source",
     });
-
-    const jsFiles = await this.projectAnalysisOps.getProjectFiles({
-      branchName,
-      language: "javascript",
-      category: "source",
-    });
-
-    const allFiles = [...sourceFiles, ...jsFiles];
     const analysisResults: InterfaceAnalysisResult[] = [];
 
-    logger.info(`[FOLDER] Analyzing interfaces in ${allFiles.length} files`);
+    logger.info(`[FOLDER] Analyzing interfaces in ${sourceFiles.length} files`);
 
-    for (const file of allFiles) {
+    for (const file of sourceFiles) {
       try {
         const fileAnalysis = await this.analyzeFileInterfaces(file);
         analysisResults.push(...fileAnalysis);
       } catch (error) {
         logger.warn(
           `Failed to analyze interfaces in ${file.relative_path}:`,
-          error
+          error,
         );
       }
     }
@@ -227,7 +221,7 @@ export class InterfaceMapper {
     await this.buildInterfaceRelationshipGraph(analysisResults);
 
     logger.info(
-      `[SUCCESS] Interface analysis complete: found ${analysisResults.length} interface contexts`
+      `[SUCCESS] Interface analysis complete: found ${analysisResults.length} interface contexts`,
     );
     return analysisResults;
   }
@@ -236,17 +230,53 @@ export class InterfaceMapper {
    * Analyze interfaces in a specific file
    */
   async analyzeFileInterfaces(
-    fileRecord: ProjectFileRecord
+    fileRecord: ProjectFileRecord,
   ): Promise<InterfaceAnalysisResult[]> {
     try {
       // Read file content
       const content = await fs.readFile(fileRecord.file_path, "utf-8");
 
-      // Parse interfaces from content
-      const interfaces = await this.parseInterfacesFromContent(
-        content,
-        fileRecord.file_path,
-        fileRecord.relative_path
+      const extraction = await this.extractorRunner.extract(content, {
+        language: fileRecord.language,
+        filePath: fileRecord.file_path,
+        relativePath: fileRecord.relative_path,
+      });
+      const interfaces: EnhancedInterfaceInfo[] = extraction.interfaces.map(
+        (iface) => {
+          const semanticType: CodeSemanticType =
+            iface.kind === "function" || iface.kind === "method"
+              ? "function_signature"
+              : iface.kind === "class" || iface.kind === "struct"
+                ? "class_definition"
+                : "interface_definition";
+          return {
+            id: undefined,
+            name: iface.name,
+            file_path: fileRecord.file_path,
+            relative_path: fileRecord.relative_path,
+            line_number: iface.startLine || iface.line,
+            definition: iface.definition || iface.signature || iface.name,
+            properties: (iface.members || []).map((member) => ({
+              name: member.name,
+              type: member.type || member.signature || "",
+              is_optional: Boolean(member.isOptional),
+              is_readonly: Boolean(member.isReadonly),
+              is_method: member.kind === "method",
+            })),
+            extends_interfaces: iface.extends || [],
+            generic_parameters: iface.templateParameters,
+            is_exported: iface.isExported,
+            is_api_contract:
+              iface.kind === "interface" &&
+              /api|request|response/i.test(iface.name),
+            is_props_interface: /props$/i.test(iface.name),
+            is_state_interface: /state$/i.test(iface.name),
+            complexity_score: Math.min(1, (iface.members?.length || 0) / 50),
+            usage_frequency: 0,
+            semantic_type: semanticType,
+            documentation: iface.documentation,
+          };
+        },
       );
 
       const results: InterfaceAnalysisResult[] = [];
@@ -260,7 +290,7 @@ export class InterfaceMapper {
         const implementations = await this.findInterfaceImplementations(
           iface,
           content,
-          fileRecord
+          fileRecord,
         );
 
         // Analyze usages (for now, only analyze the current file)
@@ -289,7 +319,7 @@ export class InterfaceMapper {
     } catch (error) {
       logger.error(
         `Failed to analyze file interfaces for ${fileRecord.file_path}:`,
-        error
+        error,
       );
       return [];
     }
@@ -301,7 +331,7 @@ export class InterfaceMapper {
   private async parseInterfacesFromContent(
     content: string,
     filePath: string,
-    relativePath: string
+    relativePath: string,
   ): Promise<EnhancedInterfaceInfo[]> {
     const interfaces: EnhancedInterfaceInfo[] = [];
     const lines = content.split("\n");
@@ -379,7 +409,7 @@ export class InterfaceMapper {
           semantic_type: this.determineSemanticType(
             name,
             properties,
-            typeDefinition
+            typeDefinition,
           ),
           documentation: this.extractDocumentation(lines, lineNumber - 1),
         };
@@ -405,7 +435,7 @@ export class InterfaceMapper {
 
     // Parse properties
     const propertyMatches = cleanBody.matchAll(
-      this.INTERFACE_PATTERNS.property_declaration
+      this.INTERFACE_PATTERNS.property_declaration,
     );
     for (const match of propertyMatches) {
       const [, name, optional, type] = match;
@@ -421,7 +451,7 @@ export class InterfaceMapper {
 
     // Parse methods
     const methodMatches = cleanBody.matchAll(
-      this.INTERFACE_PATTERNS.method_declaration
+      this.INTERFACE_PATTERNS.method_declaration,
     );
     for (const match of methodMatches) {
       const [, name, optional, params, returnType] = match;
@@ -444,13 +474,13 @@ export class InterfaceMapper {
   private async findInterfaceImplementations(
     interfaceInfo: EnhancedInterfaceInfo,
     fileContent: string,
-    fileRecord: ProjectFileRecord
+    fileRecord: ProjectFileRecord,
   ): Promise<InterfaceImplementation[]> {
     const implementations: InterfaceImplementation[] = [];
 
     // Look for class implementations in the same file
     const classMatches = fileContent.matchAll(
-      this.INTERFACE_PATTERNS.class_implements
+      this.INTERFACE_PATTERNS.class_implements,
     );
     for (const match of classMatches) {
       const [fullMatch, className, implementsList] = match;
@@ -462,7 +492,7 @@ export class InterfaceMapper {
         const completeness = await this.analyzeImplementationCompleteness(
           interfaceInfo,
           className,
-          fileContent
+          fileContent,
         );
 
         implementations.push({
@@ -483,14 +513,14 @@ export class InterfaceMapper {
       const componentName = interfaceInfo.name.replace(/Props$/, "");
       const componentPattern = new RegExp(
         `(?:function|const)\\s+${componentName}\\s*[:(]|React\\.FC<${interfaceInfo.name}>`,
-        "g"
+        "g",
       );
 
       let componentMatch;
       while ((componentMatch = componentPattern.exec(fileContent)) !== null) {
         const lineNumber = this.getLineNumber(
           fileContent,
-          componentMatch.index
+          componentMatch.index,
         );
 
         implementations.push({
@@ -514,7 +544,7 @@ export class InterfaceMapper {
    */
   private async findInterfaceUsages(
     interfaceInfo: EnhancedInterfaceInfo,
-    allFiles: ProjectFileRecord[]
+    allFiles: ProjectFileRecord[],
   ): Promise<InterfaceUsage[]> {
     const usages: InterfaceUsage[] = [];
 
@@ -561,7 +591,7 @@ export class InterfaceMapper {
         }
       } catch (error) {
         logger.debug(
-          `Could not read file for usage analysis: ${file.file_path}`
+          `Could not read file for usage analysis: ${file.file_path}`,
         );
       }
     }
@@ -573,7 +603,7 @@ export class InterfaceMapper {
    * Find interfaces related to the given interface
    */
   private async findRelatedInterfaces(
-    interfaceInfo: EnhancedInterfaceInfo
+    interfaceInfo: EnhancedInterfaceInfo,
   ): Promise<RelatedInterface[]> {
     // Check cache first
     const cacheKey = `${interfaceInfo.file_path}:${interfaceInfo.name}`;
@@ -602,7 +632,7 @@ export class InterfaceMapper {
           similarity_score: 0.9,
           shared_properties: this.findSharedProperties(
             interfaceInfo,
-            otherInterface
+            otherInterface,
           ),
           reasoning: `${interfaceInfo.name} explicitly extends ${otherInterface.name}`,
         });
@@ -612,12 +642,12 @@ export class InterfaceMapper {
       // Check for property similarity
       const sharedProperties = this.findSharedProperties(
         interfaceInfo,
-        otherInterface
+        otherInterface,
       );
       if (sharedProperties.length > 0) {
         const similarityScore = this.calculatePropertySimilarity(
           interfaceInfo,
-          otherInterface
+          otherInterface,
         );
 
         if (similarityScore > 0.3) {
@@ -656,7 +686,7 @@ export class InterfaceMapper {
    */
   private async mapDataFlow(
     interfaceInfo: EnhancedInterfaceInfo,
-    fileContent: string
+    fileContent: string,
   ): Promise<DataFlowMapping[]> {
     const dataFlowMappings: DataFlowMapping[] = [];
 
@@ -708,7 +738,7 @@ export class InterfaceMapper {
    */
   private async detectAPIEndpoints(
     interfaceInfo: EnhancedInterfaceInfo,
-    fileContent: string
+    fileContent: string,
   ): Promise<APIEndpointInfo[]> {
     const endpoints: APIEndpointInfo[] = [];
 
@@ -732,7 +762,7 @@ export class InterfaceMapper {
         const surroundingCode = this.getSurroundingCode(
           fileContent,
           match.index,
-          10
+          10,
         );
         if (surroundingCode.includes(interfaceInfo.name)) {
           endpoints.push({
@@ -756,7 +786,7 @@ export class InterfaceMapper {
    * Build comprehensive interface relationship graph
    */
   private async buildInterfaceRelationshipGraph(
-    analysisResults: InterfaceAnalysisResult[]
+    analysisResults: InterfaceAnalysisResult[],
   ): Promise<InterfaceRelationshipGraph> {
     const nodes: InterfaceRelationshipGraph["nodes"] = [];
     const edges: InterfaceRelationshipGraph["edges"] = [];
@@ -826,7 +856,7 @@ export class InterfaceMapper {
 
   private isAPIContract(
     name: string,
-    properties: InterfaceProperty[]
+    properties: InterfaceProperty[],
   ): boolean {
     const apiKeywords = [
       "request",
@@ -837,26 +867,26 @@ export class InterfaceMapper {
       "dto",
     ];
     const nameMatch = apiKeywords.some((keyword) =>
-      name.toLowerCase().includes(keyword)
+      name.toLowerCase().includes(keyword),
     );
     const propertyMatch = properties.some((prop) =>
       ["status", "code", "message", "data", "error"].includes(
-        prop.name.toLowerCase()
-      )
+        prop.name.toLowerCase(),
+      ),
     );
     return nameMatch || propertyMatch;
   }
 
   private isPropsInterface(
     name: string,
-    properties: InterfaceProperty[]
+    properties: InterfaceProperty[],
   ): boolean {
     return name.endsWith("Props") || name.endsWith("Properties");
   }
 
   private isStateInterface(
     name: string,
-    properties: InterfaceProperty[]
+    properties: InterfaceProperty[],
   ): boolean {
     return name.endsWith("State") || name.includes("State");
   }
@@ -879,7 +909,7 @@ export class InterfaceMapper {
   private determineSemanticType(
     name: string,
     properties: InterfaceProperty[],
-    body: string
+    body: string,
   ): CodeSemanticType {
     if (this.isAPIContract(name, properties)) return "api_endpoint";
     if (this.isPropsInterface(name, properties)) return "interface_definition";
@@ -892,7 +922,7 @@ export class InterfaceMapper {
 
   private extractDocumentation(
     lines: string[],
-    lineIndex: number
+    lineIndex: number,
   ): string | undefined {
     // Look for JSDoc comment above the interface
     let docLines: string[] = [];
@@ -933,7 +963,7 @@ export class InterfaceMapper {
 
   private async storeInterfaceInDatabase(
     interfaceInfo: EnhancedInterfaceInfo,
-    fileRecord: ProjectFileRecord
+    fileRecord: ProjectFileRecord,
   ): Promise<CodeInterfaceRecord | null> {
     // This would integrate with the project analysis operations
     // For now, this is a placeholder
@@ -943,7 +973,7 @@ export class InterfaceMapper {
   private async analyzeImplementationCompleteness(
     interfaceInfo: EnhancedInterfaceInfo,
     className: string,
-    fileContent: string
+    fileContent: string,
   ): Promise<{ score: number; missing: string[]; additional: string[] }> {
     // Simplified analysis - in reality you'd need proper AST parsing
     const requiredProps = interfaceInfo.properties
@@ -965,7 +995,7 @@ export class InterfaceMapper {
 
   private findSharedProperties(
     interface1: EnhancedInterfaceInfo,
-    interface2: EnhancedInterfaceInfo
+    interface2: EnhancedInterfaceInfo,
   ): string[] {
     const props1 = new Set(interface1.properties.map((p) => p.name));
     const props2 = new Set(interface2.properties.map((p) => p.name));
@@ -975,7 +1005,7 @@ export class InterfaceMapper {
 
   private calculatePropertySimilarity(
     interface1: EnhancedInterfaceInfo,
-    interface2: EnhancedInterfaceInfo
+    interface2: EnhancedInterfaceInfo,
   ): number {
     const sharedProps = this.findSharedProperties(interface1, interface2);
     const totalProps = new Set([
@@ -988,7 +1018,7 @@ export class InterfaceMapper {
 
   private isComposedOf(
     interface1: EnhancedInterfaceInfo,
-    interface2: EnhancedInterfaceInfo
+    interface2: EnhancedInterfaceInfo,
   ): boolean {
     // Check if interface1 contains interface2 as a property type
     return interface1.properties.some((p) => p.type.includes(interface2.name));
@@ -996,7 +1026,7 @@ export class InterfaceMapper {
 
   private containsInterface(
     interface1: EnhancedInterfaceInfo,
-    interface2: EnhancedInterfaceInfo
+    interface2: EnhancedInterfaceInfo,
   ): boolean {
     return (
       interface1.properties.length > interface2.properties.length &&
@@ -1007,19 +1037,19 @@ export class InterfaceMapper {
 
   private usesInterface(
     interface1: EnhancedInterfaceInfo,
-    interface2: EnhancedInterfaceInfo
+    interface2: EnhancedInterfaceInfo,
   ): boolean {
     return interface1.properties.some(
       (p) =>
         p.type.includes(interface2.name) ||
-        (p.is_method && p.type.includes(interface2.name))
+        (p.is_method && p.type.includes(interface2.name)),
     );
   }
 
   private getSurroundingCode(
     content: string,
     index: number,
-    lines: number
+    lines: number,
   ): string {
     const start = Math.max(0, content.lastIndexOf("\n", index - 1));
     const end = Math.min(content.length, content.indexOf("\n", index + 1));
@@ -1032,7 +1062,7 @@ export class InterfaceMapper {
   }
 
   private calculateInterfaceCentrality(
-    result: InterfaceAnalysisResult
+    result: InterfaceAnalysisResult,
   ): number {
     const usageWeight = result.usages.length * 0.3;
     const implementationWeight = result.implementations.length * 0.4;
@@ -1041,12 +1071,12 @@ export class InterfaceMapper {
 
     return Math.min(
       1.0,
-      usageWeight + implementationWeight + relationshipWeight + apiWeight
+      usageWeight + implementationWeight + relationshipWeight + apiWeight,
     );
   }
 
   private createInterfaceClusters(
-    analysisResults: InterfaceAnalysisResult[]
+    analysisResults: InterfaceAnalysisResult[],
   ): InterfaceRelationshipGraph["clusters"] {
     // Simplified clustering based on naming patterns and domains
     const clusters = new Map<string, string[]>();
@@ -1092,10 +1122,13 @@ export class InterfaceMapper {
   } {
     const allInterfaces = Array.from(this.interfaceCache.values());
 
-    const interfacesByType = allInterfaces.reduce((acc, iface) => {
-      acc[iface.semantic_type] = (acc[iface.semantic_type] || 0) + 1;
-      return acc;
-    }, {} as { [type: string]: number });
+    const interfacesByType = allInterfaces.reduce(
+      (acc, iface) => {
+        acc[iface.semantic_type] = (acc[iface.semantic_type] || 0) + 1;
+        return acc;
+      },
+      {} as { [type: string]: number },
+    );
 
     const complexityDistribution = allInterfaces.reduce(
       (acc, iface) => {
@@ -1104,7 +1137,7 @@ export class InterfaceMapper {
         else acc.high++;
         return acc;
       },
-      { low: 0, medium: 0, high: 0 }
+      { low: 0, medium: 0, high: 0 },
     );
 
     return {
