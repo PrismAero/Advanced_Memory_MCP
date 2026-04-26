@@ -1,0 +1,13 @@
+{
+  "_comment": "Same shape as cursor-mcp.json / claude-desktop-config.json. Shows Windows-specific path conventions: forward slashes work everywhere; backslashes must be doubled in JSON.",
+  "mcpServers": {
+    "adaptive-reasoning": {
+      "command": "npx",
+      "args": ["@prism.enterprises/adaptive-reasoning-server"],
+      "env": {
+        "MEMORY_PATH": "C:/Users/yourusername/projects/your-project",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}

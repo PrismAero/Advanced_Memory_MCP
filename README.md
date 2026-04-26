@@ -1,65 +1,86 @@
 # Adaptive Reasoning Server
 
-**An advanced MCP server that gives AI persistent memory with machine learning-powered semantic understanding.**
+An advanced Model Context Protocol (MCP) server that gives AI assistants persistent memory with machine-learning-powered semantic understanding.
 
 ## 100% Local Operation
 
-**This server runs completely locally with ZERO external connections.** Your data never leaves your machine.
+This server runs completely locally with zero external connections. Your data never leaves your machine.
 
-- **No network requests** - All processing happens locally
-- **No telemetry** - No usage tracking or analytics
-- **No cloud sync** - Data stays in your `.memory/` folder
-- **Privacy-first** - Your conversations and data remain private
+- No network requests - all processing happens locally
+- No telemetry - no usage tracking or analytics
+- No cloud sync - data stays in your `.memory/` folder
+- Privacy-first - your conversations and code remain private
 
 ## Overview
 
-The Adaptive Reasoning Server provides AI assistants with a sophisticated persistent memory system combining SQLite storage with TensorFlow.js machine learning. Store facts, decisions, patterns, and insights that persist across conversations, automatically organized with semantic relationships and vector embeddings for intelligent retrieval.
+The Adaptive Reasoning Server provides AI assistants with a persistent memory system combining SQLite storage with TensorFlow.js machine learning. Store facts, decisions, patterns, and insights that persist across conversations, automatically organized with semantic relationships and vector embeddings for intelligent retrieval.
 
 ## Key Features
 
 ### Core Memory System
 
-- **Branching Memory**: Organize knowledge by topic, project, or domain
-- **Entity Management**: Store facts, decisions, patterns, insights, and more
-- **Automatic Relationships**: ML-powered detection of related entities
-- **Status Tracking**: Mark entities as active, deprecated, archived, or draft
+- **Branching memory** - organize knowledge by topic, project, or domain
+- **Entity management** - store facts, decisions, patterns, components, and more
+- **Automatic relationships** - ML-powered detection of related entities (deferred to a background indexer by default for fast writes)
+- **Status tracking** - mark entities as active, deprecated, archived, or draft
+- **Working context** - flag the current focus set so retrieval biases toward it
 
-### Machine Learning & Semantic Search
+### Machine Learning and Semantic Search
 
-- **TensorFlow.js Integration**: 512-dimensional embeddings using Universal Sentence Encoder
-- **Vector Database**: High-performance vector storage with cosine similarity search
-- **Semantic Search**: Find related information by meaning, not just keywords
-- **Code Understanding**: Specialized embeddings for interfaces, functions, and patterns
+- **TensorFlow.js integration** - 512-dimensional embeddings using the Universal Sentence Encoder
+- **Vector search** - cosine-similarity search over stored embeddings
+- **Semantic search** - find related information by meaning, not just keywords
+- **Code understanding** - specialized embeddings for interfaces, functions, and patterns
+- **Language-aware baseline** - the model ships with a curated software-engineering seed covering C, C++ (modern C++17/20/23), Go (1.18+), TypeScript, and language-agnostic concepts so a fresh install produces sensible results without any training data
+- **Adaptive fine-tuning** - the trainer picks up confirmed relationships, search successes, and interface usage as new training data and incrementally fine-tunes the embedding model
 
 ### Project Analysis
 
-- **Automatic File Monitoring**: Watches project files for changes (3-minute intervals)
-- **Interface Detection**: Analyzes TypeScript/JavaScript interfaces and relationships
-- **Dependency Mapping**: Tracks imports, exports, and project dependencies
-- **Embedding Backfill**: Automatically generates embeddings for existing data
+- **File monitoring** - watches project files for changes (3-minute interval by default)
+- **Interface detection** - analyzes TypeScript / JavaScript interfaces and relationships
+- **Dependency mapping** - tracks imports, exports, and project dependencies
+- **Embedding backfill** - automatically generates embeddings for previously-stored data
 
 ### Intelligent Context
 
-- **Working Context**: Track current work and related entities
-- **Decision History**: Trace decision chains and rationale
-- **Dependency Analysis**: Find missing context and prerequisites
-- **Project Patterns**: Detect and suggest organizational patterns
+- **Working context** - track current work and related entities
+- **Decision history** - trace decision chains and rationale
+- **Dependency analysis** - find missing context and prerequisites
+- **Project patterns** - detect and suggest organizational patterns
 
 ## Installation
 
-### Via npx (Recommended)
+Three install variants are supported. All three produce the same runtime behavior - the only difference is how the client launches the server. Side-by-side configs: [`examples/install-variants.json`](examples/install-variants.json).
+
+### 1. npx (no install, recommended)
+
+Nothing to install up front. The client config calls `npx` directly:
+
+```json
+"command": "npx",
+"args": ["-y", "@prism.enterprises/adaptive-reasoning-server"]
+```
+
+You can also smoke-test it from a shell:
 
 ```bash
 npx @prism.enterprises/adaptive-reasoning-server
 ```
 
-### Global Installation
+### 2. Global install (faster startup, pinned version)
 
 ```bash
 npm install -g @prism.enterprises/adaptive-reasoning-server
 ```
 
-### Local Development
+Then point the client at the binary directly:
+
+```json
+"command": "adaptive-reasoning-server",
+"args": []
+```
+
+### 3. Local clone (development)
 
 ```bash
 git clone https://github.com/PrismAero/Advanced_Memory_MCP.git
@@ -68,32 +89,29 @@ npm install
 npm run build
 ```
 
-## Configuration
-
-### Cursor
-
-Add to `.cursor/mcp.json` or `.vscode/mcp.json`:
+Point the client at the built entry point:
 
 ```json
-{
-  "mcp": {
-    "servers": {
-      "adaptive-reasoning": {
-        "command": "npx",
-        "args": ["@prism.enterprises/adaptive-reasoning-server"],
-        "env": {
-          "MEMORY_PATH": "/path/to/your/project",
-          "LOG_LEVEL": "info"
-        }
-      }
-    }
-  }
-}
+"command": "node",
+"args": ["/absolute/path/to/Advanced_Memory_MCP/dist/index.js"]
 ```
 
-### Claude Desktop
+## Configuration
 
-Add to `claude_desktop_config.json`:
+The server speaks standard MCP over stdio, so it works with any MCP-aware client. Concrete config files for each major client live in [`examples/`](examples/). The most common ones are:
+
+| Client | Config file | Format key |
+|---|---|---|
+| Cursor (project) | `.cursor/mcp.json` | `mcpServers` |
+| Cursor (global) | `~/.cursor/mcp.json` | `mcpServers` |
+| Claude Desktop | `claude_desktop_config.json` | `mcpServers` |
+| VS Code | `.vscode/mcp.json` | `servers` |
+| Cline (VS Code) | `cline_mcp_settings.json` | `mcpServers` |
+| Continue.dev | `~/.continue/config.yaml` | `mcpServers:` (YAML) |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` |
+| Zed | `settings.json` | `context_servers` |
+
+A minimal Cursor / Claude Desktop / Cline / Windsurf entry looks like this:
 
 ```json
 {
@@ -102,7 +120,7 @@ Add to `claude_desktop_config.json`:
       "command": "npx",
       "args": ["@prism.enterprises/adaptive-reasoning-server"],
       "env": {
-        "MEMORY_PATH": "/path/to/your/project",
+        "MEMORY_PATH": "/absolute/path/to/your/project",
         "LOG_LEVEL": "info"
       }
     }
@@ -110,295 +128,324 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-### Environment Variables
+VS Code's native MCP integration uses a slightly different shape:
 
-- **`MEMORY_PATH`** (Required): Your project root directory - `.memory` folder created here
-- **`LOG_LEVEL`** (Optional): Logging verbosity - `debug`, `info`, `warn`, `error` (default: `info`)
-
-## Usage Examples
-
-### Basic Entity Management
-
-```typescript
-// Create entities with automatic relationship detection
-create_entities({
-  entities: [
-    {
-      name: "User Authentication System",
-      entityType: "component",
-      observations: [
-        "Uses JWT tokens for session management",
-        "Refresh tokens stored in httpOnly cookies",
-        "Token expiration: 15 minutes for access, 7 days for refresh",
-        "Integrates with OAuth2 providers",
-      ],
-    },
-  ],
-  auto_create_relations: true,
-});
-
-// Add observations to existing entities
-add_observations({
-  observations: [
-    {
-      entityName: "User Authentication System",
-      contents: [
-        "Added rate limiting: 5 failed attempts = 15 min lockout",
-        "Implemented password strength validation",
-      ],
-    },
-  ],
-});
-
-// Search with semantic understanding
-smart_search({
-  query: "how does login work",
-  search_type: "smart",
-  limit: 10,
-});
+```json
+{
+  "servers": {
+    "adaptive-reasoning": {
+      "command": "npx",
+      "args": ["@prism.enterprises/adaptive-reasoning-server"],
+      "env": {
+        "MEMORY_PATH": "/absolute/path/to/your/project",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}
 ```
 
-### Project Analysis
+See [`examples/README.md`](examples/README.md) for client-specific paths, Windows path conventions, and ready-to-copy files.
 
-```typescript
-// Analyze project structure and start monitoring
-analyze_project_structure({
-  project_path: "/path/to/project",
-  analysis_depth: "detailed",
-  include_dependencies: true,
-  include_interfaces: true,
-});
+### Environment variables
 
-// Find interface usage patterns
-find_interface_usage({
-  interface_name: "UserProfile",
-  include_implementations: true,
-  include_related_interfaces: true,
-});
-
-// Detect project patterns
-detect_project_patterns({
-  workspace_path: "/path/to/project",
-  analysis_depth: 2,
-  suggest_branches: true,
-});
-```
-
-### Machine Learning Features
-
-```typescript
-// Generate embeddings for code interfaces
-generate_interface_embedding({
-  interface_names: ["UserProfile", "AuthToken"],
-  include_context: true,
-});
-
-// Find similar code patterns
-find_similar_code({
-  code_snippet: "interface UserData { id: string; name: string; }",
-  search_type: "interface",
-  similarity_threshold: 0.7,
-  max_results: 5,
-});
-
-// Backfill embeddings for existing data
-backfill_embeddings({
-  file_limit: 100,
-  interface_limit: 100,
-});
-```
-
-### Context & Workflow Management
-
-```typescript
-// Capture decisions with context
-capture_decision({
-  decision: "Use PostgreSQL for user data",
-  rationale: "Better support for complex queries and ACID compliance",
-  alternatives: ["MongoDB", "DynamoDB"],
-  impact: "high",
-  related_entities: ["Database Design", "User Service"],
-});
-
-// Mark current work
-mark_current_work({
-  entity_names: ["User Authentication System"],
-  work_type: "implementation",
-});
-
-// Get continuation context
-get_continuation_context({
-  session_id: "dev-session-1",
-  include_decisions: true,
-  include_blockers: true,
-});
-```
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `MEMORY_PATH` | yes | - | Absolute path to your project root. The `.memory/` folder is created here. |
+| `LOG_LEVEL` | no | `info` | One of `debug`, `info`, `warn`, `error`. |
+| `DISABLE_BASELINE_SEED` | no | unset | Set to `1` to skip loading the curated baseline knowledge into the trainer on first run. |
+| `ENABLE_QT_TOOLS` | no | unset | Set to `1` to expose the six Qt/QML analysis tools (only useful when entities carry file metadata). |
 
 ## Available Tools
 
-### Core Memory Operations
+The server exposes a deliberately small surface area. Mode/action-dispatched tools (`get_context`, `analyze_workspace`, `embeddings`, `update_status`) replace what used to be 12+ overlapping tools.
 
-- `create_entities` - Create new knowledge entities
-- `add_observations` - Add notes to existing entities
-- `update_entity_status` - Change entity status
-- `delete_entities` - Remove entities
-- `smart_search` - Semantic search across knowledge
+### Branch management
 
-### Branch Management
+| Tool | Purpose |
+|---|---|
+| `list_memory_branches` | List branches with name, purpose, entity count, last-updated time. |
+| `create_memory_branch` | Create a new branch when no existing branch fits the topic. |
+| `delete_memory_branch` | Permanently delete a branch (cannot delete `main`). |
 
-- `create_memory_branch` - Create topic-specific branches
-- `list_memory_branches` - View all branches with statistics
-- `delete_memory_branch` - Remove branches
-- `read_memory_branch` - Export branch data
+### Entity CRUD
 
-### Project Analysis
+| Tool | Purpose |
+|---|---|
+| `create_entities` | Create new knowledge entities (facts, decisions, components, patterns). Auto-suggests a branch and defers relation detection to the background. |
+| `add_observations` | Append observations to an existing entity. |
+| `update_entity_status` | Change one entity's status with an optional reason. |
+| `delete_entities` | Permanently delete entities and their relations. |
 
-- `analyze_project_structure` - Analyze and monitor project
-- `detect_project_patterns` - Identify organizational patterns
-- `find_interface_usage` - Locate interface implementations
-- `navigate_codebase` - Get intelligent navigation suggestions
+### Search and read
 
-### Machine Learning
+| Tool | Purpose |
+|---|---|
+| `smart_search` | Default lookup. Name + type + content + observations with relevance ranking and optional semantic expansion. Use `branch_name='*'` for cross-branch search. |
+| `read_memory_branch` | Dump every entity and relation in a branch. Heavy - prefer `smart_search` for targeted lookups. |
 
-- `generate_interface_embedding` - Create semantic embeddings
-- `find_similar_code` - Semantic code similarity search
-- `train_project_model` - Train project-specific models
-- `backfill_embeddings` - Generate embeddings for existing data
+### Context and project state
 
-### Context & Workflow
+| Tool | Modes / purpose |
+|---|---|
+| `get_context` | `working` / `continuation` / `related` / `project` - unified context retrieval. |
+| `get_project_status` | Cross-branch overview at `summary` / `detailed` / `comprehensive` detail levels. |
+| `find_dependencies` | Walk the relations graph outward from target entities. |
+| `trace_decision_chain` | Surface decisions that shaped an entity, or recent decisions branch-wide. |
 
-- `recall_working_context` - Retrieve current work context
-- `get_project_status` - Project state summary
-- `find_dependencies` - Identify prerequisites
-- `trace_decision_chain` - Follow decision history
-- `capture_decision` - Record decisions with rationale
-- `mark_current_work` - Tag active entities
-- `update_project_status` - Update project phase
-- `archive_completed_work` - Archive finished items
-- `check_missing_dependencies` - Detect context gaps
-- `get_continuation_context` - Resume work context
+### Workflow
 
-### Workspace Integration
+| Tool | Purpose |
+|---|---|
+| `capture_decision` | Record a structured decision with rationale, alternatives, and impact. |
+| `mark_current_work` | Flag entities as the active working context. |
+| `update_status` | `phase` (bulk pattern updates + branch project_phase) or `archive` (archive completed work, optionally with a summary entity). |
+| `check_missing_dependencies` | Scan observations for explicit dependency keywords and report unbound mentions. |
 
-- `sync_with_workspace` - Sync with IDE workspace
-- `workspace_context_bridge` - Bridge memory and workspace
-- `suggest_project_context` - Get intelligent suggestions
+### Workspace integration
+
+| Tool | Modes / purpose |
+|---|---|
+| `analyze_workspace` | `sync` (folder/file structure entities) / `bridge` (link open files to memory) / `patterns` (detect architecture and suggest branches) / `structure` (start background monitoring). |
+
+### Machine learning
+
+| Tool | Purpose |
+|---|---|
+| `embeddings` | `generate` / `find_similar` / `backfill` - all embedding operations. |
+| `train_project_model` | Trigger an incremental fine-tune over collected interactions + baseline seed. |
+
+### Qt/QML analysis (opt-in)
+
+Set `ENABLE_QT_TOOLS=1` to expose: `analyze_qml_bindings`, `find_qt_controllers`, `analyze_layer_architecture`, `find_qml_usage`, `list_q_properties`, `list_q_invokables`. These require entities to carry file metadata; they are hidden by default to keep the surface area lean.
+
+## Usage Examples
+
+### Capture and recall
+
+```jsonc
+// Create entities. Branch is auto-suggested if omitted.
+create_entities({
+  "entities": [
+    {
+      "name": "User Authentication System",
+      "entityType": "component",
+      "observations": [
+        "Uses JWT tokens for session management",
+        "Refresh tokens stored in httpOnly cookies",
+        "Token expiration: 15 minutes for access, 7 days for refresh",
+        "Integrates with OAuth2 providers"
+      ]
+    }
+  ]
+})
+
+// Append more facts later.
+add_observations({
+  "observations": [
+    {
+      "entityName": "User Authentication System",
+      "contents": [
+        "Added rate limiting: 5 failed attempts = 15 min lockout",
+        "Implemented password strength validation"
+      ]
+    }
+  ]
+})
+
+// Find it again by meaning.
+smart_search({
+  "query": "how does login work",
+  "branch_name": "main"
+})
+```
+
+### Working context and continuation
+
+```jsonc
+// Tell the server what you are focused on right now.
+mark_current_work({
+  "focus_entities": ["User Authentication System"],
+  "focus_description": "Adding device-bound refresh tokens"
+})
+
+// Get back to it after a break.
+get_context({
+  "mode": "continuation",
+  "branch_name": "main",
+  "time_window_hours": 48
+})
+```
+
+### Decisions and dependencies
+
+```jsonc
+capture_decision({
+  "decision_title": "Use PostgreSQL for user data",
+  "decision_rationale": "Better support for complex queries and ACID compliance",
+  "alternatives_considered": ["MongoDB", "DynamoDB"],
+  "impact_areas": ["Database Design", "User Service"],
+  "related_entities": ["User Authentication System"]
+})
+
+// Later: why is this here?
+trace_decision_chain({
+  "entity_name": "User Authentication System"
+})
+
+// What does this depend on before I refactor it?
+find_dependencies({
+  "entity_names": ["User Authentication System"],
+  "dependency_depth": 2
+})
+```
+
+### Embeddings and code similarity
+
+```jsonc
+// Generate embeddings for known interfaces.
+embeddings({
+  "action": "generate",
+  "interface_names": ["UserProfile", "AuthToken"]
+})
+
+// Find code with similar shape.
+embeddings({
+  "action": "find_similar",
+  "code_snippet": "interface UserData { id: string; name: string; }",
+  "limit": 5
+})
+
+// One-shot backfill of missing embeddings.
+embeddings({
+  "action": "backfill",
+  "file_limit": 200,
+  "interface_limit": 200
+})
+```
+
+### Workspace integration
+
+```jsonc
+// Materialize folder/file structure entities and link them.
+analyze_workspace({
+  "mode": "sync",
+  "workspace_path": "/path/to/project",
+  "create_structure_entities": true,
+  "link_existing_entities": true
+})
+
+// Bridge currently-open files to memory entities.
+analyze_workspace({
+  "mode": "bridge",
+  "current_files": ["src/auth/login.ts", "src/auth/refresh.ts"],
+  "context_radius": 2
+})
+
+// Detect project type and suggest organizational branches.
+analyze_workspace({
+  "mode": "patterns",
+  "workspace_path": "/path/to/project",
+  "suggest_branches": true
+})
+```
 
 ## Architecture
 
-### Technology Stack
+### Technology stack
 
-- **Storage**: SQLite with optimized indexing
-- **ML Framework**: TensorFlow.js Node backend
-- **Embeddings**: Universal Sentence Encoder (512-dimensional)
-- **Vector Search**: Custom implementation with cosine similarity
-- **Background Processing**: Automatic monitoring and analysis
+- **Storage** - SQLite with FTS5 full-text search and indexed lookups
+- **ML framework** - TensorFlow.js Node backend
+- **Embeddings** - Universal Sentence Encoder (512-dimensional)
+- **Vector search** - in-process cosine similarity over the embedding column
+- **Background processing** - file monitoring, interface analysis, relationship detection, relevance scoring
 
-### Data Structure
+### Data layout
 
 ```
-your-project/                    <- MEMORY_PATH
-├── .memory/                     <- Auto-created
-│   ├── memory.db                <- Main SQLite database
-│   ├── main.json                <- Branch data (JSON backup)
-│   ├── build-config.json        <- Additional branches
-│   └── trained-models/          <- Project-specific ML models
-├── src/                         <- Your project files
-└── package.json
+your-project/                      <- MEMORY_PATH
+  .memory/                         <- auto-created
+    memory.db                      <- main SQLite database
+    main.json                      <- branch data (JSON backup)
+    <branch-name>.json             <- additional per-branch backups
+    trained-models/                <- project-specific fine-tuned models
+    seed.lock                      <- marker that baseline seed has been loaded
+  src/                             <- your project files
+  package.json
 ```
 
-### Database Schema
+### Database tables
 
-**Entities Table**
-
-- Core entity storage with metadata
-- Observations, relationships, status tracking
-
-**Vectors Table**
-
-- 512-dimensional embeddings
-- Metadata for entity/file/interface association
-
-**Project Files Table**
-
-- File analysis results
-- Language, complexity, documentation metrics
-
-**Code Interfaces Table**
-
-- Interface definitions with embeddings
-- Properties, extends, usage tracking
-
-**Dependencies Table**
-
-- Import/export relationships
-- Resolution status
+- **Entities** - core entity storage with metadata, observations, status
+- **Relations** - typed edges between entities (depends_on, affects, decides, etc.)
+- **Vectors** - 512-dimensional embeddings keyed by entity / file / interface
+- **Project files** - file analysis results (language, complexity, documentation)
+- **Code interfaces** - interface definitions with embeddings, properties, usage counts
+- **Dependencies** - import/export relationships with resolution status
 
 ## Background Processing
 
-The server automatically:
+The server runs three periodic loops by default:
 
-- **Every 3 minutes**: Monitors project file changes
-- **Every 10 minutes**: Analyzes interfaces and backfills embeddings
-- **Every 30 minutes**: Updates entity relationships and relevance scores
+- **Every 3 minutes** - file change monitoring
+- **Every 10 minutes** - interface analysis and embedding backfill
+- **Every 30 minutes** - entity relationship detection and relevance score updates
 
-## Performance Considerations
+The relationship indexer caches a per-branch signature (entity count + max-last-accessed + max-relation-count) and skips work when nothing has changed.
 
-- **Initial Analysis**: First project scan may take 1-2 minutes for large codebases
-- **Embedding Generation**: ~100ms per item (files/interfaces)
-- **Vector Search**: Sub-100ms for similarity queries
-- **Memory Usage**: ~200-500MB depending on project size
-- **Disk Usage**: ~1-5MB per 1000 entities
+## Performance
 
-## Migration & Upgrades
+- **Initial analysis** - first project scan can take 1-2 minutes for large codebases
+- **Embedding generation** - ~100 ms per item
+- **Vector search** - sub-100 ms for similarity queries
+- **Memory usage** - ~200-500 MB depending on project size
+- **Disk usage** - ~1-5 MB per 1000 entities
+
+## Migration
 
 When upgrading from a version without vector embeddings:
 
-1. **Automatic Detection**: Server detects missing embeddings on startup
-2. **Background Backfill**: Automatically generates embeddings (50 items per 10-minute cycle)
-3. **Manual Backfill**: Use `backfill_embeddings` tool for faster processing
+1. **Automatic detection** - the server detects missing embeddings on startup
+2. **Background backfill** - up to 50 items per 10-minute cycle
+3. **Manual backfill** - `embeddings` tool with `action: "backfill"` for faster processing
 
-```typescript
-// Check and backfill embeddings
-backfill_embeddings({
-  file_limit: 200, // Process up to 200 files
-  interface_limit: 200, // Process up to 200 interfaces
-});
+```jsonc
+embeddings({
+  "action": "backfill",
+  "file_limit": 200,
+  "interface_limit": 200
+})
 ```
 
 ## Troubleshooting
 
-### Server Won't Start
+### Server will not start
 
-Check logs for:
+- Check logs for TensorFlow.js initialization errors
+- Confirm SQLite database permissions on `MEMORY_PATH/.memory/`
+- Confirm `MEMORY_PATH` is an absolute, writable path
 
-- TensorFlow.js initialization errors
-- SQLite database permissions
-- MEMORY_PATH accessibility
+### Missing embeddings
 
-### Missing Embeddings
-
-Run manual backfill:
-
-```typescript
-backfill_embeddings({ file_limit: 500, interface_limit: 500 });
+```jsonc
+embeddings({ "action": "backfill", "file_limit": 500, "interface_limit": 500 })
 ```
 
-### High Memory Usage
+### High memory usage
 
 - Reduce background processing frequency
-- Limit the number of entities per branch
-- Consider archiving old data
+- Cap entities per branch
+- Archive old data with `update_status({ "mode": "archive", ... })`
 
-### Slow Searches
+### Slow searches
 
-- Ensure embeddings are generated (check with `get_project_status`)
-- Reduce `limit` parameter in searches
+- Make sure embeddings are generated (`get_project_status` reports counts)
+- Reduce `limit` in searches
 - Archive unused branches
 
 ## Development
 
-### Build from Source
+### Build from source
 
 ```bash
 git clone https://github.com/PrismAero/Advanced_Memory_MCP.git
@@ -408,53 +455,49 @@ npm run build
 npm test
 ```
 
-### Run Tests
+### Test commands
 
 ```bash
-npm test                  # Run all tests
-npm run test:watch        # Watch mode
-npm run test:coverage     # With coverage
+npm test              # build + run the full suite (entity, ML, similarity, search, branch, relation, perf, concurrency)
+npm run test:quick    # build + run the suite with --quick (skips long perf/concurrency runs)
 ```
 
-### Project Structure
+The ML test groups (`ML-Baseline`, `ML-Embeddings`, `ML-Semantic`, `ML-Language`, `ML-Trainer`, `ML-Training`, `ML-Collector`, `ML-Handlers`) exercise the trainer end-to-end against the curated baseline seed.
+
+### Project structure
 
 ```
 Advanced_Memory_MCP/
-├── modules/
-│   ├── handlers/              # MCP tool handlers
-│   ├── ml/                    # Machine learning components
-│   ├── similarity/            # TensorFlow.js integration
-│   ├── sqlite/                # Database operations
-│   ├── project-analysis/      # Code analysis
-│   └── intelligence/          # Context engine
-├── tests/                     # Test suite
-├── examples/                  # Configuration examples
-└── index.ts                   # Server entry point
+  modules/
+    handlers/           - MCP tool handlers
+    ml/                 - machine learning components (trainer, seed, project embeddings)
+    similarity/         - TensorFlow.js similarity engine
+    sqlite/             - database operations
+    project-analysis/   - code analysis
+    intelligence/       - context engine
+  tests/                - test runner and ML test suite
+  examples/             - configuration examples for each MCP client
+  index.ts              - server entry point
 ```
 
 ## Contributing
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Code style guidelines
-- Testing requirements
-- Pull request process
-- Development setup
+Contributions welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for code style, testing requirements, and the pull request process.
 
 ## Security
 
-For security issues, please see [SECURITY.md](SECURITY.md).
+For security disclosures see [SECURITY.md](SECURITY.md).
 
-Key security features:
+Key properties:
 
-- No external network connections
+- No external network connections in normal operation
 - Local-only processing
 - No data transmission
-- Monitored for suspicious activity (debug mode)
+- Optional debug-mode monitoring of suspicious activity
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT - see [LICENSE](LICENSE).
 
 ## Support
 
@@ -468,4 +511,4 @@ Built with:
 - Model Context Protocol (MCP) by Anthropic
 - TensorFlow.js
 - SQLite
-- Universal Sentence Encoder model
+- Universal Sentence Encoder

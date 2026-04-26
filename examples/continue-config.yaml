@@ -1,0 +1,12 @@
+name: My Continue config
+version: 0.0.1
+schema: v1
+
+mcpServers:
+  - name: adaptive-reasoning
+    command: npx
+    args:
+      - "@prism.enterprises/adaptive-reasoning-server"
+    env:
+      MEMORY_PATH: /absolute/path/to/your/project
+      LOG_LEVEL: info

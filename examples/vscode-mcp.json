@@ -1,10 +1,10 @@
 {
-  "mcp.servers": {
+  "servers": {
     "adaptive-reasoning": {
       "command": "npx",
       "args": ["@prism.enterprises/adaptive-reasoning-server"],
       "env": {
-        "MEMORY_PATH": "/Users/yourusername/your-project-folder",
+        "MEMORY_PATH": "/absolute/path/to/your/project",
         "LOG_LEVEL": "info"
       }
     }

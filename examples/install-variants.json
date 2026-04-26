@@ -1,0 +1,59 @@
+{
+  "_comment": "Three ways to launch the server. Pick ONE and copy that block into your client config (cursor-mcp.json, claude-desktop-config.json, etc.). Listed here side-by-side for easy comparison; clients won't load this file directly.",
+
+  "_variant_1_npx": {
+    "_doc": "No install required. Recommended for most users. The first run downloads the package; subsequent runs are cached by npm.",
+    "mcpServers": {
+      "adaptive-reasoning": {
+        "command": "npx",
+        "args": ["-y", "@prism.enterprises/adaptive-reasoning-server"],
+        "env": {
+          "MEMORY_PATH": "/absolute/path/to/your/project",
+          "LOG_LEVEL": "info"
+        }
+      }
+    }
+  },
+
+  "_variant_2_global_install": {
+    "_doc": "Install once with `npm install -g @prism.enterprises/adaptive-reasoning-server` and call the binary directly. Faster startup, no npx network check, version pinned to whatever you installed. On Windows the binary is `adaptive-reasoning-server.cmd` but `command: \"adaptive-reasoning-server\"` resolves it correctly.",
+    "mcpServers": {
+      "adaptive-reasoning": {
+        "command": "adaptive-reasoning-server",
+        "args": [],
+        "env": {
+          "MEMORY_PATH": "/absolute/path/to/your/project",
+          "LOG_LEVEL": "info"
+        }
+      }
+    }
+  },
+
+  "_variant_3_local_clone": {
+    "_doc": "Run from a local clone for development. Use the absolute path to the built dist/index.js. Run `npm install && npm run build` in the cloned repo first.",
+    "mcpServers": {
+      "adaptive-reasoning": {
+        "command": "node",
+        "args": ["/absolute/path/to/Advanced_Memory_MCP/dist/index.js"],
+        "env": {
+          "MEMORY_PATH": "/absolute/path/to/your/project",
+          "LOG_LEVEL": "info"
+        }
+      }
+    }
+  },
+
+  "_variant_3b_local_clone_windows": {
+    "_doc": "Same as variant 3 but with a Windows path. JSON requires either forward slashes or escaped backslashes.",
+    "mcpServers": {
+      "adaptive-reasoning": {
+        "command": "node",
+        "args": ["C:/Users/yourusername/code/Advanced_Memory_MCP/dist/index.js"],
+        "env": {
+          "MEMORY_PATH": "C:/Users/yourusername/projects/your-project",
+          "LOG_LEVEL": "info"
+        }
+      }
+    }
+  }
+}

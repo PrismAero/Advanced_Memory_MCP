@@ -1,0 +1,15 @@
+{
+  "context_servers": {
+    "adaptive-reasoning": {
+      "command": {
+        "path": "npx",
+        "args": ["@prism.enterprises/adaptive-reasoning-server"],
+        "env": {
+          "MEMORY_PATH": "/absolute/path/to/your/project",
+          "LOG_LEVEL": "info"
+        }
+      },
+      "settings": {}
+    }
+  }
+}

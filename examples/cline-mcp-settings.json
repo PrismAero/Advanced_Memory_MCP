@@ -6,7 +6,9 @@
       "env": {
         "MEMORY_PATH": "/absolute/path/to/your/project",
         "LOG_LEVEL": "info"
-      }
+      },
+      "disabled": false,
+      "autoApprove": []
     }
   }
 }
