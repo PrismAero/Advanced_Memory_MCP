@@ -1,5 +1,6 @@
 import { Entity, MemoryBranchInfo } from "../../memory-types.js";
 import { BackgroundProcessor } from "../background-processor.js";
+import { IntelligenceContextService } from "../intelligence/context-service.js";
 import { logger } from "../logger.js";
 import {
   jsonResponse,
@@ -19,10 +20,17 @@ import {
 export class ContextHandlers {
   private memoryManager: any;
   private backgroundProcessor: BackgroundProcessor | null = null;
+  private intelligenceContext: IntelligenceContextService;
 
   constructor(memoryManager: any, backgroundProcessor?: BackgroundProcessor) {
     this.memoryManager = memoryManager;
     this.backgroundProcessor = backgroundProcessor || null;
+    this.intelligenceContext = new IntelligenceContextService(
+      memoryManager,
+      () => this.backgroundProcessor?.getContextEngine() || null,
+      (name, coAccessed) =>
+        this.backgroundProcessor?.recordEntityAccess(name, coAccessed),
+    );
   }
 
   /**
@@ -48,27 +56,8 @@ export class ContextHandlers {
   }
 
   async handleSuggestProjectContext(args: any): Promise<any> {
-    const contextEngine = this.backgroundProcessor?.getContextEngine();
-    if (!contextEngine) {
-      return jsonResponse({
-        error: "Context engine unavailable. Background processor not running.",
-      });
-    }
-
     try {
-      const suggestions = await contextEngine.generateContextSuggestions(
-        {
-          current_file: args.current_file,
-          search_query: args.search_query,
-          working_interfaces: args.active_interfaces || [],
-        },
-        args.session_id,
-      );
-      return jsonResponse({
-        mode: "project",
-        suggestions,
-        count: suggestions.length,
-      });
+      return jsonResponse(await this.intelligenceContext.getProjectContext(args));
     } catch (error) {
       logger.error("project context suggestion failed:", error);
       return jsonResponse({
@@ -79,86 +68,13 @@ export class ContextHandlers {
   }
 
   async handleRecallWorkingContext(args: any): Promise<any> {
-    const branchName = args.branch_name || "main";
-    const includeRelated = args.include_related !== false;
-    const maxRelated = clampInteger(args.max_related, 1, 50, 10);
-    const maxObservations = clampInteger(args.max_observations, 0, 100, 5);
-
-    const working = await this.memoryManager.searchEntities(
-      "",
-      branchName,
-      ["active", "draft"],
-      { workingContextOnly: true, includeConfidenceScores: true },
-    );
-
-    let allEntities: Entity[] = [...working.entities];
-    let allRelations: any[] = [...working.relations];
-
-    if (includeRelated && working.entities.length > 0) {
-      const candidates = await this.memoryManager.searchEntities(
-        "",
-        branchName,
-        ["active"],
-        { includeContext: true },
-      );
-      const have = new Set(working.entities.map((e: Entity) => e.name));
-      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const related = candidates.entities
-        .filter(
-          (e: Entity) =>
-            !have.has(e.name) &&
-            ((e.relevanceScore && e.relevanceScore > 0.6) ||
-              (e.lastAccessed && new Date(e.lastAccessed).getTime() > cutoff)),
-        )
-        .slice(0, maxRelated);
-      allEntities.push(...related);
-    }
-
-    return jsonResponse({
-      mode: "working",
-      branch: branchName,
-      entities: sanitizeEntities(allEntities, { maxObservations }),
-      relations: this.dedupeRelations(allRelations),
-      counts: {
-        working: working.entities.length,
-        related: allEntities.length - working.entities.length,
-      },
-    });
+    return jsonResponse(await this.intelligenceContext.getWorkingContext(args));
   }
 
   async handleGetProjectStatus(args: any): Promise<any> {
-    const includeInactive = args.include_inactive || false;
-    const detailLevel = args.detail_level || "summary";
-
-    const allBranches = await this.memoryManager.listBranches();
-    const branches = includeInactive
-      ? allBranches
-      : allBranches.filter(
-          (b: MemoryBranchInfo) => b.currentFocus || b.name === "main",
-        );
-
-    const branchStatuses = [];
-    for (const branch of branches) {
-      branchStatuses.push(await this.getBranchStatus(branch, detailLevel));
-    }
-
-    const totals = branchStatuses.reduce(
-      (acc, b) => {
-        acc.entities += b.entity_count;
-        acc.working += b.working_entities;
-        if (b.current_focus) acc.active += 1;
-        return acc;
-      },
-      { entities: 0, working: 0, active: 0 },
-    );
-
     return jsonResponse({
-      total_branches: branchStatuses.length,
-      active_branches: totals.active,
-      total_entities: totals.entities,
-      working_entities: totals.working,
-      detail_level: detailLevel,
-      branches: branchStatuses,
+      ...(await this.intelligenceContext.getProjectStatus(args)),
+      background_runtime: this.backgroundProcessor?.getRuntimeStats(),
     });
   }
 
@@ -225,84 +141,11 @@ export class ContextHandlers {
   }
 
   async handleGetContinuationContext(args: any): Promise<any> {
-    const branchName = args.branch_name || "main";
-    const timeWindowHours = clampInteger(args.time_window_hours, 1, 24 * 30, 24);
-    const includeBlockers = args.include_blockers !== false;
-    const maxObservations = clampInteger(args.max_observations, 0, 100, 5);
-    const cutoff = new Date(Date.now() - timeWindowHours * 60 * 60 * 1000);
-
-    const working = await this.memoryManager.searchEntities(
-      "",
-      branchName,
-      ["active", "draft"],
-      { workingContextOnly: true },
-    );
-
-    const recentActivity = await this.getRecentActivity(branchName, cutoff);
-    const recentDecisions = await this.getRecentDecisions(
-      branchName,
-      10,
-      timeWindowHours / 24,
-    );
-    const blockers = includeBlockers
-      ? await this.getCurrentBlockers(branchName)
-      : [];
-    const nextSteps = this.extractNextSteps(working.entities);
-
-    return jsonResponse({
-      mode: "continuation",
-      branch: branchName,
-      time_window_hours: timeWindowHours,
-      working_entities: sanitizeEntities(working.entities, { maxObservations }),
-      working_count: working.entities.length,
-      recent_activity: recentActivity,
-      recent_decisions: recentDecisions,
-      blockers,
-      next_steps: nextSteps,
-    });
+    return jsonResponse(await this.intelligenceContext.getContinuationContext(args));
   }
 
   async handleSuggestRelatedContext(args: any): Promise<any> {
-    if (!args.current_focus) {
-      throw new Error("current_focus is required");
-    }
-
-    const branchName = args.branch_name || "main";
-    const max = clampInteger(args.max_suggestions, 1, 50, 10);
-
-    let targetEntities: string[] = args.entity_names || [];
-    if (targetEntities.length === 0) {
-      const working = await this.memoryManager.searchEntities(
-        "",
-        branchName,
-        ["active", "draft"],
-        { workingContextOnly: true },
-      );
-      targetEntities = working.entities.map((e: Entity) => e.name);
-    }
-
-    const results = await this.memoryManager.searchEntities(
-      args.current_focus,
-      branchName,
-      ["active"],
-      { includeContext: true, includeConfidenceScores: true },
-    );
-
-    const suggestions = sanitizeEntities(
-      results.entities
-        .filter((e: Entity) => !targetEntities.includes(e.name))
-        .slice(0, max),
-      { maxObservations: 3, keepSearchMeta: true },
-    );
-
-    return jsonResponse({
-      mode: "related",
-      branch: branchName,
-      current_focus: args.current_focus,
-      target_entities: targetEntities,
-      suggestions,
-      count: suggestions.length,
-    });
+    return jsonResponse(await this.intelligenceContext.getRelatedContext(args));
   }
 
   // ---------- helpers ----------

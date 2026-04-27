@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { ProjectIndexer } from "../../modules/project-analysis/project-indexer.js";
 import {
   createInitializedApp,
   parseTextResponse,
@@ -250,5 +251,83 @@ describe("MCP handler integration", () => {
       "score",
     ]);
     expect(result.entities[0].obs).toBeDefined();
+  });
+
+  it("returns compact intelligence context with runtime stats and project evidence", async () => {
+    await ctx.app.handleToolCall("create_entities", {
+      branch_name: "intelligence-context",
+      auto_create_relations: false,
+      entities: [
+        {
+          name: "Intel_ContextTask",
+          entityType: "task",
+          observations: [
+            "Next action: wire ContractFixture dependency before release.",
+            "Risk: missing interface evidence can mislead agents.",
+          ],
+        },
+      ],
+    });
+    await ctx.app.handleToolCall("mark_current_work", {
+      branch_name: "intelligence-context",
+      focus_entities: ["Intel_ContextTask"],
+    });
+
+    const working = parseTextResponse(
+      await ctx.app.handleToolCall("get_context", {
+        mode: "working",
+        branch_name: "intelligence-context",
+        include_related: false,
+      }),
+    );
+    expect(working.entities[0]).toEqual(
+      expect.objectContaining({
+        name: "Intel_ContextTask",
+        type: "task",
+        score: expect.objectContaining({ work: true }),
+      }),
+    );
+
+    const srcDir = path.join(ctx.memoryRoot, "src");
+    fs.mkdirSync(srcDir, { recursive: true });
+    const fixturePath = path.join(srcDir, "contract-fixture.ts");
+    fs.writeFileSync(
+      fixturePath,
+      "export interface ContractFixture { id: string; token: string }\n",
+    );
+    const analyzedFile = await new ProjectIndexer().analyzeFile(
+      fixturePath,
+      ctx.memoryRoot,
+    );
+    expect(analyzedFile).toBeTruthy();
+    const [storedFile] =
+      await ctx.app.dependencies.projectAnalysisOps.storeProjectFiles([
+        analyzedFile!,
+      ]);
+    await ctx.app.dependencies.projectAnalysisOps.storeCodeInterfaces(
+      storedFile.id!,
+      analyzedFile!.interfaces,
+    );
+
+    const project = parseTextResponse(
+      await ctx.app.handleToolCall("get_context", {
+        mode: "project",
+        current_file: fixturePath,
+        search_query: "ContractFixture dependency",
+        active_interfaces: ["ContractFixture"],
+      }),
+    );
+    expect(project.evidence.interfaces.map((item: any) => item.name)).toContain(
+      "ContractFixture",
+    );
+    expect(project.suggestions.length).toBeGreaterThan(0);
+
+    const status = parseTextResponse(
+      await ctx.app.handleToolCall("get_project_status", {
+        detail_level: "summary",
+        include_inactive: true,
+      }),
+    );
+    expect(status.background_runtime.queues.length).toBeGreaterThan(0);
   });
 });

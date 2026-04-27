@@ -6,6 +6,9 @@ import {
   CodeInterfaceRecord,
   ProjectAnalysisOperations,
 } from "../sqlite/project-analysis-operations.js";
+import { ContextScorer } from "./context-scorer.js";
+import { IntelligenceEvidenceBuilder } from "./evidence-builder.js";
+import type { IntelligenceEvidence } from "./evidence-types.js";
 
 /**
  * Context suggestion types
@@ -121,6 +124,8 @@ export class ContextEngine {
   private embeddingEngine: ProjectEmbeddingEngine;
   private interfaceMapper: InterfaceMapper;
   private projectAnalysisOps: ProjectAnalysisOperations;
+  private evidenceBuilder: IntelligenceEvidenceBuilder;
+  private scorer = new ContextScorer();
   private workingContexts = new Map<string, WorkingContext>();
   private suggestionCache = new Map<string, ContextSuggestion[]>();
   private contextPredictionCache = new Map<string, ContextPrediction>();
@@ -131,13 +136,26 @@ export class ContextEngine {
   constructor(
     embeddingEngine: ProjectEmbeddingEngine,
     interfaceMapper: InterfaceMapper,
-    projectAnalysisOps: ProjectAnalysisOperations
+    projectAnalysisOps: ProjectAnalysisOperations,
   ) {
     this.embeddingEngine = embeddingEngine;
     this.interfaceMapper = interfaceMapper;
     this.projectAnalysisOps = projectAnalysisOps;
+    this.evidenceBuilder = new IntelligenceEvidenceBuilder(projectAnalysisOps);
 
     logger.debug("Context engine initialized");
+  }
+
+  getEvidenceBuilder(): IntelligenceEvidenceBuilder {
+    return this.evidenceBuilder;
+  }
+
+  buildProjectEvidence(options: {
+    currentFile?: string;
+    searchQuery?: string;
+    activeInterfaces?: string[];
+  }): Promise<IntelligenceEvidence> {
+    return this.evidenceBuilder.buildProjectEvidence(options);
   }
 
   /**
@@ -146,7 +164,7 @@ export class ContextEngine {
   async enhanceSearchResults(
     originalResults: KnowledgeGraph,
     searchQuery: string,
-    sessionId?: string
+    sessionId?: string,
   ): Promise<EnhancedSearchResult[]> {
     const enhancedResults: EnhancedSearchResult[] = [];
 
@@ -155,7 +173,7 @@ export class ContextEngine {
         const enhanced = await this.enhanceEntityWithContext(
           entity,
           searchQuery,
-          sessionId
+          sessionId,
         );
         enhancedResults.push(enhanced);
       } catch (error) {
@@ -184,7 +202,7 @@ export class ContextEngine {
       active_entities?: Entity[];
       working_interfaces?: string[];
     },
-    sessionId?: string
+    sessionId?: string,
   ): Promise<ContextSuggestion[]> {
     const cacheKey = this.createSuggestionCacheKey(currentContext, sessionId);
 
@@ -198,32 +216,31 @@ export class ContextEngine {
     // Generate different types of suggestions
     const interfaceContextSuggestions =
       await this.generateInterfaceContextSuggestions(currentContext);
-    const importSuggestions = await this.generateImportSuggestions(
-      currentContext
-    );
-    const dependencySuggestions = await this.generateDependencyPredictions(
-      currentContext
-    );
-    const componentSuggestions = await this.generateRelatedComponentSuggestions(
-      currentContext
-    );
-    const monorepoSuggestions = await this.generateMonorepoModuleSuggestions(
-      currentContext
-    );
+    const importSuggestions =
+      await this.generateImportSuggestions(currentContext);
+    const dependencySuggestions =
+      await this.generateDependencyPredictions(currentContext);
+    const componentSuggestions =
+      await this.generateRelatedComponentSuggestions(currentContext);
+    const monorepoSuggestions =
+      await this.generateMonorepoModuleSuggestions(currentContext);
+    const evidenceSuggestions =
+      await this.generateEvidenceSuggestions(currentContext);
 
     suggestions.push(
       ...interfaceContextSuggestions,
       ...importSuggestions,
       ...dependencySuggestions,
       ...componentSuggestions,
-      ...monorepoSuggestions
+      ...monorepoSuggestions,
+      ...evidenceSuggestions,
     );
 
     // Sort by relevance and confidence
     const sortedSuggestions = suggestions
       .sort(
         (a, b) =>
-          b.relevance_score * b.confidence - a.relevance_score * a.confidence
+          b.relevance_score * b.confidence - a.relevance_score * a.confidence,
       )
       .slice(0, 20); // Limit to top 20 suggestions
 
@@ -238,7 +255,7 @@ export class ContextEngine {
    * Predict context needs based on current development patterns
    */
   async predictContextNeeds(
-    workingContext: WorkingContext
+    workingContext: WorkingContext,
   ): Promise<ContextPrediction> {
     const cacheKey = `prediction_${
       workingContext.session_id
@@ -259,22 +276,22 @@ export class ContextEngine {
 
     // Predict interface needs
     prediction.predicted_needs.push(
-      ...(await this.predictInterfaceNeeds(patterns))
+      ...(await this.predictInterfaceNeeds(patterns)),
     );
 
     // Predict import needs
     prediction.predicted_needs.push(
-      ...(await this.predictImportNeeds(patterns))
+      ...(await this.predictImportNeeds(patterns)),
     );
 
     // Find integration opportunities
     prediction.potential_integrations.push(
-      ...(await this.findIntegrationOpportunities(workingContext))
+      ...(await this.findIntegrationOpportunities(workingContext)),
     );
 
     // Identify refactoring opportunities
     prediction.refactoring_opportunities.push(
-      ...(await this.identifyRefactoringOpportunities(workingContext))
+      ...(await this.identifyRefactoringOpportunities(workingContext)),
     );
 
     // Cache the prediction
@@ -289,7 +306,7 @@ export class ContextEngine {
    */
   updateWorkingContext(
     sessionId: string,
-    updates: Partial<WorkingContext>
+    updates: Partial<WorkingContext>,
   ): void {
     const existing = this.workingContexts.get(sessionId) || {
       current_files: [],
@@ -324,7 +341,7 @@ export class ContextEngine {
   private async enhanceEntityWithContext(
     entity: Entity,
     searchQuery: string,
-    sessionId?: string
+    sessionId?: string,
   ): Promise<EnhancedSearchResult> {
     const enhanced: EnhancedSearchResult = {
       ...entity,
@@ -335,23 +352,21 @@ export class ContextEngine {
     };
 
     // Find related interfaces
-    enhanced.related_interfaces = await this.findRelatedInterfacesForEntity(
-      entity
-    );
+    enhanced.related_interfaces =
+      await this.findRelatedInterfacesForEntity(entity);
 
     // Generate context suggestions
     enhanced.context_suggestions = await this.generateEntityContextSuggestions(
       entity,
-      searchQuery
+      searchQuery,
     );
 
     // Suggest imports
     enhanced.suggested_imports = await this.suggestImportsForEntity(entity);
 
     // Find monorepo connections
-    enhanced.monorepo_connections = await this.findMonorepoConnectionsForEntity(
-      entity
-    );
+    enhanced.monorepo_connections =
+      await this.findMonorepoConnectionsForEntity(entity);
 
     return enhanced;
   }
@@ -402,7 +417,7 @@ export class ContextEngine {
         } catch (error) {
           logger.debug(
             `Failed to find related interfaces for ${interfaceName}:`,
-            error
+            error,
           );
         }
       }
@@ -530,9 +545,8 @@ export class ContextEngine {
         if (entity.entityType === "component") {
           // Find similar components using embedding similarity
           try {
-            const similarEntities = await this.findSimilarEntitiesByEmbedding(
-              entity
-            );
+            const similarEntities =
+              await this.findSimilarEntitiesByEmbedding(entity);
 
             for (const similar of similarEntities.slice(0, 2)) {
               suggestions.push({
@@ -553,7 +567,7 @@ export class ContextEngine {
           } catch (error) {
             logger.debug(
               `Failed to find similar entities for ${entity.name}:`,
-              error
+              error,
             );
           }
         }
@@ -584,7 +598,7 @@ export class ContextEngine {
       // Look for package.json files that indicate workspaces
       const workspaceFiles = workspaceContexts.filter(
         (f) =>
-          f.file_path.includes("package.json") && f.relative_path.includes("/")
+          f.file_path.includes("package.json") && f.relative_path.includes("/"),
       );
 
       for (const workspace of workspaceFiles.slice(0, 3)) {
@@ -610,38 +624,180 @@ export class ContextEngine {
     return suggestions;
   }
 
+  private async generateEvidenceSuggestions(currentContext: {
+    current_file?: string;
+    search_query?: string;
+    active_entities?: Entity[];
+    working_interfaces?: string[];
+  }): Promise<ContextSuggestion[]> {
+    const evidence = await this.evidenceBuilder.buildProjectEvidence({
+      currentFile: currentContext.current_file,
+      searchQuery: currentContext.search_query,
+      activeInterfaces: currentContext.working_interfaces || [],
+    });
+    return this.scorer
+      .scoreEvidence(evidence)
+      .slice(0, 8)
+      .map((item) => ({
+        type:
+          item.kind === "interface"
+            ? "interface_context"
+            : item.kind === "dependency"
+              ? "dependency_prediction"
+              : item.kind === "file"
+                ? "similar_implementation"
+                : "related_component",
+        title: `${item.kind}: ${item.name}`,
+        description: item.why,
+        relevance_score: item.score,
+        confidence: 0.75,
+        suggested_action: `Review ${item.name}`,
+        related_files: item.kind === "file" && item.ref ? [item.ref] : undefined,
+        related_interfaces:
+          item.kind === "interface" ? [item.name] : undefined,
+        reasoning: item.why,
+      }));
+  }
+
   // Additional helper methods would go here...
 
   private async findRelatedInterfacesForEntity(entity: Entity): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    const terms = [entity.name, entity.entityType, ...entity.observations]
+      .join(" ")
+      .split(/[^A-Za-z0-9_:]+/)
+      .filter((term) => term.length >= 4)
+      .slice(0, 6);
+    const byId = new Map<number, CodeInterfaceRecord>();
+    for (const term of terms) {
+      const interfaces = await this.projectAnalysisOps.getCodeInterfaces({
+        name: term,
+        limit: 5,
+      });
+      for (const iface of interfaces) {
+        if (iface.id) byId.set(iface.id, iface);
+      }
+      if (byId.size >= 10) break;
+    }
+    return Array.from(byId.values())
+      .slice(0, 10)
+      .map((iface) => ({
+        interface: iface,
+        relationship: "text_evidence",
+        relevance_score: 0.65,
+      }));
   }
 
   private async generateEntityContextSuggestions(
     entity: Entity,
-    searchQuery: string
+    searchQuery: string,
   ): Promise<ContextSuggestion[]> {
-    // Simplified implementation
-    return [];
+    const suggestions: ContextSuggestion[] = [];
+    for (const observation of entity.observations.slice(0, 8)) {
+      if (/block|risk|fail|error/i.test(observation)) {
+        suggestions.push({
+          type: "refactoring_opportunity",
+          title: `Risk: ${entity.name}`,
+          description: observation,
+          relevance_score: 0.9,
+          confidence: 0.75,
+          suggested_action: "Inspect blocker before changing related code",
+          reasoning: "Observation contains blocker/risk language",
+        });
+      } else if (/next|todo|action|need|must/i.test(observation)) {
+        suggestions.push({
+          type: "related_component",
+          title: `Next action: ${entity.name}`,
+          description: observation,
+          relevance_score: 0.8,
+          confidence: 0.7,
+          suggested_action: observation,
+          reasoning: "Observation contains next-action language",
+        });
+      }
+    }
+    if (
+      searchQuery &&
+      entity.observations.some((obs) =>
+        obs.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    ) {
+      suggestions.push({
+        type: "similar_implementation",
+        title: `Direct memory hit: ${entity.name}`,
+        description: `${entity.name} directly mentions the query`,
+        relevance_score: 0.9,
+        confidence: 0.85,
+        reasoning: "Query text appears in entity observations",
+      });
+    }
+    return suggestions.slice(0, 5);
   }
 
   private async suggestImportsForEntity(entity: Entity): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    const terms = [entity.name, ...entity.observations]
+      .join(" ")
+      .split(/[^A-Za-z0-9_./:-]+/)
+      .filter((term) => term.length >= 4)
+      .slice(0, 8);
+    const deps = await this.projectAnalysisOps.getProjectDependencies({ limit: 100 });
+    return deps
+      .filter((dep) =>
+        terms.some((term) =>
+          `${dep.source_identifier} ${dep.target_identifier || ""} ${
+            dep.external_package || ""
+          }`
+            .toLowerCase()
+            .includes(term.toLowerCase()),
+        ),
+      )
+      .slice(0, 5)
+      .map((dep) => ({
+        import_path: dep.external_package || dep.source_identifier,
+        symbols: [dep.target_identifier || dep.source_identifier].filter(Boolean),
+        reasoning: `${dep.dependency_type}:${dep.resolution_status}`,
+      }));
   }
 
   private async findMonorepoConnectionsForEntity(
-    entity: Entity
+    entity: Entity,
   ): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    const files = await this.projectAnalysisOps.getProjectFiles({
+      category: "config",
+      limit: 50,
+    });
+    const entityText = `${entity.name} ${entity.observations.join(" ")}`.toLowerCase();
+    return files
+      .filter((file) => {
+        const moduleName = file.relative_path.split(/[\\/]/)[0]?.toLowerCase();
+        return moduleName && entityText.includes(moduleName);
+      })
+      .slice(0, 5)
+      .map((file) => ({
+        module_name: file.relative_path.split(/[\\/]/)[0],
+        module_path: file.relative_path,
+        connection_type: "text_reference",
+      }));
   }
 
   private async findSimilarInterfaces(
-    iface: CodeInterfaceRecord
+    iface: CodeInterfaceRecord,
   ): Promise<any[]> {
-    // Simplified implementation - would use interface mapper
-    return [];
+    const candidates = await this.projectAnalysisOps.getCodeInterfaces({
+      language: iface.language,
+      kind: iface.kind,
+      limit: 50,
+    });
+    const similar = await this.embeddingEngine.findSimilarInterfaces(
+      iface,
+      candidates.filter((candidate) => candidate.id !== iface.id),
+      0.65,
+    );
+    return similar.slice(0, 5).map((result) => ({
+      interface: result.interface,
+      shared_properties: [],
+      similarity_score: result.similarity,
+      reasoning: result.reasoning,
+    }));
   }
 
   private analyzeCommonImportPatterns(dependencies: any[]): Array<{
@@ -649,8 +805,20 @@ export class ContextEngine {
     package: string;
     frequency: number;
   }> {
-    // Simplified implementation
-    return [];
+    const counts = new Map<
+      string,
+      { symbol: string; package: string; frequency: number }
+    >();
+    for (const dep of dependencies) {
+      const pkg = dep.external_package || dep.source_identifier;
+      if (!pkg) continue;
+      const symbol = dep.target_identifier || dep.source_identifier;
+      const key = `${pkg}:${symbol}`;
+      const current = counts.get(key) || { symbol, package: pkg, frequency: 0 };
+      current.frequency++;
+      counts.set(key, current);
+    }
+    return Array.from(counts.values()).sort((a, b) => b.frequency - a.frequency);
   }
 
   private async findSimilarEntitiesByEmbedding(entity: Entity): Promise<
@@ -661,44 +829,96 @@ export class ContextEngine {
       reasoning: string;
     }>
   > {
-    // Simplified implementation - would use embedding engine
-    return [];
+    const related = await this.findRelatedInterfacesForEntity(entity);
+    return related.slice(0, 5).map((item) => ({
+      entity,
+      similarity: item.relevance_score,
+      confidence: Math.min(0.9, item.relevance_score),
+      reasoning: `Related code interface: ${item.interface.name}`,
+    }));
   }
 
   private async analyzeWorkingPatterns(
-    workingContext: WorkingContext
+    workingContext: WorkingContext,
   ): Promise<any> {
-    // Simplified implementation
-    return {};
+    return {
+      files: workingContext.current_files,
+      interfaces: workingContext.active_interfaces,
+      searches: workingContext.recent_searches,
+      entities: workingContext.working_entities.map((entity) => entity.name),
+      focus: workingContext.project_focus,
+    };
   }
 
   private async predictInterfaceNeeds(patterns: any): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    return (patterns.interfaces || []).slice(0, 5).map((name: string) => ({
+      type: "interface",
+      name,
+      confidence: 0.75,
+      reasoning: "Interface is active in the working context",
+    }));
   }
 
   private async predictImportNeeds(patterns: any): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    const deps = await this.projectAnalysisOps.getProjectDependencies({ limit: 100 });
+    const focusText = `${patterns.focus || ""} ${(patterns.searches || []).join(" ")}`;
+    return this.analyzeCommonImportPatterns(deps)
+      .filter((item) => focusText.toLowerCase().includes(item.symbol.toLowerCase()))
+      .slice(0, 5)
+      .map((item) => ({
+        type: "import",
+        name: item.symbol,
+        confidence: Math.min(0.9, item.frequency / 10),
+        reasoning: `Frequently imported from ${item.package}`,
+        suggested_location: item.package,
+      }));
   }
 
   private async findIntegrationOpportunities(
-    workingContext: WorkingContext
+    workingContext: WorkingContext,
   ): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    const evidence = await this.evidenceBuilder.buildProjectEvidence({
+      searchQuery: workingContext.project_focus,
+      activeInterfaces: workingContext.active_interfaces,
+      currentFile: workingContext.current_files[0],
+    });
+    return evidence.dependencies.slice(0, 5).map((dep) => ({
+      target_system: dep.external_package || dep.target_identifier || dep.source_identifier,
+      integration_type: dep.dependency_type,
+      required_interfaces: evidence.interfaces
+        .map((iface) => iface.qualified_name || iface.name)
+        .slice(0, 3),
+      complexity_estimate: dep.resolution_status === "unresolved" ? "medium" : "low",
+    }));
   }
 
   private async identifyRefactoringOpportunities(
-    workingContext: WorkingContext
+    workingContext: WorkingContext,
   ): Promise<any[]> {
-    // Simplified implementation
-    return [];
+    const files = await this.projectAnalysisOps.getProjectFiles({ limit: 100 });
+    return files
+      .filter(
+        (file) =>
+          file.complexity === "high" ||
+          (file.documentation_percentage !== undefined &&
+            file.documentation_percentage < 20),
+      )
+      .slice(0, 5)
+      .map((file) => ({
+        opportunity_type:
+          file.complexity === "high" ? "reduce_complexity" : "improve_docs",
+        affected_files: [file.relative_path || file.file_path],
+        potential_benefit:
+          file.complexity === "high"
+            ? "Lower risk before changing related code"
+            : "Improve retrievability and future context quality",
+        effort_estimate: file.complexity === "high" ? "medium" : "low",
+      }));
   }
 
   private createSuggestionCacheKey(
     currentContext: any,
-    sessionId?: string
+    sessionId?: string,
   ): string {
     const contextStr = JSON.stringify(currentContext).substring(0, 100);
     return `${sessionId || "default"}_${contextStr}`;
@@ -733,7 +953,7 @@ export class ContextEngine {
       suggestion_cache_size: this.suggestionCache.size,
       prediction_cache_size: this.contextPredictionCache.size,
       total_suggestions_generated: Array.from(
-        this.suggestionCache.values()
+        this.suggestionCache.values(),
       ).reduce((sum, suggestions) => sum + suggestions.length, 0),
     };
   }

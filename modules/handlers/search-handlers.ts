@@ -11,7 +11,11 @@ export class SearchHandlers {
   private memoryManager: any;
   private modernSimilarity: ModernSimilarityEngine;
 
-  constructor(memoryManager: any, modernSimilarity: ModernSimilarityEngine) {
+  constructor(
+    memoryManager: any,
+    modernSimilarity: ModernSimilarityEngine,
+    private readonly recordAccess?: (name: string, coAccessed: string[]) => void,
+  ) {
     this.memoryManager = memoryManager;
     this.modernSimilarity = modernSimilarity;
   }
@@ -161,6 +165,7 @@ export class SearchHandlers {
       searchResults.relations,
       returnedEntities,
     ).slice(0, maxRelations);
+    this.recordReturnedAccess(returnedEntities);
 
     return jsonResponse({
       entities: sanitizeEntities(returnedEntities, {
@@ -178,6 +183,17 @@ export class SearchHandlers {
       branch: args.branch_name,
       relations: returnedRelations,
     });
+  }
+
+  private recordReturnedAccess(entities: Entity[]): void {
+    if (!this.recordAccess || entities.length === 0) return;
+    const names = entities.map((entity) => entity.name);
+    for (const name of names.slice(0, 10)) {
+      this.recordAccess(
+        name,
+        names.filter((otherName) => otherName !== name).slice(0, 10),
+      );
+    }
   }
 }
 

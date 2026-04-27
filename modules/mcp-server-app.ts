@@ -133,7 +133,11 @@ export function createMcpServerApp(
       modernSimilarity,
       relationshipIndexer,
     ),
-    searchHandlers: new SearchHandlers(memoryManager, modernSimilarity),
+    searchHandlers: new SearchHandlers(
+      memoryManager,
+      modernSimilarity,
+      (name, coAccessed) => backgroundProcessor.recordEntityAccess(name, coAccessed),
+    ),
     contextHandlers: new ContextHandlers(memoryManager, backgroundProcessor),
     workflowHandlers: new WorkflowHandlers(memoryManager),
     workspaceHandlers: new WorkspaceHandlers(memoryManager, backgroundProcessor),

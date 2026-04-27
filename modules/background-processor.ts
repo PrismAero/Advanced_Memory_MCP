@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { EnhancedMemoryManager } from "../enhanced-memory-manager-modular.js";
 import { Entity } from "../memory-types.js";
+import { BackgroundTaskScheduler } from "./background/task-queue.js";
 import { ContextEngine } from "./intelligence/context-engine.js";
 import { logger } from "./logger.js";
 import { AdaptiveModelTrainer } from "./ml/adaptive-model-trainer.js";
@@ -27,6 +28,7 @@ export class BackgroundProcessor {
   private memoryManager: EnhancedMemoryManager;
   private similarityEngine: ModernSimilarityEngine;
   private isProcessing: boolean = false;
+  private taskScheduler = new BackgroundTaskScheduler();
   private processingInterval: NodeJS.Timeout | null = null;
   private accessHistory: Map<
     string,
@@ -151,6 +153,22 @@ export class BackgroundProcessor {
     return this.projectEmbeddingEngine;
   }
 
+  getRuntimeStats(): {
+    queues: ReturnType<BackgroundTaskScheduler["getStats"]>;
+    accessHistorySize: number;
+    branchSignatureSize: number;
+    projectPath: string | null;
+    hasExistingProjectIndex: boolean;
+  } {
+    return {
+      queues: this.taskScheduler.getStats(),
+      accessHistorySize: this.accessHistory.size,
+      branchSignatureSize: this.branchSignatures.size,
+      projectPath: this.currentProjectPath,
+      hasExistingProjectIndex: this.hasExistingProjectIndex,
+    };
+  }
+
   /**
    * Start background processing with configurable interval
    */
@@ -162,24 +180,31 @@ export class BackgroundProcessor {
 
     const intervalMs = intervalMinutes * 60 * 1000;
     this.processingInterval = setInterval(() => {
-      this.runBackgroundTasks().catch((error) => {
-        logger.error("Background processing error:", error);
-      });
+      void this.enqueueMaintenanceRun("periodic-background");
     }, intervalMs);
 
     logger.info(`Background processor started (${intervalMinutes} minute interval)`);
 
     if (this.runInitialBackgroundTasks) {
       setTimeout(() => {
-        this.runBackgroundTasks().catch((error) => {
-          logger.error("Initial background processing error:", error);
-        });
+        void this.enqueueMaintenanceRun("initial-background");
       }, 30000);
     } else {
       logger.debug(
         "Initial background processing sweep disabled; enable with ADVANCED_MEMORY_RUN_INITIAL_BACKGROUND_TASKS=1",
       );
     }
+  }
+
+  private enqueueMaintenanceRun(reason: string): Promise<void | undefined> {
+    return this.taskScheduler.enqueue("maintenance", {
+      id: `maintenance:${reason}`,
+      coalesceKey: "maintenance:background",
+      run: async (signal) => {
+        if (signal.aborted) return;
+        await this.runBackgroundTasks();
+      },
+    });
   }
 
   /**
@@ -211,6 +236,7 @@ export class BackgroundProcessor {
       this.fileWatcher = null;
     }
 
+    this.taskScheduler.dispose();
     this.trainingDataCollector.dispose();
     this.contextEngine?.dispose();
     this.adaptiveModelTrainer?.dispose();
@@ -226,6 +252,11 @@ export class BackgroundProcessor {
     const pathChanged = this.currentProjectPath !== resolvedProjectPath;
     this.currentProjectPath = resolvedProjectPath;
     if (pathChanged) {
+      this.taskScheduler.cancelQueue("maintenance", "project-scan:");
+      this.taskScheduler.cancelQueue("file-change");
+      this.taskScheduler.cancelQueue("embedding");
+      this.taskScheduler.cancelQueue("relationship");
+      this.taskScheduler.cancelQueue("cleanup");
       this.lastProjectAnalysis = null;
       this.hasExistingProjectIndex = false;
     }
@@ -250,9 +281,7 @@ export class BackgroundProcessor {
       );
     }
 
-    this.cleanupIgnoredProjectFiles().catch((error) => {
-      logger.warn("Startup ignored-file cleanup failed:", error);
-    });
+    void this.enqueueIgnoredCleanup("startup");
 
     this.scheduleInitialProjectScan();
   }
@@ -267,7 +296,7 @@ export class BackgroundProcessor {
       this.projectMonitoringInterval = setInterval(
         async () => {
           try {
-            await this.monitorProjectStructure();
+            await this.enqueueProjectScan("periodic");
           } catch (error) {
             logger.error("Project monitoring error:", error);
           }
@@ -291,7 +320,7 @@ export class BackgroundProcessor {
         logger.debug(
           `[FOLDER] Detected ${changes.length} significant file changes`,
         );
-        this.handleFileChanges(changes);
+        void this.enqueueFileChanges(changes);
       });
     } else if (!this.enableFileWatcher) {
       logger.info(
@@ -320,10 +349,7 @@ export class BackgroundProcessor {
     );
     this.initialProjectScanTimeout = setTimeout(() => {
       this.initialProjectScanTimeout = null;
-      this.runStartupProjectSweep()
-        .catch((error) => {
-          logger.error("Initial project scan error:", error);
-        });
+      void this.enqueueProjectScan("startup", true);
     }, Math.max(0, delayMs));
 
     logger.info(
@@ -346,6 +372,24 @@ export class BackgroundProcessor {
     await this.monitorProjectStructure({ force: true, reason: "startup" });
   }
 
+  private enqueueProjectScan(
+    reason: "startup" | "periodic" | "manual",
+    force = false,
+  ): Promise<void | undefined> {
+    return this.taskScheduler.enqueue("maintenance", {
+      id: `project-scan:${reason}`,
+      coalesceKey: `project-scan:${reason}`,
+      run: async (signal) => {
+        if (signal.aborted) return;
+        if (reason === "startup") {
+          await this.runStartupProjectSweep();
+        } else {
+          await this.monitorProjectStructure({ force, reason });
+        }
+      },
+    });
+  }
+
   private async loadProjectIndexState(): Promise<void> {
     if (!this.projectAnalysisOps) return;
     const stats = await this.projectAnalysisOps.getProjectIndexStats();
@@ -365,6 +409,17 @@ export class BackgroundProcessor {
     }
   }
 
+  private enqueueIgnoredCleanup(reason: string): Promise<void | undefined> {
+    return this.taskScheduler.enqueue("cleanup", {
+      id: `cleanup:ignored:${reason}`,
+      coalesceKey: "cleanup:ignored",
+      run: async (signal) => {
+        if (signal.aborted) return;
+        await this.cleanupIgnoredProjectFiles();
+      },
+    });
+  }
+
   /**
    * Start interface analysis (every 10 minutes)
    */
@@ -374,7 +429,7 @@ export class BackgroundProcessor {
     this.interfaceAnalysisInterval = setInterval(
       async () => {
         try {
-          await this.analyzeProjectInterfaces();
+          await this.enqueueRelationshipRefresh("periodic-interface-analysis");
         } catch (error) {
           logger.error("Interface analysis error:", error);
         }
@@ -453,11 +508,11 @@ export class BackgroundProcessor {
         }
       }
 
-      await this.projectAnalysisOps.refreshInterfaceRelationships();
+      void this.enqueueRelationshipRefresh(`project-scan:${options.reason || "periodic"}`);
 
       // Drop rows for files that no longer exist on disk.
       try {
-        await this.cleanupIgnoredProjectFiles();
+        void this.enqueueIgnoredCleanup(`project-scan:${options.reason || "periodic"}`);
 
         await this.projectAnalysisOps.cleanupDeletedFiles(
           files.map((f) => f.filePath),
@@ -475,9 +530,7 @@ export class BackgroundProcessor {
       // already-persisted row simply gets its vector populated when the
       // model finishes; we don't block this scan on it.
       if (this.enableEmbeddingBackfill && this.projectEmbeddingEngine) {
-        this.backfillMissingEmbeddings().catch((error) => {
-          logger.debug("Embedding backfill error:", error);
-        });
+        void this.enqueueEmbeddingBackfill(`project-scan:${options.reason || "periodic"}`);
       } else if (!this.enableEmbeddingBackfill) {
         logger.debug(
           "[VECTOR] Embedding backfill disabled; enable by removing ADVANCED_MEMORY_ENABLE_EMBEDDING_BACKFILL=0",
@@ -519,7 +572,7 @@ export class BackgroundProcessor {
         this.projectAnalysisOps &&
         this.projectEmbeddingEngine
       ) {
-        await this.backfillMissingEmbeddings();
+        await this.enqueueEmbeddingBackfill("interface-analysis");
       }
 
       if (this.projectAnalysisOps) {
@@ -532,6 +585,17 @@ export class BackgroundProcessor {
     } catch (error) {
       logger.error("Failed to analyze project interfaces:", error);
     }
+  }
+
+  private enqueueRelationshipRefresh(reason: string): Promise<void | undefined> {
+    return this.taskScheduler.enqueue("relationship", {
+      id: `relationship:${reason}`,
+      coalesceKey: "relationship:refresh",
+      run: async (signal) => {
+        if (signal.aborted) return;
+        await this.analyzeProjectInterfaces();
+      },
+    });
   }
 
   /**
@@ -605,9 +669,46 @@ export class BackgroundProcessor {
     }
   }
 
+  private enqueueEmbeddingBackfill(reason: string): Promise<void | undefined> {
+    return this.taskScheduler.enqueue("embedding", {
+      id: `embedding:${reason}`,
+      coalesceKey: "embedding:backfill",
+      run: async (signal) => {
+        if (signal.aborted) return;
+        await this.backfillMissingEmbeddings();
+      },
+    });
+  }
+
   /**
    * Handle real-time file changes
    */
+  private async enqueueFileChanges(changes: any[]): Promise<void> {
+    const boundedChanges = changes.slice(0, 250);
+    if (changes.length > boundedChanges.length) {
+      logger.warn(
+        `[FOLDER] File-change burst capped at ${boundedChanges.length}/${changes.length} events`,
+      );
+    }
+
+    await Promise.all(
+      boundedChanges.map((change) =>
+        this.taskScheduler
+          .enqueue("file-change", {
+            id: `file-change:${change.path || "unknown"}`,
+            coalesceKey: change.path ? `file-change:${change.path}` : undefined,
+            run: async (signal) => {
+              if (signal.aborted) return;
+              await this.handleFileChanges([change]);
+            },
+          })
+          .catch((error) => {
+            logger.debug("Queued file-change task failed:", error);
+          }),
+      ),
+    );
+  }
+
   private async handleFileChanges(changes: any[]): Promise<void> {
     for (const change of changes) {
       try {
@@ -679,7 +780,7 @@ export class BackgroundProcessor {
       this.currentProjectPath,
     );
     if (this.isIgnoreConfigFile(changedPath)) {
-      await this.cleanupIgnoredProjectFiles();
+      await this.enqueueIgnoredCleanup("ignore-config-change");
       return;
     }
 
