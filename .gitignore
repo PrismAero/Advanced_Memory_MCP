@@ -305,3 +305,4 @@ mcp.json
 *.db
 *-tests.js
 memory.db
+issue_refs/

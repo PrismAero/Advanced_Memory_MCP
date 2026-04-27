@@ -52,8 +52,8 @@ describe("keyword coupling stress", () => {
     );
 
     expect(result.entities[0].name).toBe("KeywordStress_SpecificClockSkew");
-    expect(result.entities[0].matchedKeywords).toContain("ZEUS_CLOCK_SKEW_FAILURE");
-    expect(result.entities[0].observations.length).toBeLessThanOrEqual(1);
-    expect(result.entities[0].keywordSources.length).toBeLessThanOrEqual(12);
+    expect(result.entities[0].why.kw).toContain("ZEUS_CLOCK_SKEW_FAILURE");
+    expect(result.entities[0].obs.length).toBeLessThanOrEqual(1);
+    expect(result.entities[0].why.src.length).toBeLessThanOrEqual(6);
   });
 });

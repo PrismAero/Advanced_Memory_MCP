@@ -194,7 +194,7 @@ const CORE_TOOLS: Tool[] = [
   {
     name: "smart_search",
     description:
-      "Search entities by name, type, content, and observations with relevance-aware ranking and optional semantic expansion. Use as the default lookup tool when you have a query string or topic. Pass branch_name='*' to search every branch. Returns sanitized entities (no embedding vectors); set max_observations=0 to disable observation truncation.",
+      "Search entities by name, type, content, and observations with relevance-aware ranking. Use as the default targeted lookup tool when you have a query string or topic. Pass branch_name='*' to search every branch. Returns compact AI-optimized hits: name/type/status, score, why, obs, meta. Opt into include_context, include_confidence_scores, or expand_similar only when needed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -219,7 +219,12 @@ const CORE_TOOLS: Tool[] = [
         include_context: {
           type: "boolean",
           description:
-            "Auto-expand the result set with directly related entities (default: true).",
+            "Auto-expand the result set with directly related context entities (default: false).",
+        },
+        expand_similar: {
+          type: "boolean",
+          description:
+            "Add semantically similar entities beyond direct search hits. Broad and expensive; default false.",
         },
         working_context_only: {
           type: "boolean",
@@ -229,7 +234,16 @@ const CORE_TOOLS: Tool[] = [
         include_confidence_scores: {
           type: "boolean",
           description:
-            "Include similarity / confidence metadata on each result.",
+            "Include extra per-entity score/source evidence in compact result objects (default: false).",
+        },
+        max_results: {
+          type: "integer",
+          description: "Maximum entities to return. Default: 10, max: 50.",
+        },
+        max_relations: {
+          type: "integer",
+          description:
+            "Maximum relations among returned entities. Default: 20, max: 100.",
         },
         max_observations: {
           type: "integer",

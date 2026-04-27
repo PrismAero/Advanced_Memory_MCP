@@ -211,4 +211,44 @@ describe("MCP handler integration", () => {
     expect(rejected.isError).toBe(true);
     expect(parseTextResponse(rejected).error).toMatch(/must be within/i);
   });
+
+  it("keeps smart_search targeted by default", async () => {
+    const entities = Array.from({ length: 14 }, (_, index) => ({
+      name: `Search_Narrow_${index}`,
+      entityType: "service",
+      observations: [`shared target phrase ${index}`],
+    }));
+    await ctx.app.handleToolCall("create_entities", {
+      branch_name: "search-narrow-defaults",
+      auto_create_relations: false,
+      entities,
+    });
+
+    const result = parseTextResponse(
+      await ctx.app.handleToolCall("smart_search", {
+        query: "shared target phrase",
+        branch_name: "search-narrow-defaults",
+      }),
+    );
+
+    expect(result.entities).toHaveLength(10);
+    expect(result.counts.entities).toBe(10);
+    expect(result.confidence_scores).toBeUndefined();
+    expect(result.entities[0].keywordMatchScore).toBeUndefined();
+    expect(result.entities[0].entityType).toBeUndefined();
+    expect(result.relations).toEqual([]);
+    expect(Object.keys(result).slice(0, 4)).toEqual([
+      "entities",
+      "counts",
+      "query",
+      "branch",
+    ]);
+    expect(Object.keys(result.entities[0]).slice(0, 4)).toEqual([
+      "name",
+      "type",
+      "status",
+      "score",
+    ]);
+    expect(result.entities[0].obs).toBeDefined();
+  });
 });

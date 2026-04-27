@@ -33,9 +33,18 @@ export class SearchHandlers {
       : (args.branch_name as string);
 
     // AI-optimized search options
-    const includeContext = args.include_context !== false; // Default true for AI workflows
+    const includeContext = args.include_context === true;
     const workingContextOnly = args.working_context_only === true;
-    const includeConfidenceScores = args.include_confidence_scores !== false; // Default true for AI
+    const includeConfidenceScores = args.include_confidence_scores === true;
+    const expandSimilar = args.expand_similar === true;
+    const maxResults =
+      typeof args.max_results === "number"
+        ? clampInteger(args.max_results, 1, 50, 10)
+        : 10;
+    const maxRelations =
+      typeof args.max_relations === "number"
+        ? clampInteger(args.max_relations, 0, 100, 20)
+        : 20;
 
     logger.info(
       `AI-optimized smart search ${
@@ -54,12 +63,13 @@ export class SearchHandlers {
         includeContext,
         workingContextOnly,
         includeConfidenceScores,
+        maxResults,
       },
     );
 
     // Enhance with similarity engine for related entity detection
-    // Disable similarity enhancement for global search to avoid performance issues
-    if (!searchAllBranches && searchResults.entities.length > 0) {
+    // Disabled by default: broad semantic expansion can swamp precise lookups.
+    if (!searchAllBranches && expandSimilar && searchResults.entities.length > 0) {
       logger.info(
         `Smart search enhancing results with similarity detection...`,
       );
@@ -122,7 +132,11 @@ export class SearchHandlers {
               ),
           );
 
-          searchResults.entities.push(...newEntities);
+          const remainingSlots = Math.max(
+            0,
+            maxResults - searchResults.entities.length,
+          );
+          searchResults.entities.push(...newEntities.slice(0, remainingSlots));
           searchResults.relations.push(...newRelations);
 
           logger.info(
@@ -142,23 +156,44 @@ export class SearchHandlers {
         ? clampInteger(args.max_observations, 0, 100, 5)
         : 5;
 
+    const returnedEntities = searchResults.entities.slice(0, maxResults);
+    const returnedRelations = filterRelationsToReturnedEntities(
+      searchResults.relations,
+      returnedEntities,
+    ).slice(0, maxRelations);
+
     return jsonResponse({
-      entities: sanitizeEntities(searchResults.entities, {
+      entities: sanitizeEntities(returnedEntities, {
         maxObservations,
         keepSearchMeta: includeConfidenceScores,
+        compactSearch: true,
       }),
-      relations: searchResults.relations,
-      branch: args.branch_name,
-      query: args.query,
-      ...(includeConfidenceScores && searchResults.confidence_scores?.length
-        ? { confidence_scores: searchResults.confidence_scores }
-        : {}),
       counts: {
-        entities: searchResults.entities.length,
-        relations: searchResults.relations.length,
+        entities: returnedEntities.length,
+        relations: returnedRelations.length,
+        total_entities_matched: searchResults.entities.length,
+        total_relations_matched: searchResults.relations.length,
       },
+      query: args.query,
+      branch: args.branch_name,
+      relations: returnedRelations,
     });
   }
+}
+
+function filterRelationsToReturnedEntities(
+  relations: Relation[],
+  entities: Entity[],
+): Relation[] {
+  const names = new Set(entities.map((entity) => entity.name));
+  const seen = new Set<string>();
+  return (relations || []).filter((relation) => {
+    if (!names.has(relation.from) || !names.has(relation.to)) return false;
+    const key = `${relation.from}\0${relation.relationType}\0${relation.to}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function clampInteger(

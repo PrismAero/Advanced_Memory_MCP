@@ -107,13 +107,7 @@ export class KeywordOperations {
     query: string,
     options: { branchId?: number | null; statuses?: string[]; limit?: number } = {},
   ): Promise<Map<number, KeywordMatchSummary>> {
-    const normalizedQuery = normalizeKeyword(query);
-    const queryTerms = this.extractor
-      .extractText(query)
-      .map((signal) => signal.normalizedKeyword)
-      .concat(normalizedQuery)
-      .filter((value) => value.length >= 3);
-    const uniqueTerms = Array.from(new Set(queryTerms)).slice(0, 16);
+    const uniqueTerms = buildKeywordQueryTerms(query, this.extractor);
     if (uniqueTerms.length === 0) return new Map();
 
     let whereClause = `WHERE k.normalized_keyword IN (${uniqueTerms
@@ -144,6 +138,7 @@ export class KeywordOperations {
     );
 
     const summaries = new Map<number, KeywordMatchSummary>();
+    const scoreByEntityKeyword = new Map<string, number>();
     for (const row of rows || []) {
       const entityId = row.matched_entity_id;
       const summary =
@@ -161,11 +156,16 @@ export class KeywordOperations {
         Number(row.confidence || 1) *
         sourceBoost(row.source_type) *
         typeBoost(row.keyword_type);
-      summary.keywordMatchScore += score;
+      const scoreKey = `${entityId}:${row.normalized_keyword}`;
+      const previousKeywordScore = scoreByEntityKeyword.get(scoreKey) || 0;
+      if (score > previousKeywordScore) {
+        summary.keywordMatchScore += score - previousKeywordScore;
+        scoreByEntityKeyword.set(scoreKey, score);
+      }
       pushUnique(summary.matchedKeywords, row.keyword);
       pushUnique(summary.keywordSources, `${row.source_type}:${row.keyword_type}`);
       if (row.linked_type && summary.keywordCouplings.length < 8) {
-        summary.keywordCouplings.push({
+        pushUniqueCoupling(summary.keywordCouplings, {
           keyword: row.keyword,
           linked_type: row.linked_type,
           relation_type: row.link_relation_type,
@@ -299,6 +299,40 @@ export class KeywordOperations {
       }
     }
   }
+}
+
+function buildKeywordQueryTerms(
+  query: string,
+  extractor: ContextualKeywordExtractor,
+): string[] {
+  const normalizedQuery = normalizeKeyword(query);
+  const queryWordCount = normalizedQuery.split(/\s+/).filter(Boolean).length;
+  const terms = extractor
+    .extractText(query)
+    .map((signal) => signal.normalizedKeyword)
+    .concat(normalizedQuery)
+    .filter((value) => {
+      if (!value || value.length < 3) return false;
+      if (value === normalizedQuery) return true;
+      if (queryWordCount > 1 && !value.includes(" ") && value.length < 4) {
+        return false;
+      }
+      return true;
+    });
+  return Array.from(new Set(terms)).slice(0, 16);
+}
+
+function pushUniqueCoupling(
+  couplings: KeywordMatchSummary["keywordCouplings"],
+  coupling: KeywordMatchSummary["keywordCouplings"][number],
+): void {
+  const exists = couplings.some(
+    (item) =>
+      item.keyword === coupling.keyword &&
+      item.linked_type === coupling.linked_type &&
+      item.relation_type === coupling.relation_type,
+  );
+  if (!exists) couplings.push(coupling);
 }
 
 function observationWeight(obs: any): number {

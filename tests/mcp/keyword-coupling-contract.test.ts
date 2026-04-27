@@ -49,11 +49,10 @@ describe("MCP keyword coupling retrieval contract", () => {
     );
 
     expect(result.entities[0].name).toBe("Keyword_DeviceBootFix");
-    expect(result.entities[0].keywordMatchScore).toBeGreaterThan(0);
-    expect(result.entities[0].matchedKeywords).toContain("DMA_RING_BUFFER");
-    expect(result.entities[0].keywordSources.length).toBeLessThanOrEqual(12);
-    expect(result.entities[0].keywordCouplings.length).toBeLessThanOrEqual(8);
-    expect(result.confidence_scores[0].keyword_match_score).toBeGreaterThan(0);
-    expect(result.confidence_scores[0].matched_keywords).toContain("DMA_RING_BUFFER");
+    expect(result.entities[0].score.key).toBeGreaterThan(0);
+    expect(result.entities[0].why.kw).toContain("DMA_RING_BUFFER");
+    expect(result.entities[0].why.src.length).toBeLessThanOrEqual(6);
+    expect(result.entities[0].why.links.length).toBeLessThanOrEqual(4);
+    expect(result.confidence_scores).toBeUndefined();
   });
 });

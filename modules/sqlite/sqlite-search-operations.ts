@@ -30,6 +30,7 @@ export class SQLiteSearchOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
+      maxResults?: number;
     },
   ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
     const entities = await this.performSearch(
@@ -45,28 +46,24 @@ export class SQLiteSearchOperations {
       const branchId = branchName
         ? await this.connection.getBranchId(branchName)
         : undefined;
+
+      // If context expansion is requested, add related entities
+      if (options?.includeContext) {
+        const maxResults = clampLimit(options.maxResults, 10, 50);
+        const contextLimit = Math.max(0, maxResults - entities.length);
+        const contextEntities =
+          contextLimit > 0
+            ? await this.getContextualEntities(entities, branchName, contextLimit)
+            : [];
+        entities.push(...contextEntities);
+      }
+
+      entities.splice(clampLimit(options?.maxResults, 10, 50));
       const entityNames = entities.map((e) => e.name);
       relations = await this.relationOps.getRelationsForEntities(
         entityNames,
         branchId,
       );
-
-      // If context expansion is requested, add related entities
-      if (options?.includeContext) {
-        const contextEntities = await this.getContextualEntities(
-          entities,
-          branchName,
-        );
-        entities.push(...contextEntities);
-
-        // Get additional relations for context entities
-        const contextEntityNames = contextEntities.map((e) => e.name);
-        const contextRelations = await this.relationOps.getRelationsForEntities(
-          contextEntityNames,
-          branchId,
-        );
-        relations.push(...contextRelations);
-      }
     }
 
     const result: any = { entities, relations };
@@ -95,6 +92,7 @@ export class SQLiteSearchOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
+      maxResults?: number;
     },
   ): Promise<Entity[]> {
     const keywordResults = await this.performKeywordSearch(
@@ -127,7 +125,7 @@ export class SQLiteSearchOperations {
             semanticResults,
             textResults,
             keywordResults,
-          );
+          ).slice(0, clampLimit(options?.maxResults, 10, 50));
         }
       } catch (error) {
         logger.warn(
@@ -144,7 +142,10 @@ export class SQLiteSearchOperations {
       includeStatuses,
       options,
     );
-    return this.combineSearchResults([], textResults, keywordResults);
+    return this.combineSearchResults([], textResults, keywordResults).slice(
+      0,
+      clampLimit(options?.maxResults, 10, 50),
+    );
   }
 
   /**
@@ -158,6 +159,7 @@ export class SQLiteSearchOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
+      maxResults?: number;
     },
   ): Promise<Entity[]> {
     if (!this.similarityEngine) {
@@ -206,7 +208,7 @@ export class SQLiteSearchOperations {
         return scoreB - scoreA;
       });
 
-    return semanticResults;
+    return semanticResults.slice(0, clampLimit(options?.maxResults, 10, 50));
   }
 
   /**
@@ -312,11 +314,13 @@ export class SQLiteSearchOperations {
     this.mergeSearchResults(combined, seenNames, keywordResults, "keyword");
 
     // Sort combined results by enhanced scoring
-    return Array.from(combined.values()).sort((a, b) => {
-      const scoreA = this.calculateCombinedScore(a);
-      const scoreB = this.calculateCombinedScore(b);
-      return scoreB - scoreA;
-    });
+    return Array.from(combined.values())
+      .sort((a, b) => {
+        const scoreA = this.calculateCombinedScore(a);
+        const scoreB = this.calculateCombinedScore(b);
+        return scoreB - scoreA;
+      })
+      .slice(0, 50);
   }
 
   /**
@@ -379,6 +383,7 @@ export class SQLiteSearchOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
+      maxResults?: number;
     },
   ): Promise<Entity[]> {
     const branchId = branchName
@@ -390,11 +395,14 @@ export class SQLiteSearchOperations {
         includeStatuses && includeStatuses.length > 0
           ? includeStatuses
           : ["active"],
-      limit: 150,
+      limit: clampLimit(options?.maxResults, 10, 50) * 5,
     });
     if (summaries.size === 0) return [];
 
-    const ids = Array.from(summaries.keys()).slice(0, 50);
+    const ids = Array.from(summaries.keys()).slice(
+      0,
+      clampLimit(options?.maxResults, 10, 50) * 2,
+    );
     let whereClause = `WHERE e.id IN (${ids.map(() => "?").join(",")})`;
     const params: any[] = [...ids];
     if (options?.workingContextOnly) {
@@ -443,6 +451,7 @@ export class SQLiteSearchOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
+      maxResults?: number;
     },
   ): Promise<Entity[]> {
     const branchId = branchName
@@ -514,8 +523,9 @@ export class SQLiteSearchOperations {
       ${whereClause}
       GROUP BY e.id
       ${orderClause}
+      LIMIT ?
     `,
-      params,
+      [...params, clampLimit(options?.maxResults, 10, 50)],
     );
 
     return this.entityOps.convertRowsToEntities(results);
@@ -528,6 +538,7 @@ export class SQLiteSearchOperations {
   private async getContextualEntities(
     foundEntities: Entity[],
     branchName?: string,
+    limit = 10,
   ): Promise<Entity[]> {
     if (foundEntities.length === 0) return [];
 
@@ -569,9 +580,9 @@ export class SQLiteSearchOperations {
       ${whereClause}
       GROUP BY e.id
       ORDER BY e.relevance_score DESC, e.working_context DESC
-      LIMIT 10
+      LIMIT ?
     `,
-      params,
+      [...params, clampLimit(limit, 5, 10)],
     );
 
     return this.entityOps.convertRowsToEntities(contextResults);
@@ -580,4 +591,13 @@ export class SQLiteSearchOperations {
 
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+function clampLimit(
+  value: number | undefined,
+  fallback: number,
+  max: number,
+): number {
+  if (!Number.isFinite(value) || !value || value < 1) return fallback;
+  return Math.min(Math.floor(value), max);
 }

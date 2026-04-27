@@ -134,4 +134,38 @@ describe("SQLite keyword coupling storage", () => {
       ]),
     );
   });
+
+  it("does not inflate a keyword score from repeated identical observations", async () => {
+    root = createTempMemoryRoot("advanced-memory-keywords-repeat-");
+    connection = new SQLiteConnection(root);
+    await connection.initialize();
+    const branchId = await connection.getBranchId("keyword-repeat");
+
+    const entity = await connection.execute(
+      `INSERT INTO entities (name, entity_type, branch_id, original_content, optimized_content)
+       VALUES (?, ?, ?, ?, ?)`,
+      ["KeywordRepeat_Noise", "task", branchId, "", ""],
+    );
+
+    for (let i = 0; i < 10; i++) {
+      await connection.execute(
+        `INSERT INTO observations (entity_id, content, optimized_content, sequence_order, priority)
+         VALUES (?, ?, ?, ?, ?)`,
+        [entity.lastID, "phase sch", "phase sch", i, "normal"],
+      );
+    }
+
+    const keywordOps = new KeywordOperations(connection);
+    await keywordOps.refreshEntityKeywords(entity.lastID, branchId);
+
+    const matches = await keywordOps.findEntityKeywordMatches("phase sch", {
+      branchId,
+    });
+    const summary = matches.get(entity.lastID);
+
+    expect(summary?.matchedKeywords).toEqual(expect.arrayContaining(["phase sch"]));
+    expect(summary?.matchedKeywords).not.toContain("sch");
+    expect(summary?.keywordMatchScore).toBeLessThan(25);
+    expect(summary?.keywordCouplings.length).toBeLessThanOrEqual(2);
+  });
 });
