@@ -342,61 +342,13 @@ export class SQLiteConnection {
       "CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)",
       "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type)",
       "CREATE INDEX IF NOT EXISTS idx_entities_accessed ON entities(last_accessed)",
-      "CREATE INDEX IF NOT EXISTS idx_entities_working_context ON entities(working_context)",
-      "CREATE INDEX IF NOT EXISTS idx_entities_relevance ON entities(relevance_score)",
-      "CREATE INDEX IF NOT EXISTS idx_branches_focus ON memory_branches(current_focus)",
-      "CREATE INDEX IF NOT EXISTS idx_branches_phase ON memory_branches(project_phase)",
-      "CREATE INDEX IF NOT EXISTS idx_observations_type ON observations(observation_type)",
-      "CREATE INDEX IF NOT EXISTS idx_observations_priority ON observations(priority)",
       "CREATE INDEX IF NOT EXISTS idx_branch_relationships_from ON branch_relationships(from_branch_id)",
       "CREATE INDEX IF NOT EXISTS idx_branch_relationships_to ON branch_relationships(to_branch_id)",
       "CREATE INDEX IF NOT EXISTS idx_keywords_keyword ON keywords(keyword)",
       "CREATE INDEX IF NOT EXISTS idx_keywords_entity ON keywords(entity_id)",
-      "CREATE INDEX IF NOT EXISTS idx_keywords_normalized ON keywords(normalized_keyword)",
-      "CREATE INDEX IF NOT EXISTS idx_keywords_branch ON keywords(branch_id)",
-      "CREATE INDEX IF NOT EXISTS idx_keywords_type ON keywords(keyword_type)",
-      "CREATE INDEX IF NOT EXISTS idx_keywords_source ON keywords(source_type)",
-      "CREATE UNIQUE INDEX IF NOT EXISTS idx_keywords_unique_signal ON keywords(entity_id, normalized_keyword, source_type, source_id, observation_id, keyword_type)",
-      "CREATE INDEX IF NOT EXISTS idx_keyword_links_entity ON keyword_links(entity_id)",
-      "CREATE INDEX IF NOT EXISTS idx_keyword_links_target ON keyword_links(linked_type, linked_id)",
       "CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)",
       "CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)",
       "CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)",
-
-      // Project analysis indexes
-      "CREATE INDEX IF NOT EXISTS idx_project_files_path ON project_files(file_path)",
-      "CREATE INDEX IF NOT EXISTS idx_project_files_type ON project_files(file_type)",
-      "CREATE INDEX IF NOT EXISTS idx_project_files_language ON project_files(language)",
-      "CREATE INDEX IF NOT EXISTS idx_project_files_category ON project_files(category)",
-      "CREATE INDEX IF NOT EXISTS idx_project_files_modified ON project_files(last_modified)",
-      "CREATE INDEX IF NOT EXISTS idx_project_files_branch ON project_files(branch_id)",
-      "CREATE INDEX IF NOT EXISTS idx_project_files_entry_point ON project_files(is_entry_point)",
-
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_name ON code_interfaces(name)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_file ON code_interfaces(file_id)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_type ON code_interfaces(interface_type)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_language ON code_interfaces(language)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_qualified ON code_interfaces(qualified_name)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_kind ON code_interfaces(kind)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_stable ON code_interfaces(stable_id)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_exported ON code_interfaces(is_exported)",
-      "CREATE INDEX IF NOT EXISTS idx_code_interfaces_usage ON code_interfaces(usage_count)",
-
-      "CREATE INDEX IF NOT EXISTS idx_project_deps_from ON project_dependencies(from_file_id)",
-      "CREATE INDEX IF NOT EXISTS idx_project_deps_to ON project_dependencies(to_file_id)",
-      "CREATE INDEX IF NOT EXISTS idx_project_deps_type ON project_dependencies(dependency_type)",
-      "CREATE INDEX IF NOT EXISTS idx_project_deps_identifier ON project_dependencies(source_identifier)",
-      "CREATE INDEX IF NOT EXISTS idx_project_deps_package ON project_dependencies(external_package)",
-
-      "CREATE INDEX IF NOT EXISTS idx_workspace_context_path ON workspace_context(workspace_path)",
-      "CREATE INDEX IF NOT EXISTS idx_workspace_context_type ON workspace_context(project_type)",
-      "CREATE INDEX IF NOT EXISTS idx_workspace_context_branch ON workspace_context(branch_id)",
-      "CREATE INDEX IF NOT EXISTS idx_workspace_context_status ON workspace_context(indexing_status)",
-
-      "CREATE INDEX IF NOT EXISTS idx_interface_rels_from ON interface_relationships(from_interface_id)",
-      "CREATE INDEX IF NOT EXISTS idx_interface_rels_to ON interface_relationships(to_interface_id)",
-      "CREATE INDEX IF NOT EXISTS idx_interface_rels_type ON interface_relationships(relationship_type)",
-      "CREATE INDEX IF NOT EXISTS idx_interface_rels_confidence ON interface_relationships(confidence_score)",
     ];
 
     for (const index of indexes) {
@@ -529,10 +481,27 @@ export class SQLiteConnection {
         "ALTER TABLE entities ADD COLUMN embedding BLOB"
       );
 
-      // Add embedding columns to project analysis tables if they exist
-      await this.safeAlterTable(
-        "ALTER TABLE project_files ADD COLUMN embedding BLOB"
-      );
+      for (const column of [
+        "relative_path TEXT DEFAULT ''",
+        "file_type TEXT DEFAULT 'unknown'",
+        "language TEXT DEFAULT 'unknown'",
+        "category TEXT DEFAULT 'unknown'",
+        "size_bytes INTEGER DEFAULT 0",
+        "line_count INTEGER DEFAULT 0",
+        "last_modified DATETIME",
+        "last_analyzed DATETIME",
+        "branch_id INTEGER DEFAULT 1",
+        "is_entry_point INTEGER DEFAULT 0",
+        "has_tests INTEGER DEFAULT 0",
+        "complexity TEXT DEFAULT 'low'",
+        "documentation_percentage REAL DEFAULT 0.0",
+        "analysis_metadata TEXT",
+        "embedding BLOB",
+        "created_at DATETIME",
+        "updated_at DATETIME",
+      ]) {
+        await this.safeAlterTable(`ALTER TABLE project_files ADD COLUMN ${column}`);
+      }
 
       await this.safeAlterTable(
         "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB"
@@ -554,8 +523,55 @@ export class SQLiteConnection {
         "metadata TEXT",
         "summary TEXT",
         "rank_text TEXT",
+        "is_exported INTEGER DEFAULT 0",
+        "is_generic INTEGER DEFAULT 0",
+        "usage_count INTEGER DEFAULT 0",
+        "last_used DATETIME",
+        "created_at DATETIME",
+        "updated_at DATETIME",
       ]) {
         await this.safeAlterTable(`ALTER TABLE code_interfaces ADD COLUMN ${column}`);
+      }
+
+      for (const column of [
+        "to_file_id INTEGER",
+        "target_identifier TEXT",
+        "is_default_import INTEGER DEFAULT 0",
+        "is_namespace_import INTEGER DEFAULT 0",
+        "is_type_only INTEGER DEFAULT 0",
+        "external_package TEXT",
+        "resolution_status TEXT DEFAULT 'resolved'",
+        "created_at DATETIME",
+        "updated_at DATETIME",
+      ]) {
+        await this.safeAlterTable(`ALTER TABLE project_dependencies ADD COLUMN ${column}`);
+      }
+
+      for (const column of [
+        "config_files TEXT",
+        "entry_points TEXT",
+        "frameworks TEXT",
+        "languages TEXT",
+        "workspace_dependencies TEXT",
+        "total_files INTEGER DEFAULT 0",
+        "total_size_bytes INTEGER DEFAULT 0",
+        "last_indexed DATETIME",
+        "indexing_status TEXT DEFAULT 'pending'",
+        "branch_id INTEGER DEFAULT 1",
+        "created_at DATETIME",
+        "updated_at DATETIME",
+      ]) {
+        await this.safeAlterTable(`ALTER TABLE workspace_context ADD COLUMN ${column}`);
+      }
+
+      for (const column of [
+        "confidence_score REAL DEFAULT 0.5",
+        "semantic_similarity REAL DEFAULT 0.0",
+        "usage_frequency INTEGER DEFAULT 0",
+        "last_detected DATETIME",
+        "created_at DATETIME",
+      ]) {
+        await this.safeAlterTable(`ALTER TABLE interface_relationships ADD COLUMN ${column}`);
       }
 
       // Create project analysis tables if they don't exist
@@ -682,13 +698,44 @@ export class SQLiteConnection {
       }
 
       for (const indexQuery of [
+        "CREATE INDEX IF NOT EXISTS idx_entities_working_context ON entities(working_context)",
+        "CREATE INDEX IF NOT EXISTS idx_entities_relevance ON entities(relevance_score)",
+        "CREATE INDEX IF NOT EXISTS idx_branches_focus ON memory_branches(current_focus)",
+        "CREATE INDEX IF NOT EXISTS idx_branches_phase ON memory_branches(project_phase)",
+        "CREATE INDEX IF NOT EXISTS idx_observations_type ON observations(observation_type)",
+        "CREATE INDEX IF NOT EXISTS idx_observations_priority ON observations(priority)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_path ON project_files(file_path)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_type ON project_files(file_type)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_language ON project_files(language)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_category ON project_files(category)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_modified ON project_files(last_modified)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_branch ON project_files(branch_id)",
+        "CREATE INDEX IF NOT EXISTS idx_project_files_entry_point ON project_files(is_entry_point)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_name ON code_interfaces(name)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_file ON code_interfaces(file_id)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_type ON code_interfaces(interface_type)",
         "CREATE INDEX IF NOT EXISTS idx_code_interfaces_language ON code_interfaces(language)",
         "CREATE INDEX IF NOT EXISTS idx_code_interfaces_qualified ON code_interfaces(qualified_name)",
         "CREATE INDEX IF NOT EXISTS idx_code_interfaces_kind ON code_interfaces(kind)",
         "CREATE INDEX IF NOT EXISTS idx_code_interfaces_stable ON code_interfaces(stable_id)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_exported ON code_interfaces(is_exported)",
+        "CREATE INDEX IF NOT EXISTS idx_code_interfaces_usage ON code_interfaces(usage_count)",
+        "CREATE INDEX IF NOT EXISTS idx_project_deps_from ON project_dependencies(from_file_id)",
+        "CREATE INDEX IF NOT EXISTS idx_project_deps_to ON project_dependencies(to_file_id)",
+        "CREATE INDEX IF NOT EXISTS idx_project_deps_type ON project_dependencies(dependency_type)",
+        "CREATE INDEX IF NOT EXISTS idx_project_deps_identifier ON project_dependencies(source_identifier)",
+        "CREATE INDEX IF NOT EXISTS idx_project_deps_package ON project_dependencies(external_package)",
+        "CREATE INDEX IF NOT EXISTS idx_workspace_context_path ON workspace_context(workspace_path)",
+        "CREATE INDEX IF NOT EXISTS idx_workspace_context_type ON workspace_context(project_type)",
+        "CREATE INDEX IF NOT EXISTS idx_workspace_context_branch ON workspace_context(branch_id)",
+        "CREATE INDEX IF NOT EXISTS idx_workspace_context_status ON workspace_context(indexing_status)",
+        "CREATE INDEX IF NOT EXISTS idx_interface_rels_from ON interface_relationships(from_interface_id)",
+        "CREATE INDEX IF NOT EXISTS idx_interface_rels_to ON interface_relationships(to_interface_id)",
+        "CREATE INDEX IF NOT EXISTS idx_interface_rels_type ON interface_relationships(relationship_type)",
+        "CREATE INDEX IF NOT EXISTS idx_interface_rels_confidence ON interface_relationships(confidence_score)",
       ]) {
         await this.runQuery(indexQuery).catch((error) => {
-          logger.warn("Failed to create code interface index:", error);
+          logger.warn("Failed to create migrated schema index:", error);
         });
       }
 

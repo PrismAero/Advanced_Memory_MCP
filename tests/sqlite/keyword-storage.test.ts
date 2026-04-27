@@ -84,4 +84,54 @@ describe("SQLite keyword coupling storage", () => {
     );
     expect(staleObservationKeywords.count).toBe(0);
   });
+
+  it("migrates an existing flat keywords table before creating new keyword indexes", async () => {
+    root = createTempMemoryRoot("advanced-memory-keywords-legacy-");
+    connection = new SQLiteConnection(root);
+    await connection.initialize();
+
+    await connection.execute("DROP TABLE IF EXISTS keyword_links");
+    await connection.execute("DROP TABLE IF EXISTS keywords");
+    await connection.execute(
+      `CREATE TABLE keywords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        keyword TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        weight REAL DEFAULT 1.0,
+        context TEXT,
+        FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+      )`,
+    );
+    await connection.close();
+
+    connection = new SQLiteConnection(root);
+    await expect(connection.initialize()).resolves.toBeUndefined();
+
+    const columns = await connection.runQuery("PRAGMA table_info(keywords)");
+    expect(columns.map((column: any) => column.name)).toEqual(
+      expect.arrayContaining([
+        "normalized_keyword",
+        "source_type",
+        "source_id",
+        "branch_id",
+        "observation_id",
+        "keyword_type",
+        "confidence",
+        "position",
+        "phrase_length",
+        "last_seen",
+        "metadata",
+      ]),
+    );
+
+    const indexes = await connection.runQuery("PRAGMA index_list(keywords)");
+    expect(indexes.map((index: any) => index.name)).toEqual(
+      expect.arrayContaining([
+        "idx_keywords_normalized",
+        "idx_keywords_branch",
+        "idx_keywords_type",
+        "idx_keywords_source",
+      ]),
+    );
+  });
 });
