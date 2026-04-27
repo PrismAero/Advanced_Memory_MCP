@@ -63,7 +63,9 @@ export class ProjectAnalysisOperations {
   }
 
   async initialize(): Promise<void> {
-    await this.vectorStore.initialize();
+    await this.vectorStore.initialize({
+      loadExisting: process.env.ADVANCED_MEMORY_LOAD_VECTOR_INDEX_ON_STARTUP === "1",
+    });
     await this.backfillMissingEmbeddings();
   }
 
@@ -129,6 +131,25 @@ export class ProjectAnalysisOperations {
     limit?: number;
   }): Promise<ProjectFileRecord[]> {
     return this.fileOps.getProjectFiles(criteria);
+  }
+
+  async getProjectIndexStats(branchName?: string): Promise<{
+    fileCount: number;
+    lastAnalyzed: string | null;
+  }> {
+    const branchId = branchName
+      ? await this.connection.getBranchId(branchName)
+      : null;
+    const row = await this.connection.getQuery(
+      `SELECT COUNT(*) as file_count, MAX(last_analyzed) as last_analyzed
+       FROM project_files
+       WHERE (? IS NULL OR branch_id = ?)`,
+      [branchId, branchId],
+    );
+    return {
+      fileCount: row?.file_count || 0,
+      lastAnalyzed: row?.last_analyzed || null,
+    };
   }
 
   generateMissingFileEmbeddings(
@@ -251,5 +272,12 @@ export class ProjectAnalysisOperations {
       retainedPaths,
       branchName,
     );
+  }
+
+  cleanupIgnoredFiles(
+    rootPath: string,
+    branchName?: string,
+  ): Promise<number> {
+    return this.cleanupOps.cleanupIgnoredFiles(rootPath, branchName);
   }
 }

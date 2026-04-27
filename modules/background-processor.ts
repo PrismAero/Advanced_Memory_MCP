@@ -50,6 +50,7 @@ export class BackgroundProcessor {
   private lastProjectAnalysis: Date | null = null;
   private projectMonitoringInterval: NodeJS.Timeout | null = null;
   private interfaceAnalysisInterval: NodeJS.Timeout | null = null;
+  private initialProjectScanTimeout: NodeJS.Timeout | null = null;
 
   constructor(
     memoryManager: EnhancedMemoryManager,
@@ -164,6 +165,11 @@ export class BackgroundProcessor {
       this.projectMonitoringInterval = null;
     }
 
+    if (this.initialProjectScanTimeout) {
+      clearTimeout(this.initialProjectScanTimeout);
+      this.initialProjectScanTimeout = null;
+    }
+
     if (this.interfaceAnalysisInterval) {
       clearInterval(this.interfaceAnalysisInterval);
       this.interfaceAnalysisInterval = null;
@@ -202,12 +208,11 @@ export class BackgroundProcessor {
       this.startInterfaceAnalysis();
     }
 
-    // Kick off an immediate scan so a freshly-opened project starts
-    // populating the database within seconds instead of waiting for
-    // the 3-minute interval to fire.
-    this.monitorProjectStructure().catch((error) => {
-      logger.error("Initial project scan error:", error);
+    this.cleanupIgnoredProjectFiles().catch((error) => {
+      logger.warn("Startup ignored-file cleanup failed:", error);
     });
+
+    this.scheduleInitialProjectScan();
   }
 
   /**
@@ -229,8 +234,13 @@ export class BackgroundProcessor {
 
     // Start file watcher for real-time changes
     if (!this.fileWatcher) {
-      this.fileWatcher = new FileWatcher(this.projectIndexer);
-      this.fileWatcher.startWatching(this.currentProjectPath);
+      this.fileWatcher = new FileWatcher(this.projectIndexer, {
+        skipInitialAnalysis: true,
+        skipInitialFolderTree: true,
+      });
+      this.fileWatcher.startWatching(this.currentProjectPath).catch((error) => {
+        logger.warn("File watcher startup failed:", error);
+      });
 
       this.fileWatcher.on("significantChanges", (changes) => {
         logger.debug(
@@ -241,6 +251,57 @@ export class BackgroundProcessor {
     }
 
     logger.info("[FOLDER] Project monitoring started (3-minute intervals)");
+  }
+
+  private scheduleInitialProjectScan(): void {
+    if (!this.currentProjectPath) return;
+    if (this.initialProjectScanTimeout) {
+      clearTimeout(this.initialProjectScanTimeout);
+      this.initialProjectScanTimeout = null;
+    }
+
+    const delayMs = Number(
+      process.env.ADVANCED_MEMORY_INITIAL_SCAN_DELAY_MS || 60_000,
+    );
+    this.initialProjectScanTimeout = setTimeout(() => {
+      this.initialProjectScanTimeout = null;
+      this.shouldSkipInitialProjectScan()
+        .then((skip) => {
+          if (skip) {
+            logger.info(
+              "[BACKGROUND] Existing project index found; skipping startup full project scan",
+            );
+            this.lastProjectAnalysis = new Date();
+            return;
+          }
+          return this.monitorProjectStructure();
+        })
+        .catch((error) => {
+          logger.error("Initial project scan error:", error);
+        });
+    }, Math.max(0, delayMs));
+
+    logger.info(
+      `[BACKGROUND] Initial project scan scheduled in ${Math.round(
+        delayMs / 1000,
+      )}s`,
+    );
+  }
+
+  private async shouldSkipInitialProjectScan(): Promise<boolean> {
+    if (!this.projectAnalysisOps || !this.currentProjectPath) return false;
+    const stats = await this.projectAnalysisOps.getProjectIndexStats();
+    return stats.fileCount > 0;
+  }
+
+  private async cleanupIgnoredProjectFiles(): Promise<void> {
+    if (!this.projectAnalysisOps || !this.currentProjectPath) return;
+    const removed = await this.projectAnalysisOps.cleanupIgnoredFiles(
+      this.currentProjectPath,
+    );
+    if (removed > 0) {
+      logger.info(`[MEMORYIGNORE] Removed ${removed} ignored project files`);
+    }
   }
 
   /**
@@ -336,6 +397,8 @@ export class BackgroundProcessor {
 
       // Drop rows for files that no longer exist on disk.
       try {
+        await this.cleanupIgnoredProjectFiles();
+
         await this.projectAnalysisOps.cleanupDeletedFiles(
           files.map((f) => f.filePath),
         );

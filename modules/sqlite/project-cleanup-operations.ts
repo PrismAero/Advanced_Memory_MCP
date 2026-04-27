@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { IgnorePolicy } from "../project-analysis/ignore-policy.js";
 import { VectorStore } from "../vector-store.js";
 import { SQLiteConnection } from "./sqlite-connection.js";
 
@@ -22,6 +23,33 @@ export class ProjectCleanupOperations {
   ): Promise<number> {
     const branchId = await this.connection.getBranchId(branchName);
     return this.cleanupFilesNotInSet(retainedPaths, branchId);
+  }
+
+  async cleanupIgnoredFiles(
+    rootPath: string,
+    branchName?: string,
+  ): Promise<number> {
+    const branchId = await this.connection.getBranchId(branchName);
+    const ignorePolicy = new IgnorePolicy();
+    await ignorePolicy.load(rootPath);
+
+    const rows = await this.connection.runQuery(
+      "SELECT id, file_path, relative_path FROM project_files WHERE branch_id = ?",
+      [branchId],
+    );
+    const ignoredIds = (rows || [])
+      .filter((row: any) => {
+        const relativePath = row.relative_path || relativeFromRoot(rootPath, row.file_path);
+        return ignorePolicy.ignores(relativePath);
+      })
+      .map((row: any) => row.id);
+
+    if (ignoredIds.length === 0) return 0;
+    await this.deleteProjectFilesById(ignoredIds);
+    logger.info(
+      `Cleaned up ${ignoredIds.length} newly ignored files from database`,
+    );
+    return ignoredIds.length;
   }
 
   private async cleanupFilesNotInSet(
@@ -64,6 +92,12 @@ export class ProjectCleanupOperations {
       );
 
       await this.connection.execute(
+        `DELETE FROM project_dependencies
+         WHERE from_file_id IN (${placeholders}) OR to_file_id IN (${placeholders})`,
+        [...fileIds, ...fileIds],
+      );
+
+      await this.connection.execute(
         `DELETE FROM project_files WHERE id IN (${placeholders})`,
         fileIds,
       );
@@ -71,4 +105,13 @@ export class ProjectCleanupOperations {
 
     return fileIds.length;
   }
+}
+
+function relativeFromRoot(rootPath: string, filePath: string): string {
+  const normalizedRoot = rootPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedFile = String(filePath || "").replace(/\\/g, "/");
+  if (normalizedFile.startsWith(`${normalizedRoot}/`)) {
+    return normalizedFile.slice(normalizedRoot.length + 1);
+  }
+  return normalizedFile;
 }

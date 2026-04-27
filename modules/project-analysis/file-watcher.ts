@@ -72,6 +72,8 @@ export interface WatcherConfig {
   enableStats: boolean;
   useGitignore: boolean; // Whether to respect .gitignore files
   additionalIgnorePatterns?: string[]; // Extra patterns to ignore beyond .gitignore
+  skipInitialAnalysis?: boolean; // Avoid startup-wide scans when DB already has state
+  skipInitialFolderTree?: boolean; // Avoid building an in-memory tree for huge repos
 }
 
 /**
@@ -110,6 +112,8 @@ export class FileWatcher extends EventEmitter {
       enableStats: true,
       useGitignore: true,
       additionalIgnorePatterns: [],
+      skipInitialAnalysis: false,
+      skipInitialFolderTree: false,
       ...config,
     };
 
@@ -138,11 +142,17 @@ export class FileWatcher extends EventEmitter {
         await this.loadGitignorePatterns();
       }
 
-      // Initial project analysis
-      await this.performInitialAnalysis();
+      if (!this.config.skipInitialAnalysis) {
+        await this.performInitialAnalysis();
+      } else {
+        logger.debug("[DATA] Skipping file watcher initial project analysis");
+      }
 
-      // Build initial folder tree
-      await this.buildInitialFolderTree();
+      if (!this.config.skipInitialFolderTree) {
+        await this.buildInitialFolderTree();
+      } else {
+        logger.debug("[FOLDER] Skipping file watcher initial folder tree build");
+      }
 
       // Start file system watcher
       this.watcher = chokidar.watch(this.rootPath, {

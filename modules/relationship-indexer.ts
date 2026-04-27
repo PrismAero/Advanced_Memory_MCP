@@ -61,13 +61,16 @@ export class RelationshipIndexer {
     // Start background processing
     this.startBackgroundProcessing();
 
-    // Queue initial index build
-    this.queueTask({
-      id: `init_${Date.now()}`,
-      type: "cleanup_stale",
-      priority: "high",
-      createdAt: new Date(),
-    });
+    if (process.env.ADVANCED_MEMORY_BUILD_RELATIONSHIP_INDEX_ON_STARTUP === "1") {
+      this.queueTask({
+        id: `init_${Date.now()}`,
+        type: "cleanup_stale",
+        priority: "high",
+        createdAt: new Date(),
+      });
+    } else {
+      logger.info("[INIT] Skipping startup relationship index rebuild");
+    }
 
     logger.info("[SUCCESS] Relationship Indexer ready");
   }

@@ -34,6 +34,7 @@ export class VectorStore {
   private tensorIndex: tf.Tensor | null = null;
   private idMap: string[] = [];
   private isDirty: boolean = false;
+  private indexLoaded: boolean = false;
 
   constructor(
     connection: SQLiteConnection,
@@ -45,7 +46,7 @@ export class VectorStore {
     this.dimension = dimension;
   }
 
-  async initialize(): Promise<void> {
+  async initialize(options: { loadExisting?: boolean } = {}): Promise<void> {
     // Create table if not exists
     await this.connection.runQuery(`
       CREATE TABLE IF NOT EXISTS ${this.tableName} (
@@ -57,9 +58,13 @@ export class VectorStore {
       )
     `);
 
-    await this.loadIndex();
+    if (options.loadExisting === true) {
+      await this.loadIndex();
+    } else {
+      this.indexLoaded = false;
+    }
     logger.info(
-      `[VECTOR] Vector store initialized with ${this.vectorCache.size} vectors`
+      `[VECTOR] Vector store initialized${options.loadExisting === true ? ` with ${this.vectorCache.size} vectors` : " (lazy index load)"}`
     );
   }
 
@@ -87,6 +92,7 @@ export class VectorStore {
         }
         this.rebuildTensorIndex();
       }
+      this.indexLoaded = true;
     } catch (error) {
       logger.error("Failed to load vector index:", error);
     }
@@ -180,6 +186,10 @@ export class VectorStore {
     limit: number = 5,
     minScore: number = 0.0
   ): Promise<VectorSearchResult[]> {
+    if (!this.indexLoaded) {
+      await this.loadIndex();
+    }
+
     if (!this.tensorIndex || this.vectorCache.size === 0) {
       return [];
     }

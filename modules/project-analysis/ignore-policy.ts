@@ -55,7 +55,18 @@ export class IgnorePolicy {
     }
 
     if (!this.ignoreFilter) return false;
-    return this.ignoreFilter.ignores(normalized);
+    if (this.ignoreFilter.ignores(normalized)) return true;
+
+    // Treat ignored directory entries as applying to all descendants. This
+    // makes `.memoryignore` entries such as `generated`, `build/`, or
+    // `third_party/foo` clean up and skip nested files even when the DB row is
+    // for `generated/sub/file.cpp`.
+    const parts = normalized.split("/");
+    for (let index = 1; index < parts.length; index++) {
+      const ancestor = parts.slice(0, index).join("/");
+      if (ancestor && this.ignoreFilter.ignores(ancestor)) return true;
+    }
+    return false;
   }
 
   getWatcherIgnoreGlobs(): string[] {
