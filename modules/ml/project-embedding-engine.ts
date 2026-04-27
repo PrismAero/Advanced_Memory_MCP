@@ -101,7 +101,7 @@ export class ProjectEmbeddingEngine {
     this.baseModelManager = baseModelManager;
     this.adaptiveTrainer = adaptiveTrainer;
 
-    logger.info(" Project embedding engine initialized");
+    logger.debug("Project embedding engine initialized");
   }
 
   /**

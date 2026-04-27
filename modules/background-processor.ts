@@ -1,3 +1,5 @@
+import { promises as fs } from "fs";
+import path from "path";
 import { EnhancedMemoryManager } from "../enhanced-memory-manager-modular.js";
 import { Entity } from "../memory-types.js";
 import { ContextEngine } from "./intelligence/context-engine.js";
@@ -7,6 +9,7 @@ import { resolveOwnedPath } from "./path-boundary.js";
 import { ProjectEmbeddingEngine } from "./ml/project-embedding-engine.js";
 import { TrainingDataCollector } from "./ml/training-data-collector.js";
 import { FileWatcher } from "./project-analysis/file-watcher.js";
+import { IgnorePolicy } from "./project-analysis/ignore-policy.js";
 import { InterfaceMapper } from "./project-analysis/interface-mapper.js";
 import { ProjectIndexer } from "./project-analysis/project-indexer.js";
 import {
@@ -51,6 +54,31 @@ export class BackgroundProcessor {
   private projectMonitoringInterval: NodeJS.Timeout | null = null;
   private interfaceAnalysisInterval: NodeJS.Timeout | null = null;
   private initialProjectScanTimeout: NodeJS.Timeout | null = null;
+  private hasExistingProjectIndex: boolean = false;
+  private isEmbeddingBackfillRunning: boolean = false;
+  private readonly projectMaintenanceIntervalMs = readDurationMs(
+    "ADVANCED_MEMORY_PROJECT_MAINTENANCE_INTERVAL_MS",
+    30 * 60 * 1000,
+  );
+  private readonly periodicFullScanIntervalMs = readDurationMs(
+    "ADVANCED_MEMORY_PERIODIC_FULL_SCAN_INTERVAL_MS",
+    0,
+  );
+  private readonly enableStartupFullSweep =
+    process.env.ADVANCED_MEMORY_STARTUP_FULL_SWEEP !== "0";
+  private readonly enableFileWatcher =
+    process.env.ADVANCED_MEMORY_ENABLE_FILE_WATCHER !== "0";
+  private readonly enableBackgroundInterfaceAnalysis =
+    process.env.ADVANCED_MEMORY_ENABLE_BACKGROUND_INTERFACE_ANALYSIS === "1";
+  private readonly runInitialBackgroundTasks =
+    process.env.ADVANCED_MEMORY_RUN_INITIAL_BACKGROUND_TASKS === "1";
+  private readonly enableEmbeddingBackfill =
+    process.env.ADVANCED_MEMORY_ENABLE_EMBEDDING_BACKFILL !== "0";
+  private readonly embeddingBackfillBatchSize = readPositiveInt(
+    "ADVANCED_MEMORY_EMBEDDING_BACKFILL_BATCH_SIZE",
+    50,
+    500,
+  );
 
   constructor(
     memoryManager: EnhancedMemoryManager,
@@ -98,7 +126,7 @@ export class BackgroundProcessor {
       }
     });
 
-    logger.info(
+    logger.debug(
       "[BOT] Enhanced background processor initialized with ML-based project monitoring",
     );
   }
@@ -139,16 +167,19 @@ export class BackgroundProcessor {
       });
     }, intervalMs);
 
-    logger.info(
-      `Background processor started with ${intervalMinutes} minute interval`,
-    );
+    logger.info(`Background processor started (${intervalMinutes} minute interval)`);
 
-    // Run initial background tasks after a short delay
-    setTimeout(() => {
-      this.runBackgroundTasks().catch((error) => {
-        logger.error("Initial background processing error:", error);
-      });
-    }, 30000); // 30 seconds delay
+    if (this.runInitialBackgroundTasks) {
+      setTimeout(() => {
+        this.runBackgroundTasks().catch((error) => {
+          logger.error("Initial background processing error:", error);
+        });
+      }, 30000);
+    } else {
+      logger.debug(
+        "Initial background processing sweep disabled; enable with ADVANCED_MEMORY_RUN_INITIAL_BACKGROUND_TASKS=1",
+      );
+    }
   }
 
   /**
@@ -191,21 +222,32 @@ export class BackgroundProcessor {
    * Set the project to monitor and start monitoring tasks
    */
   setMonitoredProject(projectPath: string): void {
-    this.currentProjectPath = resolveOwnedPath(projectPath, "project_path");
-    // Force the next monitorProjectStructure() to actually run,
-    // even if the process previously ran one for a different path.
-    this.lastProjectAnalysis = null;
+    const resolvedProjectPath = resolveOwnedPath(projectPath, "project_path");
+    const pathChanged = this.currentProjectPath !== resolvedProjectPath;
+    this.currentProjectPath = resolvedProjectPath;
+    if (pathChanged) {
+      this.lastProjectAnalysis = null;
+      this.hasExistingProjectIndex = false;
+    }
     logger.info(
       `[BACKGROUND] Set monitored project path: ${this.currentProjectPath}`,
     );
+
+    this.loadProjectIndexState().catch((error) => {
+      logger.debug("Project index state check failed:", error);
+    });
 
     // Start monitoring if not already running
     if (!this.projectMonitoringInterval) {
       this.startProjectMonitoring();
     }
 
-    if (!this.interfaceAnalysisInterval) {
+    if (this.enableBackgroundInterfaceAnalysis && !this.interfaceAnalysisInterval) {
       this.startInterfaceAnalysis();
+    } else if (!this.enableBackgroundInterfaceAnalysis) {
+      logger.info(
+        "[SEARCH] Background interface analysis disabled; enable with ADVANCED_MEMORY_ENABLE_BACKGROUND_INTERFACE_ANALYSIS=1",
+      );
     }
 
     this.cleanupIgnoredProjectFiles().catch((error) => {
@@ -216,24 +258,27 @@ export class BackgroundProcessor {
   }
 
   /**
-   * Start project structure monitoring (every 3 minutes)
+   * Start lightweight project maintenance.
    */
   private startProjectMonitoring(): void {
     if (!this.currentProjectPath) return;
 
-    this.projectMonitoringInterval = setInterval(
-      async () => {
-        try {
-          await this.monitorProjectStructure();
-        } catch (error) {
-          logger.error("Project monitoring error:", error);
-        }
-      },
-      3 * 60 * 1000,
-    ); // 3 minutes
+    if (this.projectMaintenanceIntervalMs > 0) {
+      this.projectMonitoringInterval = setInterval(
+        async () => {
+          try {
+            await this.monitorProjectStructure();
+          } catch (error) {
+            logger.error("Project monitoring error:", error);
+          }
+        },
+        this.projectMaintenanceIntervalMs,
+      );
+    }
 
-    // Start file watcher for real-time changes
-    if (!this.fileWatcher) {
+    // File watching still requires chokidar to walk large directory trees, so it
+    // is opt-in for massive repos. Explicit analyze_workspace calls still work.
+    if (this.enableFileWatcher && !this.fileWatcher) {
       this.fileWatcher = new FileWatcher(this.projectIndexer, {
         skipInitialAnalysis: true,
         skipInitialFolderTree: true,
@@ -248,9 +293,19 @@ export class BackgroundProcessor {
         );
         this.handleFileChanges(changes);
       });
+    } else if (!this.enableFileWatcher) {
+      logger.info(
+        "[FOLDER] File watcher disabled; enable with ADVANCED_MEMORY_ENABLE_FILE_WATCHER=1",
+      );
     }
 
-    logger.info("[FOLDER] Project monitoring started (3-minute intervals)");
+    logger.info(
+      this.projectMaintenanceIntervalMs > 0
+        ? `[FOLDER] Project maintenance started (${Math.round(
+            this.projectMaintenanceIntervalMs / 1000,
+          )}s intervals)`
+        : "[FOLDER] Periodic project maintenance disabled",
+    );
   }
 
   private scheduleInitialProjectScan(): void {
@@ -265,17 +320,7 @@ export class BackgroundProcessor {
     );
     this.initialProjectScanTimeout = setTimeout(() => {
       this.initialProjectScanTimeout = null;
-      this.shouldSkipInitialProjectScan()
-        .then((skip) => {
-          if (skip) {
-            logger.info(
-              "[BACKGROUND] Existing project index found; skipping startup full project scan",
-            );
-            this.lastProjectAnalysis = new Date();
-            return;
-          }
-          return this.monitorProjectStructure();
-        })
+      this.runStartupProjectSweep()
         .catch((error) => {
           logger.error("Initial project scan error:", error);
         });
@@ -288,10 +333,26 @@ export class BackgroundProcessor {
     );
   }
 
-  private async shouldSkipInitialProjectScan(): Promise<boolean> {
-    if (!this.projectAnalysisOps || !this.currentProjectPath) return false;
+  private async runStartupProjectSweep(): Promise<void> {
+    if (!this.enableStartupFullSweep) {
+      logger.info(
+        "[BACKGROUND] Startup project sweep disabled by ADVANCED_MEMORY_STARTUP_FULL_SWEEP=0",
+      );
+      await this.loadProjectIndexState();
+      return;
+    }
+
+    logger.info("[BACKGROUND] Running one startup project reconciliation sweep");
+    await this.monitorProjectStructure({ force: true, reason: "startup" });
+  }
+
+  private async loadProjectIndexState(): Promise<void> {
+    if (!this.projectAnalysisOps) return;
     const stats = await this.projectAnalysisOps.getProjectIndexStats();
-    return stats.fileCount > 0;
+    this.hasExistingProjectIndex = stats.fileCount > 0;
+    if (this.hasExistingProjectIndex && stats.lastAnalyzed) {
+      this.lastProjectAnalysis = new Date(stats.lastAnalyzed);
+    }
   }
 
   private async cleanupIgnoredProjectFiles(): Promise<void> {
@@ -334,18 +395,17 @@ export class BackgroundProcessor {
    *   2. Expensive: embed files+interfaces and back-fill the vectors
    *      table. This is allowed to be slow / interrupted.
    */
-  private async monitorProjectStructure(): Promise<void> {
+  private async monitorProjectStructure(
+    options: { force?: boolean; reason?: "startup" | "periodic" | "manual" } = {},
+  ): Promise<void> {
     if (!this.currentProjectPath || !this.projectAnalysisOps) return;
 
     try {
       logger.debug("[DATA] Monitoring project structure changes");
 
-      // Re-analyze project if it's been a while
-      const shouldReanalyze =
-        !this.lastProjectAnalysis ||
-        Date.now() - this.lastProjectAnalysis.getTime() > 30 * 60 * 1000; // 30 minutes
-
-      if (!shouldReanalyze) return;
+      if (!options.force && (await this.shouldSkipPeriodicProjectScan())) {
+        return;
+      }
 
       const projectInfo = await this.projectIndexer.analyzeProject(
         this.currentProjectPath,
@@ -408,20 +468,40 @@ export class BackgroundProcessor {
 
       this.lastProjectAnalysis = new Date();
       logger.info(
-        `[LOADING] Project structure persisted (${storedFiles.length}/${files.length} files)`,
+        `[LOADING] Project structure persisted (${storedFiles.length}/${files.length} files, reason: ${options.reason || "periodic"})`,
       );
 
       // Phase 2 — kick off embedding back-fill in the background. Any
       // already-persisted row simply gets its vector populated when the
       // model finishes; we don't block this scan on it.
-      if (this.projectEmbeddingEngine) {
+      if (this.enableEmbeddingBackfill && this.projectEmbeddingEngine) {
         this.backfillMissingEmbeddings().catch((error) => {
           logger.debug("Embedding backfill error:", error);
         });
+      } else if (!this.enableEmbeddingBackfill) {
+        logger.debug(
+          "[VECTOR] Embedding backfill disabled; enable by removing ADVANCED_MEMORY_ENABLE_EMBEDDING_BACKFILL=0",
+        );
       }
     } catch (error) {
       logger.error("Failed to monitor project structure:", error);
     }
+  }
+
+  private async shouldSkipPeriodicProjectScan(): Promise<boolean> {
+    await this.loadProjectIndexState();
+
+    if (!this.hasExistingProjectIndex) return false;
+
+    if (this.periodicFullScanIntervalMs <= 0) {
+      logger.debug(
+        "[DATA] Existing project index found; periodic full project scans are disabled",
+      );
+      return true;
+    }
+
+    const lastScanMs = this.lastProjectAnalysis?.getTime() || 0;
+    return Date.now() - lastScanMs < this.periodicFullScanIntervalMs;
   }
 
   /**
@@ -434,7 +514,11 @@ export class BackgroundProcessor {
       logger.debug("[SEARCH] Analyzing project interfaces");
 
       // Also check and backfill missing embeddings
-      if (this.projectAnalysisOps && this.projectEmbeddingEngine) {
+      if (
+        this.enableEmbeddingBackfill &&
+        this.projectAnalysisOps &&
+        this.projectEmbeddingEngine
+      ) {
         await this.backfillMissingEmbeddings();
       }
 
@@ -455,9 +539,28 @@ export class BackgroundProcessor {
    */
   private async backfillMissingEmbeddings(): Promise<void> {
     if (!this.projectAnalysisOps || !this.projectEmbeddingEngine) return;
+    if (this.isEmbeddingBackfillRunning) {
+      logger.debug("[VECTOR] Embedding backfill already running; skipping overlap");
+      return;
+    }
+
+    this.isEmbeddingBackfillRunning = true;
 
     try {
-      // Generate embeddings for files without them (batch of 50)
+      const before = await this.projectAnalysisOps.getMissingEmbeddingCounts();
+      if (
+        before.filesWithoutEmbeddings === 0 &&
+        before.interfacesWithoutEmbeddings === 0
+      ) {
+        logger.debug("[VECTOR] No embedding backlog to backfill");
+        return;
+      }
+
+      logger.info(
+        `[VECTOR] Embedding backfill batch starting: backlog ${before.filesWithoutEmbeddings} files, ${before.interfacesWithoutEmbeddings} interfaces; batch size ${this.embeddingBackfillBatchSize} per type`,
+      );
+
+      // Generate embeddings for files without them in a bounded low-priority batch.
       const fileEmbeddingGenerator = async (fileContext: string) => {
         const result =
           await this.projectEmbeddingEngine!.generateProjectEmbedding(
@@ -471,10 +574,10 @@ export class BackgroundProcessor {
       const updatedFiles =
         await this.projectAnalysisOps.generateMissingFileEmbeddings(
           fileEmbeddingGenerator,
-          50,
+          this.embeddingBackfillBatchSize,
         );
 
-      // Generate embeddings for interfaces without them (batch of 50)
+      // Generate embeddings for interfaces without them in a bounded low-priority batch.
       const interfaceEmbeddingGenerator = async (interfaceContext: string) => {
         const result =
           await this.projectEmbeddingEngine!.generateProjectEmbedding(
@@ -488,16 +591,17 @@ export class BackgroundProcessor {
       const updatedInterfaces =
         await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
           interfaceEmbeddingGenerator,
-          50,
+          this.embeddingBackfillBatchSize,
         );
 
-      if (updatedFiles.length > 0 || updatedInterfaces.length > 0) {
-        logger.info(
-          `[VECTOR] Backfilled embeddings: ${updatedFiles.length} files, ${updatedInterfaces.length} interfaces`,
-        );
-      }
+      const after = await this.projectAnalysisOps.getMissingEmbeddingCounts();
+      logger.info(
+        `[VECTOR] Embedding backfill batch complete: processed ${updatedFiles.length} files, ${updatedInterfaces.length} interfaces; remaining ${after.filesWithoutEmbeddings} files, ${after.interfacesWithoutEmbeddings} interfaces`,
+      );
     } catch (error) {
       logger.debug("Backfill embeddings error:", error);
+    } finally {
+      this.isEmbeddingBackfillRunning = false;
     }
   }
 
@@ -507,6 +611,8 @@ export class BackgroundProcessor {
   private async handleFileChanges(changes: any[]): Promise<void> {
     for (const change of changes) {
       try {
+        await this.updateProjectIndexForFileChange(change);
+
         // Extract relevant information for training data
         if (
           this.trainingDataCollector &&
@@ -560,6 +666,72 @@ export class BackgroundProcessor {
     } catch (error) {
       logger.debug(`Failed to update relevance for file change:`, error);
     }
+  }
+
+  private async updateProjectIndexForFileChange(change: any): Promise<void> {
+    if (!this.currentProjectPath || !this.projectAnalysisOps || !change.path) {
+      return;
+    }
+
+    const changedPath = resolveOwnedPath(
+      change.path,
+      "changed_file",
+      this.currentProjectPath,
+    );
+    if (this.isIgnoreConfigFile(changedPath)) {
+      await this.cleanupIgnoredProjectFiles();
+      return;
+    }
+
+    if (change.type === "unlink" || change.type === "unlinkDir") {
+      await this.projectAnalysisOps.deleteProjectFilesByPath([changedPath]);
+      return;
+    }
+
+    const relativePath = path.relative(this.currentProjectPath, changedPath);
+    const ignorePolicy = new IgnorePolicy();
+    await ignorePolicy.load(this.currentProjectPath);
+    if (ignorePolicy.ignores(relativePath)) {
+      await this.projectAnalysisOps.deleteProjectFilesByPath([changedPath]);
+      return;
+    }
+
+    const stats = await fs.stat(changedPath).catch(() => null);
+    if (!stats?.isFile()) return;
+
+    const file = await this.projectIndexer.analyzeFile(
+      changedPath,
+      this.currentProjectPath,
+    );
+    if (!file) return;
+
+    const [storedFile] = await this.projectAnalysisOps.storeProjectFiles([file]);
+    if (!storedFile?.id) return;
+
+    await this.projectAnalysisOps.clearProjectFileDerivedData([storedFile.id]);
+
+    if (file.interfaces?.length) {
+      await this.projectAnalysisOps.storeCodeInterfaces(
+        storedFile.id,
+        file.interfaces,
+      );
+    }
+
+    if (file.imports?.length || file.exports?.length) {
+      await this.projectAnalysisOps.storeProjectDependencies(
+        storedFile.id,
+        file.imports || [],
+        file.exports || [],
+      );
+    }
+  }
+
+  private isIgnoreConfigFile(filePath: string): boolean {
+    if (!this.currentProjectPath) return false;
+    const relativePath = path
+      .relative(this.currentProjectPath, filePath)
+      .replace(/\\/g, "/");
+    return relativePath === ".gitignore" || relativePath === ".memory/.memoryignore";
   }
 
   /**
@@ -1279,4 +1451,20 @@ export class BackgroundProcessor {
       logger.warn(`Failed to update working context for ${entityName}:`, error);
     }
   }
+}
+
+function readDurationMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return Math.floor(value);
+}
+
+function readPositiveInt(name: string, fallback: number, max: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 1) return fallback;
+  return Math.min(Math.floor(value), max);
 }

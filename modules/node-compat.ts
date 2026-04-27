@@ -12,6 +12,10 @@ const require = createRequire(import.meta.url);
 
 let initialized = false;
 
+// Keep TensorFlow native startup chatter from flooding MCP stderr. Users can
+// opt back in by setting TF_CPP_MIN_LOG_LEVEL explicitly.
+process.env.TF_CPP_MIN_LOG_LEVEL ??= "2";
+
 /**
  * Apply all Node.js compatibility polyfills for TensorFlow.js
  * Safe to call multiple times - will only apply once
@@ -104,9 +108,6 @@ export function applyNodeCompatPolyfills(): void {
     };
 
     initialized = true;
-    console.error(
-      "[COMPATIBILITY] TensorFlow.js compatibility shim initialized for Node.js v24+"
-    );
   } catch (error) {
     console.error(
       "[COMPATIBILITY] Failed to apply Node.js compatibility polyfills:",

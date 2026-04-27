@@ -95,7 +95,7 @@ export class ModernSimilarityEngine {
     }
 
     try {
-      logger.info("Initializing TensorFlow.js similarity engine...");
+      logger.debug("Initializing TensorFlow.js similarity engine...");
       await this.modelManager.initialize();
       this.initialized = true;
       logger.info(

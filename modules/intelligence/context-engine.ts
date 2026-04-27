@@ -137,7 +137,7 @@ export class ContextEngine {
     this.interfaceMapper = interfaceMapper;
     this.projectAnalysisOps = projectAnalysisOps;
 
-    logger.info(" Context engine initialized");
+    logger.debug("Context engine initialized");
   }
 
   /**

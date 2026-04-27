@@ -206,7 +206,7 @@ export class ProjectFileOperations {
       );
       if (!files || files.length === 0) return [];
 
-      logger.info(`[VECTOR] Generating embeddings for ${files.length} files...`);
+      logger.debug(`[VECTOR] Generating embeddings for ${files.length} files...`);
       const updatedIds: number[] = [];
 
       for (const file of files) {
@@ -235,7 +235,7 @@ export class ProjectFileOperations {
       }
 
       if (updatedIds.length > 0) {
-        logger.info(`[SUCCESS] Generated embeddings for ${updatedIds.length} files`);
+        logger.debug(`[SUCCESS] Generated embeddings for ${updatedIds.length} files`);
       }
       return updatedIds;
     } catch (error) {

@@ -80,22 +80,7 @@ export class ProjectCleanupOperations {
 
     const placeholders = fileIds.map(() => "?").join(",");
     await this.connection.withTransaction(async () => {
-      const interfaceRows = await this.connection.runQuery(
-        `SELECT id FROM code_interfaces WHERE file_id IN (${placeholders})`,
-        fileIds,
-      );
-      const interfaceIds = (interfaceRows || []).map((row: any) => row.id);
-
-      await this.vectorStore.deleteMany(fileIds.map((id) => `file_${id}`));
-      await this.vectorStore.deleteMany(
-        interfaceIds.map((id: number) => `interface_${id}`),
-      );
-
-      await this.connection.execute(
-        `DELETE FROM project_dependencies
-         WHERE from_file_id IN (${placeholders}) OR to_file_id IN (${placeholders})`,
-        [...fileIds, ...fileIds],
-      );
+      await this.deleteProjectFileDerivedData(fileIds);
 
       await this.connection.execute(
         `DELETE FROM project_files WHERE id IN (${placeholders})`,
@@ -104,6 +89,51 @@ export class ProjectCleanupOperations {
     });
 
     return fileIds.length;
+  }
+
+  async deleteProjectFilesByPath(
+    filePaths: string[],
+    branchName?: string,
+  ): Promise<number> {
+    if (filePaths.length === 0) return 0;
+    const branchId = await this.connection.getBranchId(branchName);
+    const placeholders = filePaths.map(() => "?").join(",");
+    const rows = await this.connection.runQuery(
+      `SELECT id FROM project_files WHERE branch_id = ? AND file_path IN (${placeholders})`,
+      [branchId, ...filePaths],
+    );
+    return this.deleteProjectFilesById((rows || []).map((row: any) => row.id));
+  }
+
+  async clearProjectFileDerivedData(fileIds: number[]): Promise<void> {
+    if (fileIds.length === 0) return;
+    await this.connection.withTransaction(async () => {
+      await this.deleteProjectFileDerivedData(fileIds);
+    });
+  }
+
+  private async deleteProjectFileDerivedData(fileIds: number[]): Promise<void> {
+    const placeholders = fileIds.map(() => "?").join(",");
+    const interfaceRows = await this.connection.runQuery(
+      `SELECT id FROM code_interfaces WHERE file_id IN (${placeholders})`,
+      fileIds,
+    );
+    const interfaceIds = (interfaceRows || []).map((row: any) => row.id);
+
+    await this.vectorStore.deleteMany(fileIds.map((id) => `file_${id}`));
+    await this.vectorStore.deleteMany(
+      interfaceIds.map((id: number) => `interface_${id}`),
+    );
+
+    await this.connection.execute(
+      `DELETE FROM project_dependencies
+       WHERE from_file_id IN (${placeholders}) OR to_file_id IN (${placeholders})`,
+      [...fileIds, ...fileIds],
+    );
+    await this.connection.execute(
+      `DELETE FROM code_interfaces WHERE file_id IN (${placeholders})`,
+      fileIds,
+    );
   }
 }
 

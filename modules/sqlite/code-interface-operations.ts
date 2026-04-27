@@ -393,7 +393,7 @@ export class CodeInterfaceOperations {
       );
       if (!interfaces || interfaces.length === 0) return [];
 
-      logger.info(
+      logger.debug(
         `[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`,
       );
       const updatedIds: number[] = [];
@@ -444,7 +444,7 @@ export class CodeInterfaceOperations {
       }
 
       if (updatedIds.length > 0) {
-        logger.info(
+        logger.debug(
           `[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`,
         );
       }

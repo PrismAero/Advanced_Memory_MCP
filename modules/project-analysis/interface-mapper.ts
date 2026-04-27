@@ -184,7 +184,7 @@ export class InterfaceMapper {
     this.projectAnalysisOps = projectAnalysisOps;
     this.embeddingEngine = embeddingEngine;
 
-    logger.info("[SEARCH] Interface mapper initialized");
+    logger.debug("[SEARCH] Interface mapper initialized");
   }
 
   /**

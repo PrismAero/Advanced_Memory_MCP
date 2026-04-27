@@ -66,20 +66,25 @@ export class ProjectAnalysisOperations {
     await this.vectorStore.initialize({
       loadExisting: process.env.ADVANCED_MEMORY_LOAD_VECTOR_INDEX_ON_STARTUP === "1",
     });
-    await this.backfillMissingEmbeddings();
+    const missing = await this.getMissingEmbeddingCounts();
+    if (missing.filesWithoutEmbeddings > 0 || missing.interfacesWithoutEmbeddings > 0) {
+      logger.info(
+        `[VECTOR] Embedding backlog detected: ${missing.filesWithoutEmbeddings} files, ${missing.interfacesWithoutEmbeddings} interfaces missing vectors`,
+      );
+    } else {
+      logger.debug("[VECTOR] All existing project analysis data has embeddings");
+    }
   }
 
   dispose(): void {
     this.vectorStore.dispose();
   }
 
-  async backfillMissingEmbeddings(): Promise<{
+  async getMissingEmbeddingCounts(): Promise<{
     filesWithoutEmbeddings: number;
     interfacesWithoutEmbeddings: number;
   }> {
     try {
-      logger.info("[VECTOR] Checking for data without embeddings...");
-
       const fileCount = await this.connection.getQuery(`
         SELECT COUNT(*) as count
         FROM project_files pf
@@ -93,19 +98,18 @@ export class ProjectAnalysisOperations {
       const filesWithoutEmbeddings = fileCount?.count || 0;
       const interfacesWithoutEmbeddings = interfaceCount?.count || 0;
 
-      if (filesWithoutEmbeddings > 0 || interfacesWithoutEmbeddings > 0) {
-        logger.info(
-          `[VECTOR] Found ${filesWithoutEmbeddings} files and ${interfacesWithoutEmbeddings} interfaces without embeddings`,
-        );
-      } else {
-        logger.info("[VECTOR] All existing data has embeddings");
-      }
-
       return { filesWithoutEmbeddings, interfacesWithoutEmbeddings };
     } catch (error) {
       logger.warn("Failed to check for missing embeddings:", error);
       return { filesWithoutEmbeddings: 0, interfacesWithoutEmbeddings: 0 };
     }
+  }
+
+  backfillMissingEmbeddings(): Promise<{
+    filesWithoutEmbeddings: number;
+    interfacesWithoutEmbeddings: number;
+  }> {
+    return this.getMissingEmbeddingCounts();
   }
 
   storeProjectFiles(
@@ -279,5 +283,16 @@ export class ProjectAnalysisOperations {
     branchName?: string,
   ): Promise<number> {
     return this.cleanupOps.cleanupIgnoredFiles(rootPath, branchName);
+  }
+
+  deleteProjectFilesByPath(
+    filePaths: string[],
+    branchName?: string,
+  ): Promise<number> {
+    return this.cleanupOps.deleteProjectFilesByPath(filePaths, branchName);
+  }
+
+  clearProjectFileDerivedData(fileIds: number[]): Promise<void> {
+    return this.cleanupOps.clearProjectFileDerivedData(fileIds);
   }
 }

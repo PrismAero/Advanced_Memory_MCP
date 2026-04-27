@@ -104,6 +104,7 @@ export function createMcpServerApp(
   options: McpServerAppOptions = {},
 ): McpServerApp {
   const projectPath = options.projectPath || process.env.MEMORY_PATH || process.cwd();
+  logger.initializeSessionLog(projectPath);
   const startBackgroundProcessor = options.startBackgroundProcessor !== false;
   const autoStartProjectMonitoring =
     options.autoStartProjectMonitoring ?? Boolean(process.env.MEMORY_PATH);
@@ -323,9 +324,6 @@ export function createMcpServerApp(
 
     if (startBackgroundProcessor) {
       backgroundProcessor.start(30);
-      logger.info(
-        "Background processor started for AI memory enhancements (30 min interval)",
-      );
     }
 
     if (autoStartProjectMonitoring) {

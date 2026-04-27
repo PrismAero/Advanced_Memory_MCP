@@ -120,7 +120,7 @@ export class TrainingDataCollector extends EventEmitter {
       this.cleanupOldData();
     }, 24 * 60 * 60 * 1000); // Daily cleanup
 
-    logger.info("[DATA] Training data collector initialized");
+    logger.debug("[DATA] Training data collector initialized");
   }
 
   /**
