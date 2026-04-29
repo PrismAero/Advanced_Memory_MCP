@@ -41,11 +41,23 @@ export class MLHandlers {
         return this.handleFindSimilarCode(args);
       case "backfill":
         return this.handleBackfillEmbeddings(args);
+      case "health":
+        return this.handleEmbeddingHealth();
       default:
         throw new Error(
-          `Unknown embeddings action "${action}". Expected one of: generate, find_similar, backfill.`,
+          `Unknown embeddings action "${action}". Expected one of: generate, find_similar, backfill, health.`,
         );
     }
+  }
+
+  async handleEmbeddingHealth(): Promise<any> {
+    return jsonResponse({
+      action: "health",
+      similarity: this.similarityEngine.getStatistics(),
+      similarity_health: await this.similarityEngine.healthCheck(),
+      project_embeddings: this.projectEmbeddingEngine.getStatistics(),
+      training: this.adaptiveModelTrainer.getTrainingStatistics(),
+    });
   }
 
   async handleTrainProjectModel(args: any): Promise<any> {

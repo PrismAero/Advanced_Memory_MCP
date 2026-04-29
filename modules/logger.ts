@@ -22,7 +22,7 @@ class Logger {
     this.level = LOG_LEVELS[logLevel] ?? LOG_LEVELS.info;
     const consoleLevel = parseLogLevel(
       process.env.ADVANCED_MEMORY_CONSOLE_LOG_LEVEL,
-      process.env.LOG_LEVEL ? logLevel : "warn",
+      "warn",
     );
     this.consoleLevel = LOG_LEVELS[consoleLevel] ?? LOG_LEVELS.warn;
   }

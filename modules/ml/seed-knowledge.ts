@@ -1149,7 +1149,9 @@ const SEED_CONCEPTS: SeedConcept[] = [
  * can use the *same* prefix at query time and benefit from the
  * language clustering we trained for here.
  */
-export function languageTag(language: SeedLanguage | string | undefined): string {
+export function languageTag(
+  language: SeedLanguage | string | undefined,
+): string {
   const lang = (language ?? "any").toString().toLowerCase().trim();
   return `[LANG:${lang}]`;
 }
@@ -1169,7 +1171,9 @@ export function languageTag(language: SeedLanguage | string | undefined): string
  * default `min_confidence_threshold` (0.4) so every seed point
  * actually flows through training.
  */
-export function buildBaselineSeedData(now: Date = new Date()): TrainingDataPoint[] {
+export function buildBaselineSeedData(
+  now: Date = new Date(),
+): TrainingDataPoint[] {
   const points: TrainingDataPoint[] = [];
 
   for (let conceptIdx = 0; conceptIdx < SEED_CONCEPTS.length; conceptIdx++) {
@@ -1244,9 +1248,7 @@ export function getSeedConceptPairs(): Array<{
  * together within a language and pushes unrelated items in *other*
  * languages further away.
  */
-export function getSeedConceptsByLanguage(
-  language: SeedLanguage
-): Array<{
+export function getSeedConceptsByLanguage(language: SeedLanguage): Array<{
   concept: string;
   related: string[];
   domain: string;

@@ -1,9 +1,9 @@
-import * as tf from "@tensorflow/tfjs-node";
 import { promises as fs } from "fs";
 import path from "path";
 import { logger } from "../logger.js";
 import { TensorFlowModelManager } from "../similarity/tensorflow-model-manager.js";
 import { buildBaselineSeedData } from "./seed-knowledge.js";
+import { tf, tensorflowRuntime } from "./tf-runtime.js";
 
 /**
  * Training data point for model fine-tuning
@@ -151,7 +151,7 @@ export class AdaptiveModelTrainer {
   private async maybeLoadBaselineSeed(): Promise<void> {
     if (process.env.DISABLE_BASELINE_SEED === "1") {
       logger.info(
-        "[SEED] Baseline seed disabled via DISABLE_BASELINE_SEED env var"
+        "[SEED] Baseline seed disabled via DISABLE_BASELINE_SEED env var",
       );
       return;
     }
@@ -164,7 +164,7 @@ export class AdaptiveModelTrainer {
 
     if (this.trainingData.size > 0) {
       logger.debug(
-        "[SEED] Trainer already has data points; skipping baseline seed"
+        "[SEED] Trainer already has data points; skipping baseline seed",
       );
       return;
     }
@@ -189,12 +189,12 @@ export class AdaptiveModelTrainer {
             note: "Delete this file (and re-init) to re-apply baseline seed.",
           },
           null,
-          2
-        )
+          2,
+        ),
       );
 
       logger.info(
-        `[SEED] Loaded ${seedPoints.length} baseline knowledge points`
+        `[SEED] Loaded ${seedPoints.length} baseline knowledge points`,
       );
     } catch (error) {
       // Seeding is best-effort; never fail init because of it.
@@ -217,7 +217,7 @@ export class AdaptiveModelTrainer {
     // Auto-trigger training if we have enough data
     if (this.trainingData.size % 100 === 0 && this.trainingData.size > 0) {
       logger.info(
-        `[DATA] Collected ${this.trainingData.size} training data points, considering training`
+        `[DATA] Collected ${this.trainingData.size} training data points, considering training`,
       );
 
       // Only trigger if not already training
@@ -242,15 +242,16 @@ export class AdaptiveModelTrainer {
    * Start training with current data
    */
   async startTraining(
-    config?: Partial<TrainingConfig>
+    config?: Partial<TrainingConfig>,
   ): Promise<TrainingSession> {
+    await tensorflowRuntime.initialize();
     if (this.isTraining) {
       throw new Error("Training is already in progress");
     }
 
     if (this.trainingData.size < 50) {
       throw new Error(
-        `Insufficient training data: ${this.trainingData.size} points (minimum 50 required)`
+        `Insufficient training data: ${this.trainingData.size} points (minimum 50 required)`,
       );
     }
 
@@ -279,7 +280,7 @@ export class AdaptiveModelTrainer {
     this.isTraining = true;
 
     logger.info(
-      `[INIT] Starting training session ${session.id} with ${session.data_points_count} data points`
+      `[INIT] Starting training session ${session.id} with ${session.data_points_count} data points`,
     );
 
     try {
@@ -288,7 +289,9 @@ export class AdaptiveModelTrainer {
       session.completed_at = new Date();
       session.status = "completed";
 
-      logger.info(`[SUCCESS] Training session ${session.id} completed successfully`);
+      logger.info(
+        `[SUCCESS] Training session ${session.id} completed successfully`,
+      );
     } catch (error) {
       session.status = "failed";
       session.error_message =
@@ -306,11 +309,13 @@ export class AdaptiveModelTrainer {
    * Perform the actual training
    */
   private async performTraining(session: TrainingSession): Promise<void> {
+    let inputs: tf.Tensor | null = null;
+    let targets: tf.Tensor | null = null;
     try {
       // Prepare training data
-      const { inputs, targets } = await this.prepareTrainingData(
-        session.config
-      );
+      const tensors = await this.prepareTrainingData(session.config);
+      inputs = tensors.inputs;
+      targets = tensors.targets;
 
       // Create or load model for fine-tuning
       const model = await this.createFineTuningModel();
@@ -351,6 +356,9 @@ export class AdaptiveModelTrainer {
     } catch (error) {
       logger.error("Training failed:", error);
       throw error;
+    } finally {
+      inputs?.dispose();
+      targets?.dispose();
     }
   }
 
@@ -383,9 +391,8 @@ export class AdaptiveModelTrainer {
     }
 
     // Convert to tensors
-    const inputEmbeddings = await this.baseModelManager.generateEmbeddings(
-      inputTexts
-    );
+    const inputEmbeddings =
+      await this.baseModelManager.generateEmbeddings(inputTexts);
 
     const inputs = tf.tensor2d(inputEmbeddings);
     const targets = tf.tensor2d(targetEmbeddings);
@@ -422,7 +429,7 @@ export class AdaptiveModelTrainer {
    * Create training callbacks (simplified version for compatibility)
    */
   private createTrainingCallbacks(
-    session: TrainingSession
+    session: TrainingSession,
   ): tf.CustomCallback[] {
     const epochEndCallback: tf.CustomCallback = {
       onEpochEnd: async (epoch: number, logs?: tf.Logs) => {
@@ -453,7 +460,7 @@ export class AdaptiveModelTrainer {
 
         logger.info(
           `[PROGRESS] Epoch ${epoch + 1}/${session.config.epochs}: ` +
-            `loss=${lossValue.toFixed(4)}, accuracy=${accuracyValue.toFixed(4)}`
+            `loss=${lossValue.toFixed(4)}, accuracy=${accuracyValue.toFixed(4)}`,
         );
 
         // Save model periodically
@@ -472,7 +479,7 @@ export class AdaptiveModelTrainer {
   private async saveTrainedModel(
     model: tf.LayersModel,
     session: TrainingSession,
-    history: tf.History
+    history: tf.History,
   ): Promise<ModelVersion> {
     const version = `v${Date.now()}`;
     const modelPath = path.join(this.modelCacheDir, version);
@@ -505,7 +512,7 @@ export class AdaptiveModelTrainer {
     // Save version metadata
     await fs.writeFile(
       path.join(modelPath, "metadata.json"),
-      JSON.stringify(modelVersion, null, 2)
+      JSON.stringify(modelVersion, null, 2),
     );
 
     this.modelVersions.push(modelVersion);
@@ -535,21 +542,24 @@ export class AdaptiveModelTrainer {
       }
 
       // Apply fine-tuned adjustments
+      const before = tensorflowRuntime.snapshot("adaptive-predict-before");
       const baseEmbedding = tf.tensor2d([baseEmbeddings[0]]);
       const enhancedEmbedding = this.activeModel.predict(
-        baseEmbedding
+        baseEmbedding,
       ) as tf.Tensor;
       const result = await enhancedEmbedding.data();
 
       // Cleanup tensors
       baseEmbedding.dispose();
       enhancedEmbedding.dispose();
+      const after = tensorflowRuntime.snapshot("adaptive-predict-after");
+      tensorflowRuntime.warnOnTensorGrowth(before, after, 0);
 
       return Array.from(result);
     } catch (error) {
       logger.warn(
         "Failed to generate enhanced embedding, falling back to base:",
-        error
+        error,
       );
       return this.baseModelManager
         .generateEmbeddings([text])
@@ -567,7 +577,7 @@ export class AdaptiveModelTrainer {
         const content = await fs.readFile(manifestPath, "utf-8");
         this.modelVersions = JSON.parse(content);
         logger.info(
-          `[CLIPBOARD] Loaded ${this.modelVersions.length} existing model versions`
+          `[CLIPBOARD] Loaded ${this.modelVersions.length} existing model versions`,
         );
       }
     } catch (error) {
@@ -583,7 +593,7 @@ export class AdaptiveModelTrainer {
     const manifestPath = path.join(this.modelCacheDir, "versions.json");
     await fs.writeFile(
       manifestPath,
-      JSON.stringify(this.modelVersions, null, 2)
+      JSON.stringify(this.modelVersions, null, 2),
     );
   }
 
@@ -597,14 +607,16 @@ export class AdaptiveModelTrainer {
         const modelPath = path.join(
           activeVersion.file_path,
           "model",
-          "model.json"
+          "model.json",
         );
         this.activeModel = await tf.loadLayersModel(`file://${modelPath}`);
-        logger.info(`[TARGET] Loaded active model version ${activeVersion.version}`);
+        logger.info(
+          `[TARGET] Loaded active model version ${activeVersion.version}`,
+        );
       } catch (error) {
         logger.warn(
           `Failed to load active model ${activeVersion.version}:`,
-          error
+          error,
         );
       }
     }
@@ -645,10 +657,13 @@ export class AdaptiveModelTrainer {
     current_session?: TrainingSession;
   } {
     const dataPoints = Array.from(this.trainingData.values());
-    const sourceTypes = dataPoints.reduce((acc, point) => {
-      acc[point.source_type] = (acc[point.source_type] || 0) + 1;
-      return acc;
-    }, {} as { [source: string]: number });
+    const sourceTypes = dataPoints.reduce(
+      (acc, point) => {
+        acc[point.source_type] = (acc[point.source_type] || 0) + 1;
+        return acc;
+      },
+      {} as { [source: string]: number },
+    );
 
     const averageConfidence =
       dataPoints.length > 0
@@ -714,7 +729,8 @@ export class AdaptiveModelTrainer {
     const sorted = Array.from(this.trainingData.values()).sort(
       (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
-    const overflow = this.trainingData.size - this.maxRetainedTrainingDataPoints;
+    const overflow =
+      this.trainingData.size - this.maxRetainedTrainingDataPoints;
     for (const point of sorted.slice(0, overflow)) {
       this.trainingData.delete(point.id);
     }

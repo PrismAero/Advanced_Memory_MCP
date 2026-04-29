@@ -21,14 +21,14 @@ export interface ModelConfig {
 
 /**
  * Supported TensorFlow.js models for entity similarity
- * All models are bundled locally for offline operation
+ * Models are prepared into a local cache before inference.
  */
 export const SUPPORTED_MODELS: { [key: string]: ModelConfig } = {
   "universal-sentence-encoder": {
     id: "universal-sentence-encoder",
     name: "Universal Sentence Encoder",
-    description: "Bundled model for semantic similarity (local-only)",
-    url: "@tensorflow-models/universal-sentence-encoder",
+    description: "Universal Sentence Encoder Lite loaded from a local cache",
+    url: "local-cache:universal-sentence-encoder",
     size: 25, // Approximate size in MB when loaded
     embeddingDim: 512,
     maxTokens: 256,
@@ -76,7 +76,7 @@ export function getDefaultModelSelection(): ModelSelection {
   // Default configuration using bundled model
   return {
     preferredModel: "universal-sentence-encoder",
-    fallbackModels: [], // No fallbacks needed - bundled model is always available
+    fallbackModels: [],
     autoFallback: false,
     performanceMode: "balanced",
   };
@@ -193,8 +193,18 @@ export function getEnvironmentConfig(): EnvironmentConfig {
   return {
     maxMemoryUsage: parseInt(process.env.MAX_MODEL_MEMORY || "200"),
     preferredPerformance: (process.env.PERFORMANCE_MODE as any) || "balanced",
-    allowModelDownload: process.env.ALLOW_MODEL_DOWNLOAD !== "false",
-    modelCacheDir: process.env.MODEL_CACHE_DIR || ".memory/models",
-    networkTimeout: parseInt(process.env.MODEL_DOWNLOAD_TIMEOUT || "30000"),
+    allowModelDownload:
+      process.env.ADVANCED_MEMORY_ALLOW_MODEL_DOWNLOAD !== "0" &&
+      process.env.ADVANCED_MEMORY_ALLOW_MODEL_DOWNLOAD !== "false" &&
+      process.env.ALLOW_MODEL_DOWNLOAD !== "false",
+    modelCacheDir:
+      process.env.ADVANCED_MEMORY_MODEL_CACHE_DIR ||
+      process.env.MODEL_CACHE_DIR ||
+      `${process.env.MEMORY_PATH || process.cwd()}/.memory/models`,
+    networkTimeout: parseInt(
+      process.env.ADVANCED_MEMORY_MODEL_DOWNLOAD_TIMEOUT_MS ||
+        process.env.MODEL_DOWNLOAD_TIMEOUT ||
+        "30000",
+    ),
   };
 }

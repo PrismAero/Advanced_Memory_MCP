@@ -329,5 +329,16 @@ describe("MCP handler integration", () => {
       }),
     );
     expect(status.background_runtime.queues.length).toBeGreaterThan(0);
+
+    const mlHealth = parseTextResponse(
+      await ctx.app.handleToolCall("embeddings", { action: "health" }),
+    );
+    expect(mlHealth.similarity.modelInfo).toEqual(
+      expect.objectContaining({
+        modelId: "fake-embedding-provider",
+        provider: "fake",
+        isLoaded: true,
+      }),
+    );
   });
 });

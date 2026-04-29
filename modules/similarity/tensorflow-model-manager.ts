@@ -1,6 +1,12 @@
-import * as use from "@tensorflow-models/universal-sentence-encoder";
-import * as tf from "@tensorflow/tfjs-node";
+import { promises as fs } from "fs";
 import { logger } from "../logger.js";
+import {
+  PreparedUseModelArtifacts,
+  USE_LITE_EMBEDDING_DIM,
+  getDefaultUseModelArtifactConfig,
+  prepareUseModelArtifacts,
+} from "../ml/model-artifacts.js";
+import { tf, tensorflowRuntime } from "../ml/tf-runtime.js";
 import {
   EnvironmentConfig,
   ModelConfig,
@@ -10,6 +16,18 @@ import {
   getModelConfig,
 } from "./model-config.js";
 
+export type EmbeddingProviderMode = "universal-sentence-encoder" | "fake";
+
+export interface TensorFlowModelManagerOptions {
+  modelCacheDir?: string;
+  provider?: EmbeddingProviderMode;
+  allowModelDownload?: boolean;
+  modelUrl?: string;
+  vocabUrl?: string;
+  downloadTimeoutMs?: number;
+  embeddingBatchSize?: number;
+}
+
 /**
  * TensorFlow.js Model Manager
  * Handles model loading and lifecycle management for local-only operation.
@@ -18,18 +36,50 @@ import {
  * If TensorFlow.js fails to initialize, the server will not start.
  */
 export class TensorFlowModelManager {
-  private loadedModel: tf.GraphModel | tf.LayersModel | any | null = null;
+  private loadedModel: any | null = null;
   private currentModelId: string | null = null;
   private modelCacheDir: string;
   private environmentConfig: EnvironmentConfig;
   private modelSelection: ModelSelection;
   private isInitialized: boolean = false;
   private initializationPromise: Promise<void> | null = null;
+  private providerMode: EmbeddingProviderMode;
+  private preparedArtifacts: PreparedUseModelArtifacts | null = null;
+  private embeddingBatchSize: number;
+  private lastTensorDelta = 0;
 
-  constructor(modelCacheDir?: string) {
+  constructor(options?: string | TensorFlowModelManagerOptions) {
+    const normalized =
+      typeof options === "string" ? { modelCacheDir: options } : options || {};
     this.environmentConfig = getEnvironmentConfig();
-    this.modelCacheDir = modelCacheDir || this.environmentConfig.modelCacheDir;
+    this.modelCacheDir =
+      normalized.modelCacheDir || this.environmentConfig.modelCacheDir;
     this.modelSelection = getDefaultModelSelection();
+    this.providerMode =
+      normalized.provider ||
+      (process.env
+        .ADVANCED_MEMORY_EMBEDDING_PROVIDER as EmbeddingProviderMode) ||
+      "universal-sentence-encoder";
+    this.embeddingBatchSize = clampPositiveInt(
+      normalized.embeddingBatchSize ||
+        Number(process.env.ADVANCED_MEMORY_EMBEDDING_BATCH_SIZE),
+      1,
+      128,
+      32,
+    );
+
+    if (normalized.allowModelDownload !== undefined) {
+      this.environmentConfig.allowModelDownload = normalized.allowModelDownload;
+    }
+    if (normalized.modelUrl) {
+      process.env.ADVANCED_MEMORY_USE_MODEL_URL = normalized.modelUrl;
+    }
+    if (normalized.vocabUrl) {
+      process.env.ADVANCED_MEMORY_USE_VOCAB_URL = normalized.vocabUrl;
+    }
+    if (normalized.downloadTimeoutMs) {
+      this.environmentConfig.networkTimeout = normalized.downloadTimeoutMs;
+    }
   }
 
   /**
@@ -50,37 +100,45 @@ export class TensorFlowModelManager {
   }
 
   private async _performInitialization(): Promise<void> {
-    logger.info(
-      "Initializing TensorFlow.js Model Manager with bundled models..."
-    );
+    logger.info("Initializing TensorFlow.js Model Manager...");
+    await tensorflowRuntime.initialize();
 
-    // Load preferred model (bundled - no downloading needed)
     await this.loadPreferredModel();
+
+    this.isInitialized = true;
 
     // Test TensorFlow compatibility immediately after loading
     await this.testCompatibility();
 
-    this.isInitialized = true;
     logger.info(
-      `TensorFlow.js Model Manager ready with bundled model: ${this.currentModelId}`
+      `TensorFlow.js Model Manager ready with model: ${this.currentModelId}`,
     );
   }
 
   /**
-   * Load preferred bundled model
+   * Load preferred model
    */
   private async loadPreferredModel(): Promise<void> {
-    const modelId = this.modelSelection.preferredModel;
+    const modelId =
+      this.providerMode === "fake"
+        ? "fake-embedding-provider"
+        : this.modelSelection.preferredModel;
 
-    logger.info(`Loading bundled model: ${modelId}`);
+    logger.info(`Loading embedding provider: ${modelId}`);
     await this.loadModel(modelId);
-    logger.info(`Successfully loaded bundled model: ${modelId}`);
+    logger.info(`Successfully loaded embedding provider: ${modelId}`);
   }
 
   /**
-   * Load a specific model by ID - supports bundled models for local-only operation
+   * Load a specific model by ID.
    */
   async loadModel(modelId: string): Promise<void> {
+    if (modelId === "fake-embedding-provider") {
+      this.loadedModel = new FakeEmbeddingProvider(USE_LITE_EMBEDDING_DIM);
+      this.currentModelId = modelId;
+      return;
+    }
+
     const modelConfig = getModelConfig(modelId);
     if (!modelConfig) {
       throw new Error(`Unknown model ID: ${modelId}`);
@@ -88,22 +146,34 @@ export class TensorFlowModelManager {
 
     const startTime = Date.now();
 
-    // Handle bundled Universal Sentence Encoder
     if (modelId === "universal-sentence-encoder") {
-      logger.info(`Loading bundled Universal Sentence Encoder...`);
-      this.loadedModel = await use.load();
+      const artifactConfig = getDefaultUseModelArtifactConfig(
+        this.modelCacheDir,
+      );
+      artifactConfig.allowDownload = this.environmentConfig.allowModelDownload;
+      artifactConfig.downloadTimeoutMs = this.environmentConfig.networkTimeout;
+
+      this.preparedArtifacts = await prepareUseModelArtifacts(artifactConfig);
+      logger.info(
+        `[TENSORFLOW] Loading Universal Sentence Encoder from ${this.preparedArtifacts.modelDir}`,
+      );
+      this.loadedModel =
+        await LocalUniversalSentenceEncoderProvider.load(this.preparedArtifacts);
       this.currentModelId = modelId;
       const loadTime = Date.now() - startTime;
-      logger.info(`Bundled model loaded in ${loadTime}ms`);
+      logger.info(
+        `Universal Sentence Encoder loaded in ${loadTime}ms${
+          this.preparedArtifacts.downloaded ? " after cache preparation" : ""
+        }`,
+      );
 
-      // Warm up the model with a test inference
       await this.warmUpModel();
       return;
     }
 
     // Only universal-sentence-encoder is supported
     throw new Error(
-      `Model ${modelId} is not available as a bundled model. Only 'universal-sentence-encoder' is supported for local-only operation.`
+      `Model ${modelId} is not available as a bundled model. Only 'universal-sentence-encoder' is supported for local-only operation.`,
     );
   }
 
@@ -114,41 +184,26 @@ export class TensorFlowModelManager {
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     if (!this.loadedModel) {
       throw new Error(
-        "TensorFlow.js model not loaded. Call initialize() first."
+        "TensorFlow.js model not loaded. Call initialize() first.",
       );
     }
 
     if (!this.isInitialized) {
       throw new Error(
-        "TensorFlow.js Model Manager not initialized. Call initialize() first."
+        "TensorFlow.js Model Manager not initialized. Call initialize() first.",
       );
     }
 
-    // Preprocess texts for model input
-    const processedTexts = texts.map((text) => this.preprocessText(text));
+    if (texts.length === 0) return [];
 
-    // Use Universal Sentence Encoder API for bundled model
-    if (this.currentModelId === "universal-sentence-encoder") {
-      const embeddings = await (this.loadedModel as any).embed(processedTexts);
-      const embeddingData = await embeddings.data();
-      embeddings.dispose();
-
-      // Reshape results - USE produces 512-dimensional embeddings
-      const embeddingDim = 512;
-      const results: number[][] = [];
-
-      for (let i = 0; i < processedTexts.length; i++) {
-        const start = i * embeddingDim;
-        const end = start + embeddingDim;
-        results.push(Array.from(embeddingData.slice(start, end)));
-      }
-
-      return results;
+    const results: number[][] = [];
+    for (let i = 0; i < texts.length; i += this.embeddingBatchSize) {
+      const batch = texts
+        .slice(i, i + this.embeddingBatchSize)
+        .map((text) => this.preprocessText(text));
+      results.push(...(await this.generateEmbeddingBatch(batch)));
     }
-
-    throw new Error(
-      `Unsupported model type for embedding generation: ${this.currentModelId}`
-    );
+    return results;
   }
 
   /**
@@ -159,22 +214,13 @@ export class TensorFlowModelManager {
       throw new Error("No model loaded for compatibility test");
     }
 
-    // Test embedding generation directly
-    const testTexts = ["test"];
-    const processedTexts = testTexts.map((text) => this.preprocessText(text));
-
-    if (this.currentModelId === "universal-sentence-encoder") {
-      const embeddings = await (this.loadedModel as any).embed(processedTexts);
-      const embeddingData = await embeddings.data();
-      embeddings.dispose();
-
-      if (embeddingData && embeddingData.length > 0) {
-        logger.info("TensorFlow.js compatibility test passed");
-      } else {
-        throw new Error(
-          "TensorFlow.js compatibility test failed: no embedding data returned"
-        );
-      }
+    const [embedding] = await this.generateEmbeddings(["test"]);
+    if (embedding?.length === USE_LITE_EMBEDDING_DIM) {
+      logger.info("TensorFlow.js compatibility test passed");
+    } else {
+      throw new Error(
+        `TensorFlow.js compatibility test failed: expected ${USE_LITE_EMBEDDING_DIM} dimensions, got ${embedding?.length || 0}`,
+      );
     }
   }
 
@@ -183,7 +229,7 @@ export class TensorFlowModelManager {
    */
   calculateCosineSimilarity(
     embedding1: number[],
-    embedding2: number[]
+    embedding2: number[],
   ): number {
     if (embedding1.length !== embedding2.length) {
       throw new Error("Embeddings must have the same dimension");
@@ -213,7 +259,7 @@ export class TensorFlowModelManager {
    */
   async calculateBatchSimilarity(
     targetText: string,
-    candidateTexts: string[]
+    candidateTexts: string[],
   ): Promise<{ text: string; similarity: number }[]> {
     if (candidateTexts.length === 0) {
       return [];
@@ -230,7 +276,7 @@ export class TensorFlowModelManager {
     for (let i = 1; i < embeddings.length; i++) {
       const similarity = this.calculateCosineSimilarity(
         targetEmbedding,
-        embeddings[i]
+        embeddings[i],
       );
       results.push({
         text: candidateTexts[i - 1],
@@ -266,12 +312,23 @@ export class TensorFlowModelManager {
     modelId: string | null;
     isLoaded: boolean;
     memoryUsage: number;
+    backend: string | null;
+    provider: EmbeddingProviderMode;
+    artifactPath?: string;
+    tensorCount: number;
+    lastTensorDelta: number;
     modelConfig: ModelConfig | null;
   } {
+    const health = tensorflowRuntime.getHealth();
     return {
       modelId: this.currentModelId,
       isLoaded: this.loadedModel !== null,
-      memoryUsage: tf.memory().numBytes / (1024 * 1024), // MB
+      memoryUsage: health.memory.numBytes / (1024 * 1024), // MB
+      backend: health.backend,
+      provider: this.providerMode,
+      artifactPath: this.preparedArtifacts?.modelDir,
+      tensorCount: health.memory.numTensors,
+      lastTensorDelta: this.lastTensorDelta,
       modelConfig: this.getCurrentModelConfig(),
     };
   }
@@ -283,10 +340,15 @@ export class TensorFlowModelManager {
     if (this.loadedModel) {
       if (typeof (this.loadedModel as any).dispose === "function") {
         (this.loadedModel as any).dispose();
+      } else if (
+        typeof (this.loadedModel as any).model?.dispose === "function"
+      ) {
+        (this.loadedModel as any).model.dispose();
       }
       this.loadedModel = null;
     }
     this.currentModelId = null;
+    this.preparedArtifacts = null;
     this.isInitialized = false;
     this.initializationPromise = null;
   }
@@ -295,21 +357,47 @@ export class TensorFlowModelManager {
    * Warm up the model by verifying it's properly loaded
    */
   private async warmUpModel(): Promise<void> {
-    logger.info("Warming up model...");
+    logger.debug("Warming up model...");
 
     if (
-      this.currentModelId === "universal-sentence-encoder" &&
-      this.loadedModel
+      !this.loadedModel ||
+      typeof (this.loadedModel as any).embed !== "function"
     ) {
-      // Verify the model object exists and has the embed method
-      if (typeof (this.loadedModel as any).embed === "function") {
-        logger.info("Model warmed up successfully - embed method available");
-      } else {
-        throw new Error("Model loaded but embed method not available");
-      }
-    } else {
-      logger.info("Model object verified");
+      throw new Error("Model loaded but embed method not available");
     }
+  }
+
+  private async generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
+    if (
+      !this.loadedModel ||
+      typeof (this.loadedModel as any).embed !== "function"
+    ) {
+      throw new Error(`Unsupported embedding provider: ${this.currentModelId}`);
+    }
+
+    const before = tensorflowRuntime.snapshot("embed-before");
+    const embeddings = await (this.loadedModel as any).embed(texts);
+    const embeddingData = await embeddings.data();
+    embeddings.dispose();
+    const after = tensorflowRuntime.snapshot("embed-after");
+    this.lastTensorDelta = after.numTensors - before.numTensors;
+    tensorflowRuntime.warnOnTensorGrowth(before, after, 0);
+
+    const results: number[][] = [];
+    for (let i = 0; i < texts.length; i++) {
+      const start = i * USE_LITE_EMBEDDING_DIM;
+      const end = start + USE_LITE_EMBEDDING_DIM;
+      const vector = Array.from(
+        embeddingData.slice(start, end) as ArrayLike<number>,
+      );
+      if (vector.length !== USE_LITE_EMBEDDING_DIM) {
+        throw new Error(
+          `Embedding dimension mismatch. Expected ${USE_LITE_EMBEDDING_DIM}, got ${vector.length}`,
+        );
+      }
+      results.push(vector);
+    }
+    return results;
   }
 
   /**
@@ -323,4 +411,143 @@ export class TensorFlowModelManager {
       .trim()
       .substring(0, 256); // Limit to model's max tokens
   }
+}
+
+class FakeEmbeddingProvider {
+  constructor(private readonly dimensions: number) {}
+
+  async embed(texts: string[]): Promise<FakeTensor> {
+    return new FakeTensor(
+      texts.map((text) => deterministicEmbedding(text, this.dimensions)),
+    );
+  }
+}
+
+class LocalUniversalSentenceEncoderProvider {
+  private constructor(
+    private readonly model: tf.GraphModel,
+    private readonly tokenizer: { encode(input: string): number[] },
+  ) {}
+
+  static async load(
+    artifacts: PreparedUseModelArtifacts,
+  ): Promise<LocalUniversalSentenceEncoderProvider> {
+    const [model, vocabularyModule] = await Promise.all([
+      tf.loadGraphModel(artifacts.modelUrl),
+      import("@tensorflow-models/universal-sentence-encoder"),
+    ]);
+    const vocabulary = JSON.parse(await fs.readFile(artifacts.vocabPath, "utf-8"));
+    const tokenizer = new (vocabularyModule as any).Tokenizer(vocabulary);
+    return new LocalUniversalSentenceEncoderProvider(model, tokenizer);
+  }
+
+  async embed(inputs: string[]): Promise<tf.Tensor> {
+    const encodings = inputs.map((input) => this.tokenizer.encode(input));
+    const flattenedIndices: number[][] = [];
+    for (let i = 0; i < encodings.length; i++) {
+      for (let j = 0; j < encodings[i].length; j++) {
+        flattenedIndices.push([i, j]);
+      }
+    }
+
+    const indices = tf.tensor2d(flattenedIndices, [flattenedIndices.length, 2], "int32");
+    const values = tf.tensor1d(encodings.flat(), "int32");
+    try {
+      const embeddings = await this.model.executeAsync({ indices, values });
+      return Array.isArray(embeddings) ? embeddings[0] : embeddings;
+    } finally {
+      indices.dispose();
+      values.dispose();
+    }
+  }
+
+  dispose(): void {
+    this.model.dispose();
+  }
+}
+
+class FakeTensor {
+  constructor(private readonly vectors: number[][]) {}
+
+  async data(): Promise<Float32Array> {
+    return Float32Array.from(this.vectors.flat());
+  }
+
+  dispose(): void {
+    // No-op fake tensor for deterministic tests.
+  }
+}
+
+function deterministicEmbedding(text: string, dimensions: number): number[] {
+  const vector = new Array<number>(dimensions).fill(0);
+  const tokens = tokenizeForFakeEmbedding(text);
+  for (const token of tokens) {
+    addTokenSignal(vector, token, 1);
+    for (const related of FAKE_SEMANTIC_GROUPS[token] || []) {
+      addTokenSignal(vector, related, 0.65);
+    }
+  }
+  for (let i = 0; i < tokens.length - 1; i++) {
+    addTokenSignal(vector, `${tokens[i]}:${tokens[i + 1]}`, 0.35);
+  }
+  const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  return norm === 0 ? vector : vector.map((value) => value / norm);
+}
+
+function tokenizeForFakeEmbedding(text: string): string[] {
+  return text
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !FAKE_STOP_WORDS.has(token));
+}
+
+function addTokenSignal(vector: number[], token: string, weight: number): void {
+  const index = stableHash(token) % vector.length;
+  vector[index] += weight;
+}
+
+function stableHash(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+const FAKE_STOP_WORDS = new Set([
+  "and",
+  "the",
+  "for",
+  "with",
+  "after",
+  "before",
+  "into",
+  "from",
+  "local",
+  "files",
+]);
+
+const FAKE_SEMANTIC_GROUPS: Record<string, string[]> = {
+  auth: ["authentication", "oauth", "token", "jwt", "security"],
+  authentication: ["auth", "oauth", "token", "jwt", "security"],
+  oauth: ["auth", "authentication", "callback", "token"],
+  jwt: ["auth", "authentication", "token"],
+  token: ["auth", "authentication", "jwt", "credential"],
+  validation: ["validate", "verification", "security"],
+  callback: ["oauth", "handler", "controller"],
+  controller: ["handler", "endpoint", "route"],
+  service: ["handler", "business", "logic"],
+};
+
+function clampPositiveInt(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(numeric)));
 }

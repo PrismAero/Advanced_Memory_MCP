@@ -552,6 +552,11 @@ export class ModernSimilarityEngine {
       modelId: string | null;
       isLoaded: boolean;
       memoryUsage: number;
+      backend?: string | null;
+      provider?: string;
+      artifactPath?: string;
+      tensorCount?: number;
+      lastTensorDelta?: number;
     };
     cacheStats?: {
       embeddingsCached: number;
@@ -578,6 +583,11 @@ export class ModernSimilarityEngine {
         modelId: modelInfo.modelId,
         isLoaded: modelInfo.isLoaded,
         memoryUsage: modelInfo.memoryUsage,
+        backend: modelInfo.backend,
+        provider: modelInfo.provider,
+        artifactPath: modelInfo.artifactPath,
+        tensorCount: modelInfo.tensorCount,
+        lastTensorDelta: modelInfo.lastTensorDelta,
       },
       cacheStats: {
         embeddingsCached: this.embeddingCache.size,

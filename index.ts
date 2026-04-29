@@ -3,8 +3,8 @@
 /**
  * Adaptive Reasoning Server - 100% Local Operation
  *
- * SECURITY GUARANTEE: This server makes ZERO external network connections.
- * All operations are local-only for maximum privacy and security.
+ * Model artifacts are prepared into a local cache before inference. Runtime
+ * operation stays local after the embedding model is cached.
  */
 
 // CRITICAL: Apply Node.js v24 compatibility polyfills BEFORE any TensorFlow.js imports

@@ -87,6 +87,8 @@ export async function createStdioClient(
   );
   env.MEMORY_PATH = memoryRoot;
   env.LOG_LEVEL = "error";
+  env.ADVANCED_MEMORY_EMBEDDING_PROVIDER = "fake";
+  env.ADVANCED_MEMORY_ALLOW_MODEL_DOWNLOAD = "0";
 
   const transport = new StdioClientTransport({
     command: process.execPath,

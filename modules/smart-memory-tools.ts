@@ -12,7 +12,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js";
  * Tools have been consolidated into mode/action-dispatched groups:
  *   - get_context        (working | continuation | related | project)
  *   - analyze_workspace  (sync | bridge | patterns | structure)
- *   - embeddings         (generate | find_similar | backfill)
+ *   - embeddings         (generate | find_similar | backfill | health)
  *   - update_status      (phase | archive)
  *
  * Qt/QML tools remain available behind ENABLE_QT_TOOLS=1 for projects
@@ -668,13 +668,13 @@ const CORE_TOOLS: Tool[] = [
   {
     name: "embeddings",
     description:
-      "Embedding operations dispatcher. action='generate' produces embeddings for named interfaces. action='find_similar' runs semantic similarity search for a code snippet against stored interfaces. action='backfill' fills in missing embeddings for files/interfaces. Default action: 'find_similar'.",
+      "Embedding operations dispatcher. action='generate' produces embeddings for named interfaces. action='find_similar' runs semantic similarity search for a code snippet against stored interfaces. action='backfill' fills in missing embeddings for files/interfaces. action='health' reports model/backend/cache/tensor health. Default action: 'find_similar'.",
     inputSchema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["generate", "find_similar", "backfill"],
+          enum: ["generate", "find_similar", "backfill", "health"],
           description: "Default: 'find_similar'.",
         },
         interface_names: {

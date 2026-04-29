@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "async_hooks";
 import { promises as fs } from "fs";
 import path from "path";
 import sqlite3 from "sqlite3";
@@ -14,6 +15,9 @@ export class SQLiteConnection {
   private basePath: string;
   private initialized: boolean = false;
   private initializePromise: Promise<void> | null = null;
+  private transactionQueue: Promise<void> = Promise.resolve();
+  private transactionContext = new AsyncLocalStorage<{ depth: number }>();
+  private savepointCounter = 0;
 
   constructor(basePath: string) {
     this.basePath = path.resolve(basePath);
@@ -62,7 +66,7 @@ export class SQLiteConnection {
 
     // Ensure main branch exists
     await this.runQuery(
-      'INSERT OR IGNORE INTO memory_branches (id, name, purpose) VALUES (1, "main", "Main project memory - core entities, business logic, and system architecture")'
+      'INSERT OR IGNORE INTO memory_branches (id, name, purpose) VALUES (1, "main", "Main project memory - core entities, business logic, and system architecture")',
     );
   }
 
@@ -376,8 +380,8 @@ export class SQLiteConnection {
       logger.warn(
         `Migration warning for query "${query.substring(
           0,
-          50
-        )}...": ${errorMessage}`
+          50,
+        )}...": ${errorMessage}`,
       );
     }
   }
@@ -390,29 +394,29 @@ export class SQLiteConnection {
     try {
       // Add AI enhancement columns to entities table
       await this.safeAlterTable(
-        "ALTER TABLE entities ADD COLUMN working_context INTEGER DEFAULT 0"
+        "ALTER TABLE entities ADD COLUMN working_context INTEGER DEFAULT 0",
       );
 
       await this.safeAlterTable(
-        "ALTER TABLE entities ADD COLUMN relevance_score REAL DEFAULT 0.5"
+        "ALTER TABLE entities ADD COLUMN relevance_score REAL DEFAULT 0.5",
       );
 
       // Add AI enhancement columns to memory_branches table
       await this.safeAlterTable(
-        "ALTER TABLE memory_branches ADD COLUMN current_focus INTEGER DEFAULT 0"
+        "ALTER TABLE memory_branches ADD COLUMN current_focus INTEGER DEFAULT 0",
       );
 
       await this.safeAlterTable(
-        "ALTER TABLE memory_branches ADD COLUMN project_phase TEXT DEFAULT 'active-development'"
+        "ALTER TABLE memory_branches ADD COLUMN project_phase TEXT DEFAULT 'active-development'",
       );
 
       // Add AI enhancement columns to observations table
       await this.safeAlterTable(
-        "ALTER TABLE observations ADD COLUMN observation_type TEXT DEFAULT 'reference'"
+        "ALTER TABLE observations ADD COLUMN observation_type TEXT DEFAULT 'reference'",
       );
 
       await this.safeAlterTable(
-        "ALTER TABLE observations ADD COLUMN priority TEXT DEFAULT 'normal'"
+        "ALTER TABLE observations ADD COLUMN priority TEXT DEFAULT 'normal'",
       );
 
       for (const column of [
@@ -432,16 +436,16 @@ export class SQLiteConnection {
       }
 
       await this.runQuery(
-        "UPDATE keywords SET normalized_keyword = LOWER(keyword) WHERE normalized_keyword IS NULL"
+        "UPDATE keywords SET normalized_keyword = LOWER(keyword) WHERE normalized_keyword IS NULL",
       );
       await this.runQuery(
-        "UPDATE keywords SET branch_id = (SELECT branch_id FROM entities WHERE entities.id = keywords.entity_id) WHERE branch_id IS NULL"
+        "UPDATE keywords SET branch_id = (SELECT branch_id FROM entities WHERE entities.id = keywords.entity_id) WHERE branch_id IS NULL",
       );
       await this.runQuery(
-        "UPDATE keywords SET source_id = CAST(entity_id AS TEXT) WHERE source_id IS NULL"
+        "UPDATE keywords SET source_id = CAST(entity_id AS TEXT) WHERE source_id IS NULL",
       );
       await this.runQuery(
-        "UPDATE keywords SET last_seen = CURRENT_TIMESTAMP WHERE last_seen IS NULL"
+        "UPDATE keywords SET last_seen = CURRENT_TIMESTAMP WHERE last_seen IS NULL",
       );
 
       await this.runQuery(
@@ -459,7 +463,7 @@ export class SQLiteConnection {
           FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE CASCADE,
           FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
           UNIQUE(keyword_id, linked_type, linked_id, relation_type)
-        )`
+        )`,
       );
 
       for (const indexQuery of [
@@ -478,7 +482,7 @@ export class SQLiteConnection {
 
       // Add embedding column for TensorFlow.js support
       await this.safeAlterTable(
-        "ALTER TABLE entities ADD COLUMN embedding BLOB"
+        "ALTER TABLE entities ADD COLUMN embedding BLOB",
       );
 
       for (const column of [
@@ -500,11 +504,13 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(`ALTER TABLE project_files ADD COLUMN ${column}`);
+        await this.safeAlterTable(
+          `ALTER TABLE project_files ADD COLUMN ${column}`,
+        );
       }
 
       await this.safeAlterTable(
-        "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB"
+        "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB",
       );
 
       for (const column of [
@@ -530,7 +536,9 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(`ALTER TABLE code_interfaces ADD COLUMN ${column}`);
+        await this.safeAlterTable(
+          `ALTER TABLE code_interfaces ADD COLUMN ${column}`,
+        );
       }
 
       for (const column of [
@@ -544,7 +552,9 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(`ALTER TABLE project_dependencies ADD COLUMN ${column}`);
+        await this.safeAlterTable(
+          `ALTER TABLE project_dependencies ADD COLUMN ${column}`,
+        );
       }
 
       for (const column of [
@@ -561,7 +571,9 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(`ALTER TABLE workspace_context ADD COLUMN ${column}`);
+        await this.safeAlterTable(
+          `ALTER TABLE workspace_context ADD COLUMN ${column}`,
+        );
       }
 
       for (const column of [
@@ -571,7 +583,9 @@ export class SQLiteConnection {
         "last_detected DATETIME",
         "created_at DATETIME",
       ]) {
-        await this.safeAlterTable(`ALTER TABLE interface_relationships ADD COLUMN ${column}`);
+        await this.safeAlterTable(
+          `ALTER TABLE interface_relationships ADD COLUMN ${column}`,
+        );
       }
 
       // Create project analysis tables if they don't exist
@@ -740,7 +754,7 @@ export class SQLiteConnection {
       }
 
       logger.info(
-        "AI enhancements and project analysis migration completed successfully"
+        "AI enhancements and project analysis migration completed successfully",
       );
     } catch (error) {
       logger.error("Error during AI enhancements migration:", error);
@@ -767,7 +781,7 @@ export class SQLiteConnection {
 
   async execute(
     query: string,
-    params: any[] = []
+    params: any[] = [],
   ): Promise<{ lastID: number; changes: number }> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
@@ -786,9 +800,22 @@ export class SQLiteConnection {
   }
 
   async withTransaction<T>(operation: () => Promise<T>): Promise<T> {
+    const activeTransaction = this.transactionContext.getStore();
+    if (activeTransaction) {
+      return this.withSavepoint(operation);
+    }
+
+    let releaseTransaction!: () => void;
+    const previousTransaction = this.transactionQueue;
+    this.transactionQueue = new Promise<void>((resolve) => {
+      releaseTransaction = resolve;
+    });
+
+    await previousTransaction.catch(() => undefined);
+
     await this.execute("BEGIN IMMEDIATE TRANSACTION");
     try {
-      const result = await operation();
+      const result = await this.transactionContext.run({ depth: 1 }, operation);
       await this.execute("COMMIT");
       return result;
     } catch (error) {
@@ -796,6 +823,29 @@ export class SQLiteConnection {
         await this.execute("ROLLBACK");
       } catch (rollbackError) {
         logger.error("Failed to rollback transaction:", rollbackError);
+      }
+      throw error;
+    } finally {
+      releaseTransaction();
+    }
+  }
+
+  private async withSavepoint<T>(operation: () => Promise<T>): Promise<T> {
+    const savepointName = `nested_tx_${++this.savepointCounter}`;
+    await this.execute(`SAVEPOINT ${savepointName}`);
+    try {
+      const result = await operation();
+      await this.execute(`RELEASE SAVEPOINT ${savepointName}`);
+      return result;
+    } catch (error) {
+      try {
+        await this.execute(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+        await this.execute(`RELEASE SAVEPOINT ${savepointName}`);
+      } catch (rollbackError) {
+        logger.error(
+          "Failed to rollback transaction savepoint:",
+          rollbackError,
+        );
       }
       throw error;
     }
@@ -825,7 +875,7 @@ export class SQLiteConnection {
           if (err) {
             logger.error("Error closing database:", err);
           }
-        this.db = null;
+          this.db = null;
           resolve();
         });
       });
@@ -836,7 +886,7 @@ export class SQLiteConnection {
     const name = branchName || "main";
     const branch = await this.getQuery(
       "SELECT id FROM memory_branches WHERE name = ?",
-      [name]
+      [name],
     );
 
     if (branch) {
@@ -846,12 +896,12 @@ export class SQLiteConnection {
     // Create branch if it doesn't exist
     await this.runQuery(
       "INSERT OR IGNORE INTO memory_branches (name, purpose) VALUES (?, ?)",
-      [name, `Auto-created branch: ${name}`]
+      [name, `Auto-created branch: ${name}`],
     );
 
     const newBranch = await this.getQuery(
       "SELECT id FROM memory_branches WHERE name = ?",
-      [name]
+      [name],
     );
 
     return newBranch.id;

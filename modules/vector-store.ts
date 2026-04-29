@@ -1,5 +1,5 @@
-import * as tf from "@tensorflow/tfjs-node";
 import { logger } from "./logger.js";
+import { tf, tensorflowRuntime } from "./ml/tf-runtime.js";
 import { SQLiteConnection } from "./sqlite/sqlite-connection.js";
 
 export interface VectorSearchResult {
@@ -186,6 +186,7 @@ export class VectorStore {
     limit: number = 5,
     minScore: number = 0.0
   ): Promise<VectorSearchResult[]> {
+    await tensorflowRuntime.initialize();
     if (!this.indexLoaded) {
       await this.loadIndex();
     }
@@ -199,6 +200,7 @@ export class VectorStore {
       this.isDirty = false;
     }
 
+    const before = tensorflowRuntime.snapshot("vector-search-before");
     const { scoreValues, indexValues } = tf.tidy(() => {
       const queryTensor = tf.tensor2d([queryVector]);
 
@@ -228,6 +230,8 @@ export class VectorStore {
         indexValues: Array.from(indices.dataSync()),
       };
     }) as unknown as { scoreValues: number[]; indexValues: number[] };
+    const after = tensorflowRuntime.snapshot("vector-search-after");
+    tensorflowRuntime.warnOnTensorGrowth(before, after, 0);
 
     const results: VectorSearchResult[] = [];
     for (let i = 0; i < indexValues.length; i++) {
