@@ -49,20 +49,16 @@ export class TensorFlowModelManager {
   private lastTensorDelta = 0;
 
   constructor(options?: string | TensorFlowModelManagerOptions) {
-    const normalized =
-      typeof options === "string" ? { modelCacheDir: options } : options || {};
+    const normalized = typeof options === "string" ? { modelCacheDir: options } : options || {};
     this.environmentConfig = getEnvironmentConfig();
-    this.modelCacheDir =
-      normalized.modelCacheDir || this.environmentConfig.modelCacheDir;
+    this.modelCacheDir = normalized.modelCacheDir || this.environmentConfig.modelCacheDir;
     this.modelSelection = getDefaultModelSelection();
     this.providerMode =
       normalized.provider ||
-      (process.env
-        .ADVANCED_MEMORY_EMBEDDING_PROVIDER as EmbeddingProviderMode) ||
+      (process.env.ADVANCED_MEMORY_EMBEDDING_PROVIDER as EmbeddingProviderMode) ||
       "universal-sentence-encoder";
     this.embeddingBatchSize = clampPositiveInt(
-      normalized.embeddingBatchSize ||
-        Number(process.env.ADVANCED_MEMORY_EMBEDDING_BATCH_SIZE),
+      normalized.embeddingBatchSize || Number(process.env.ADVANCED_MEMORY_EMBEDDING_BATCH_SIZE),
       1,
       128,
       32,
@@ -110,9 +106,7 @@ export class TensorFlowModelManager {
     // Test TensorFlow compatibility immediately after loading
     await this.testCompatibility();
 
-    logger.info(
-      `TensorFlow.js Model Manager ready with model: ${this.currentModelId}`,
-    );
+    logger.info(`TensorFlow.js Model Manager ready with model: ${this.currentModelId}`);
   }
 
   /**
@@ -120,9 +114,7 @@ export class TensorFlowModelManager {
    */
   private async loadPreferredModel(): Promise<void> {
     const modelId =
-      this.providerMode === "fake"
-        ? "fake-embedding-provider"
-        : this.modelSelection.preferredModel;
+      this.providerMode === "fake" ? "fake-embedding-provider" : this.modelSelection.preferredModel;
 
     logger.info(`Loading embedding provider: ${modelId}`);
     await this.loadModel(modelId);
@@ -147,9 +139,7 @@ export class TensorFlowModelManager {
     const startTime = Date.now();
 
     if (modelId === "universal-sentence-encoder") {
-      const artifactConfig = getDefaultUseModelArtifactConfig(
-        this.modelCacheDir,
-      );
+      const artifactConfig = getDefaultUseModelArtifactConfig(this.modelCacheDir);
       artifactConfig.allowDownload = this.environmentConfig.allowModelDownload;
       artifactConfig.downloadTimeoutMs = this.environmentConfig.networkTimeout;
 
@@ -157,8 +147,7 @@ export class TensorFlowModelManager {
       logger.info(
         `[TENSORFLOW] Loading Universal Sentence Encoder from ${this.preparedArtifacts.modelDir}`,
       );
-      this.loadedModel =
-        await LocalUniversalSentenceEncoderProvider.load(this.preparedArtifacts);
+      this.loadedModel = await LocalUniversalSentenceEncoderProvider.load(this.preparedArtifacts);
       this.currentModelId = modelId;
       const loadTime = Date.now() - startTime;
       logger.info(
@@ -183,15 +172,11 @@ export class TensorFlowModelManager {
    */
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     if (!this.loadedModel) {
-      throw new Error(
-        "TensorFlow.js model not loaded. Call initialize() first.",
-      );
+      throw new Error("TensorFlow.js model not loaded. Call initialize() first.");
     }
 
     if (!this.isInitialized) {
-      throw new Error(
-        "TensorFlow.js Model Manager not initialized. Call initialize() first.",
-      );
+      throw new Error("TensorFlow.js Model Manager not initialized. Call initialize() first.");
     }
 
     if (texts.length === 0) return [];
@@ -227,10 +212,7 @@ export class TensorFlowModelManager {
   /**
    * Calculate cosine similarity between embeddings
    */
-  calculateCosineSimilarity(
-    embedding1: number[],
-    embedding2: number[],
-  ): number {
+  calculateCosineSimilarity(embedding1: number[], embedding2: number[]): number {
     if (embedding1.length !== embedding2.length) {
       throw new Error("Embeddings must have the same dimension");
     }
@@ -274,10 +256,7 @@ export class TensorFlowModelManager {
 
     // Calculate similarity with each candidate
     for (let i = 1; i < embeddings.length; i++) {
-      const similarity = this.calculateCosineSimilarity(
-        targetEmbedding,
-        embeddings[i],
-      );
+      const similarity = this.calculateCosineSimilarity(targetEmbedding, embeddings[i]);
       results.push({
         text: candidateTexts[i - 1],
         similarity,
@@ -340,9 +319,7 @@ export class TensorFlowModelManager {
     if (this.loadedModel) {
       if (typeof (this.loadedModel as any).dispose === "function") {
         (this.loadedModel as any).dispose();
-      } else if (
-        typeof (this.loadedModel as any).model?.dispose === "function"
-      ) {
+      } else if (typeof (this.loadedModel as any).model?.dispose === "function") {
         (this.loadedModel as any).model.dispose();
       }
       this.loadedModel = null;
@@ -359,19 +336,13 @@ export class TensorFlowModelManager {
   private async warmUpModel(): Promise<void> {
     logger.debug("Warming up model...");
 
-    if (
-      !this.loadedModel ||
-      typeof (this.loadedModel as any).embed !== "function"
-    ) {
+    if (!this.loadedModel || typeof (this.loadedModel as any).embed !== "function") {
       throw new Error("Model loaded but embed method not available");
     }
   }
 
   private async generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
-    if (
-      !this.loadedModel ||
-      typeof (this.loadedModel as any).embed !== "function"
-    ) {
+    if (!this.loadedModel || typeof (this.loadedModel as any).embed !== "function") {
       throw new Error(`Unsupported embedding provider: ${this.currentModelId}`);
     }
 
@@ -387,9 +358,7 @@ export class TensorFlowModelManager {
     for (let i = 0; i < texts.length; i++) {
       const start = i * USE_LITE_EMBEDDING_DIM;
       const end = start + USE_LITE_EMBEDDING_DIM;
-      const vector = Array.from(
-        embeddingData.slice(start, end) as ArrayLike<number>,
-      );
+      const vector = Array.from(embeddingData.slice(start, end) as ArrayLike<number>);
       if (vector.length !== USE_LITE_EMBEDDING_DIM) {
         throw new Error(
           `Embedding dimension mismatch. Expected ${USE_LITE_EMBEDDING_DIM}, got ${vector.length}`,
@@ -417,9 +386,7 @@ class FakeEmbeddingProvider {
   constructor(private readonly dimensions: number) {}
 
   async embed(texts: string[]): Promise<FakeTensor> {
-    return new FakeTensor(
-      texts.map((text) => deterministicEmbedding(text, this.dimensions)),
-    );
+    return new FakeTensor(texts.map((text) => deterministicEmbedding(text, this.dimensions)));
   }
 }
 
@@ -541,12 +508,7 @@ const FAKE_SEMANTIC_GROUPS: Record<string, string[]> = {
   service: ["handler", "business", "logic"],
 };
 
-function clampPositiveInt(
-  value: unknown,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
+function clampPositiveInt(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(numeric)));

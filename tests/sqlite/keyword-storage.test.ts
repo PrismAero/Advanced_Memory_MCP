@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { KeywordOperations } from "../../modules/sqlite/keyword-operations.js";
 import { SQLiteConnection } from "../../modules/sqlite/sqlite-connection.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("SQLite keyword coupling storage", () => {
   let root: string | undefined;
@@ -74,9 +71,7 @@ describe("SQLite keyword coupling storage", () => {
     );
     expect(links.count).toBeGreaterThan(0);
 
-    await connection.execute("DELETE FROM observations WHERE id = ?", [
-      observation.lastID,
-    ]);
+    await connection.execute("DELETE FROM observations WHERE id = ?", [observation.lastID]);
     await keywordOps.refreshEntityKeywords(entity.lastID, branchId);
     const staleObservationKeywords = await connection.getQuery(
       "SELECT COUNT(*) as count FROM keywords WHERE observation_id = ?",

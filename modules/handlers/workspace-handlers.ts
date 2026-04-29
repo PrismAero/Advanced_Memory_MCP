@@ -4,7 +4,11 @@ import { Entity } from "../../memory-types.js";
 import { BackgroundProcessor } from "../background-processor.js";
 import { logger } from "../logger.js";
 import { resolveOwnedPath } from "../path-boundary.js";
-import { ensureMemoryIgnoreFile, IgnorePolicy, readMemoryIgnorePatterns } from "../project-analysis/ignore-policy.js";
+import {
+  ensureMemoryIgnoreFile,
+  IgnorePolicy,
+  readMemoryIgnorePatterns,
+} from "../project-analysis/ignore-policy.js";
 import { jsonResponse, sanitizeEntities } from "./response-utils.js";
 
 /**
@@ -72,17 +76,11 @@ export class WorkspaceHandlers {
     let createdCount = 0;
     let linkedCount = 0;
     if (createStructure) {
-      const entities = await this.createWorkspaceStructureEntities(
-        workspaceAnalysis,
-        branchName,
-      );
+      const entities = await this.createWorkspaceStructureEntities(workspaceAnalysis, branchName);
       createdCount = entities.length;
     }
     if (linkExisting) {
-      linkedCount = await this.linkEntitiesToFiles(
-        workspaceAnalysis,
-        branchName,
-      );
+      linkedCount = await this.linkEntitiesToFiles(workspaceAnalysis, branchName);
     }
 
     return jsonResponse({
@@ -113,11 +111,7 @@ export class WorkspaceHandlers {
     const fileConnections: any[] = [];
 
     for (const filePath of currentFiles) {
-      const fileAnalysis = await this.analyzeFileContext(
-        filePath,
-        branchName,
-        contextRadius,
-      );
+      const fileAnalysis = await this.analyzeFileContext(filePath, branchName, contextRadius);
       relatedEntities.push(...fileAnalysis.relatedEntities);
       fileConnections.push({
         file: filePath,
@@ -149,17 +143,7 @@ export class WorkspaceHandlers {
     try {
       const workspaceAnalysis = await this.analyzeWorkspaceStructure(
         projectPath,
-        [
-          "*.ts",
-          "*.tsx",
-          "*.js",
-          "*.jsx",
-          "*.py",
-          "*.java",
-          "*.cs",
-          "*.go",
-          "*.rs",
-        ],
+        ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.java", "*.cs", "*.go", "*.rs"],
         args.memory_ignore_patterns || [],
       );
       const structureEntities = await this.createWorkspaceStructureEntities(
@@ -194,10 +178,7 @@ export class WorkspaceHandlers {
     const suggestBranches = args.suggest_branches !== false;
     const createSuggestedBranches = args.create_suggested_branches === true;
 
-    const patternAnalysis = await this.detectPatterns(
-      workspacePath,
-      analysisDepth,
-    );
+    const patternAnalysis = await this.detectPatterns(workspacePath, analysisDepth);
 
     let branchSuggestions: any[] = [];
     let createdBranches: any[] = [];
@@ -255,8 +236,7 @@ export class WorkspaceHandlers {
         persistAdditionalPatterns: additionalIgnorePatterns.length > 0,
       });
       await this.walkDirectory(workspacePath, workspacePath, analysis, 0, 3, ignorePolicy);
-      analysis.importantFiles =
-        await this.identifyImportantFiles(workspacePath);
+      analysis.importantFiles = await this.identifyImportantFiles(workspacePath);
       return analysis;
     } catch (error) {
       logger.warn("Error analyzing workspace structure:", error);
@@ -286,19 +266,11 @@ export class WorkspaceHandlers {
             path: relativePath,
             depth,
           });
-          await this.walkDirectory(
-            itemPath,
-            rootPath,
-            analysis,
-            depth + 1,
-            maxDepth,
-            ignorePolicy,
-          );
+          await this.walkDirectory(itemPath, rootPath, analysis, depth + 1, maxDepth, ignorePolicy);
         } else if (item.isFile()) {
           analysis.totalFiles++;
           const extension = path.extname(item.name);
-          analysis.fileTypes[extension] =
-            (analysis.fileTypes[extension] || 0) + 1;
+          analysis.fileTypes[extension] = (analysis.fileTypes[extension] || 0) + 1;
         }
       }
     } catch (error) {
@@ -306,9 +278,7 @@ export class WorkspaceHandlers {
     }
   }
 
-  private async identifyImportantFiles(
-    workspacePath: string,
-  ): Promise<string[]> {
+  private async identifyImportantFiles(workspacePath: string): Promise<string[]> {
     const importantNames = [
       "package.json",
       "tsconfig.json",
@@ -340,17 +310,12 @@ export class WorkspaceHandlers {
   ): Promise<Entity[]> {
     const entities: Entity[] = [];
     try {
-      const majorFolders = workspaceAnalysis.folders.filter(
-        (f: any) => f.depth <= 1,
-      );
+      const majorFolders = workspaceAnalysis.folders.filter((f: any) => f.depth <= 1);
       for (const folder of majorFolders.slice(0, 10)) {
         entities.push({
           name: `Folder: ${folder.name}`,
           entityType: "reference",
-          observations: [
-            `Workspace folder: ${folder.path}`,
-            `Depth: ${folder.depth}`,
-          ],
+          observations: [`Workspace folder: ${folder.path}`, `Depth: ${folder.depth}`],
           status: "active",
           relevanceScore: 0.6,
         });
@@ -373,10 +338,7 @@ export class WorkspaceHandlers {
     return entities;
   }
 
-  private async linkEntitiesToFiles(
-    workspaceAnalysis: any,
-    branchName: string,
-  ): Promise<number> {
+  private async linkEntitiesToFiles(workspaceAnalysis: any, branchName: string): Promise<number> {
     let linkedCount = 0;
     try {
       const existing = await this.memoryManager.exportBranch(branchName);
@@ -384,13 +346,11 @@ export class WorkspaceHandlers {
         const entityName = entity.name.toLowerCase();
         const matchingFolder = workspaceAnalysis.folders.find(
           (f: any) =>
-            entityName.includes(f.name.toLowerCase()) ||
-            f.name.toLowerCase().includes(entityName),
+            entityName.includes(f.name.toLowerCase()) || f.name.toLowerCase().includes(entityName),
         );
         const matchingFile = workspaceAnalysis.importantFiles.find(
           (f: string) =>
-            entityName.includes(f.toLowerCase()) ||
-            f.toLowerCase().includes(entityName),
+            entityName.includes(f.toLowerCase()) || f.toLowerCase().includes(entityName),
         );
         if (matchingFolder || matchingFile) {
           const note = matchingFolder
@@ -424,12 +384,9 @@ export class WorkspaceHandlers {
       const keywords = [...segments, fileName].filter((k) => k.length > 2);
 
       for (const keyword of keywords.slice(0, contextRadius * 2)) {
-        const results = await this.memoryManager.searchEntities(
-          keyword,
-          branchName,
-          ["active"],
-          { includeConfidenceScores: true },
-        );
+        const results = await this.memoryManager.searchEntities(keyword, branchName, ["active"], {
+          includeConfidenceScores: true,
+        });
         for (const entity of results.entities) {
           fileAnalysis.relatedEntities.push({
             entity_name: entity.name,
@@ -451,10 +408,7 @@ export class WorkspaceHandlers {
     return fileAnalysis;
   }
 
-  private async detectPatterns(
-    workspacePath: string,
-    analysisDepth: number,
-  ): Promise<any> {
+  private async detectPatterns(workspacePath: string, analysisDepth: number): Promise<any> {
     const patterns: any[] = [];
     let projectType = "unknown";
     let architectureStyle = "unknown";
@@ -481,10 +435,7 @@ export class WorkspaceHandlers {
         });
       }
 
-      const structureAnalysis = await this.analyzeWorkspaceStructure(
-        workspacePath,
-        [],
-      );
+      const structureAnalysis = await this.analyzeWorkspaceStructure(workspacePath, []);
       const hasComponents = structureAnalysis.folders.some((f: any) =>
         f.name.toLowerCase().includes("component"),
       );
@@ -569,23 +520,15 @@ export class WorkspaceHandlers {
     return suggestions;
   }
 
-  private async createSuggestedBranches(
-    branchSuggestions: any[],
-  ): Promise<any[]> {
+  private async createSuggestedBranches(branchSuggestions: any[]): Promise<any[]> {
     const created: any[] = [];
     for (const suggestion of branchSuggestions) {
       if (suggestion.name === "main") continue;
       try {
-        await this.memoryManager.createBranch(
-          suggestion.name,
-          suggestion.purpose,
-        );
+        await this.memoryManager.createBranch(suggestion.name, suggestion.purpose);
         created.push(suggestion);
       } catch (error) {
-        logger.warn(
-          `Failed to create suggested branch ${suggestion.name}:`,
-          error,
-        );
+        logger.warn(`Failed to create suggested branch ${suggestion.name}:`, error);
       }
     }
     return created;
@@ -602,8 +545,7 @@ export class WorkspaceHandlers {
       })
       .sort(
         (a, b) =>
-          (b.relevance_score || b.confidence || 0) -
-          (a.relevance_score || a.confidence || 0),
+          (b.relevance_score || b.confidence || 0) - (a.relevance_score || a.confidence || 0),
       );
   }
 }

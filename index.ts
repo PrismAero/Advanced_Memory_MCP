@@ -12,10 +12,7 @@ import "./modules/node-compat.js";
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { logger } from "./modules/logger.js";
-import {
-  createMcpServerApp,
-  installNetworkMonitor,
-} from "./modules/mcp-server-app.js";
+import { createMcpServerApp, installNetworkMonitor } from "./modules/mcp-server-app.js";
 
 installNetworkMonitor();
 const app = createMcpServerApp();

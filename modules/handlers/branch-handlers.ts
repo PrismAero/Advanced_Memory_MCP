@@ -23,7 +23,7 @@ export class BranchHandlers {
     }
     const newBranch = await this.memoryManager.createBranch(
       args.branch_name as string,
-      args.purpose as string
+      args.purpose as string,
     );
     return jsonResponse({
       created: true,
@@ -46,11 +46,9 @@ export class BranchHandlers {
     const branchGraph = await this.memoryManager.readGraph(
       args.branch_name as string,
       args.include_statuses,
-      args.include_auto_context !== false
+      args.include_auto_context !== false,
     );
-    const maxObservations = typeof args.max_observations === "number"
-      ? args.max_observations
-      : 5;
+    const maxObservations = typeof args.max_observations === "number" ? args.max_observations : 5;
     return jsonResponse({
       branch: args.branch_name || "main",
       entities: sanitizeEntities(branchGraph.entities, { maxObservations }),

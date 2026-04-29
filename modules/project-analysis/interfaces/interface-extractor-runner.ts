@@ -30,17 +30,13 @@ export class InterfaceExtractorRunner {
       extension: context.extension || path.extname(context.relativePath),
     };
     const extractor =
-      this.extractors.find((candidate) =>
-        candidate.supports(fullContext.language),
-      ) || this.fallback;
+      this.extractors.find((candidate) => candidate.supports(fullContext.language)) ||
+      this.fallback;
 
     const result = await extractor.extract(content, fullContext);
     return {
       ...result,
-      interfaces: clampInterfaceCount(
-        dedupeInterfaces(result.interfaces),
-        1_000,
-      ),
+      interfaces: clampInterfaceCount(dedupeInterfaces(result.interfaces), 1_000),
     };
   }
 }

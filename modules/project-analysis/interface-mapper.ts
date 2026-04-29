@@ -1,9 +1,6 @@
 import { promises as fs } from "fs";
 import { logger } from "../logger.js";
-import {
-  CodeSemanticType,
-  ProjectEmbeddingEngine,
-} from "../ml/project-embedding-engine.js";
+import { CodeSemanticType, ProjectEmbeddingEngine } from "../ml/project-embedding-engine.js";
 import {
   CodeInterfaceRecord,
   ProjectAnalysisOperations,
@@ -92,12 +89,7 @@ export interface InterfaceUsage {
  */
 export interface RelatedInterface {
   interface: EnhancedInterfaceInfo;
-  relationship_type:
-    | "extends"
-    | "contains"
-    | "similar"
-    | "composed_of"
-    | "uses";
+  relationship_type: "extends" | "contains" | "similar" | "composed_of" | "uses";
   similarity_score: number;
   shared_properties: string[];
   reasoning: string;
@@ -164,12 +156,10 @@ export class InterfaceMapper {
 
   // TypeScript/JavaScript patterns
   private readonly INTERFACE_PATTERNS = {
-    interface_declaration:
-      /interface\s+(\w+)(?:<[^>]*>)?\s*(?:extends\s+([^{]+))?\s*\{([^}]*)\}/gs,
+    interface_declaration: /interface\s+(\w+)(?:<[^>]*>)?\s*(?:extends\s+([^{]+))?\s*\{([^}]*)\}/gs,
     type_alias: /type\s+(\w+)(?:<[^>]*>)?\s*=\s*([^;]+);?/gs,
     props_interface: /interface\s+(\w+)(?:Props|Properties)\s*\{([^}]*)\}/gs,
-    api_interface:
-      /interface\s+(\w+)(?:Request|Response|API|Endpoint)\s*\{([^}]*)\}/gs,
+    api_interface: /interface\s+(\w+)(?:Request|Response|API|Endpoint)\s*\{([^}]*)\}/gs,
     class_implements:
       /class\s+(\w+)(?:<[^>]*>)?(?:\s+extends\s+[^{]+)?\s+implements\s+([^{]+)\s*\{/gs,
     property_declaration: /(\w+)(\?)?:\s*([^;,\n]+)/gs,
@@ -190,9 +180,7 @@ export class InterfaceMapper {
   /**
    * Analyze all interfaces in project files
    */
-  async analyzeProjectInterfaces(
-    branchName?: string,
-  ): Promise<InterfaceAnalysisResult[]> {
+  async analyzeProjectInterfaces(branchName?: string): Promise<InterfaceAnalysisResult[]> {
     logger.info("[SEARCH] Starting comprehensive interface analysis");
 
     // Get all source files. Language-specific extraction is delegated to
@@ -210,10 +198,7 @@ export class InterfaceMapper {
         const fileAnalysis = await this.analyzeFileInterfaces(file);
         analysisResults.push(...fileAnalysis);
       } catch (error) {
-        logger.warn(
-          `Failed to analyze interfaces in ${file.relative_path}:`,
-          error,
-        );
+        logger.warn(`Failed to analyze interfaces in ${file.relative_path}:`, error);
       }
     }
 
@@ -229,9 +214,7 @@ export class InterfaceMapper {
   /**
    * Analyze interfaces in a specific file
    */
-  async analyzeFileInterfaces(
-    fileRecord: ProjectFileRecord,
-  ): Promise<InterfaceAnalysisResult[]> {
+  async analyzeFileInterfaces(fileRecord: ProjectFileRecord): Promise<InterfaceAnalysisResult[]> {
     try {
       // Read file content
       const content = await fs.readFile(fileRecord.file_path, "utf-8");
@@ -241,43 +224,39 @@ export class InterfaceMapper {
         filePath: fileRecord.file_path,
         relativePath: fileRecord.relative_path,
       });
-      const interfaces: EnhancedInterfaceInfo[] = extraction.interfaces.map(
-        (iface) => {
-          const semanticType: CodeSemanticType =
-            iface.kind === "function" || iface.kind === "method"
-              ? "function_signature"
-              : iface.kind === "class" || iface.kind === "struct"
-                ? "class_definition"
-                : "interface_definition";
-          return {
-            id: undefined,
-            name: iface.name,
-            file_path: fileRecord.file_path,
-            relative_path: fileRecord.relative_path,
-            line_number: iface.startLine || iface.line,
-            definition: iface.definition || iface.signature || iface.name,
-            properties: (iface.members || []).map((member) => ({
-              name: member.name,
-              type: member.type || member.signature || "",
-              is_optional: Boolean(member.isOptional),
-              is_readonly: Boolean(member.isReadonly),
-              is_method: member.kind === "method",
-            })),
-            extends_interfaces: iface.extends || [],
-            generic_parameters: iface.templateParameters,
-            is_exported: iface.isExported,
-            is_api_contract:
-              iface.kind === "interface" &&
-              /api|request|response/i.test(iface.name),
-            is_props_interface: /props$/i.test(iface.name),
-            is_state_interface: /state$/i.test(iface.name),
-            complexity_score: Math.min(1, (iface.members?.length || 0) / 50),
-            usage_frequency: 0,
-            semantic_type: semanticType,
-            documentation: iface.documentation,
-          };
-        },
-      );
+      const interfaces: EnhancedInterfaceInfo[] = extraction.interfaces.map((iface) => {
+        const semanticType: CodeSemanticType =
+          iface.kind === "function" || iface.kind === "method"
+            ? "function_signature"
+            : iface.kind === "class" || iface.kind === "struct"
+              ? "class_definition"
+              : "interface_definition";
+        return {
+          id: undefined,
+          name: iface.name,
+          file_path: fileRecord.file_path,
+          relative_path: fileRecord.relative_path,
+          line_number: iface.startLine || iface.line,
+          definition: iface.definition || iface.signature || iface.name,
+          properties: (iface.members || []).map((member) => ({
+            name: member.name,
+            type: member.type || member.signature || "",
+            is_optional: Boolean(member.isOptional),
+            is_readonly: Boolean(member.isReadonly),
+            is_method: member.kind === "method",
+          })),
+          extends_interfaces: iface.extends || [],
+          generic_parameters: iface.templateParameters,
+          is_exported: iface.isExported,
+          is_api_contract: iface.kind === "interface" && /api|request|response/i.test(iface.name),
+          is_props_interface: /props$/i.test(iface.name),
+          is_state_interface: /state$/i.test(iface.name),
+          complexity_score: Math.min(1, (iface.members?.length || 0) / 50),
+          usage_frequency: 0,
+          semantic_type: semanticType,
+          documentation: iface.documentation,
+        };
+      });
 
       const results: InterfaceAnalysisResult[] = [];
 
@@ -287,11 +266,7 @@ export class InterfaceMapper {
         if (!stored) continue;
 
         // Analyze implementations
-        const implementations = await this.findInterfaceImplementations(
-          iface,
-          content,
-          fileRecord,
-        );
+        const implementations = await this.findInterfaceImplementations(iface, content, fileRecord);
 
         // Analyze usages (for now, only analyze the current file)
         const usages = await this.findInterfaceUsages(iface, [fileRecord]);
@@ -317,10 +292,7 @@ export class InterfaceMapper {
 
       return results;
     } catch (error) {
-      logger.error(
-        `Failed to analyze file interfaces for ${fileRecord.file_path}:`,
-        error,
-      );
+      logger.error(`Failed to analyze file interfaces for ${fileRecord.file_path}:`, error);
       return [];
     }
   }
@@ -340,10 +312,7 @@ export class InterfaceMapper {
     let match;
     this.INTERFACE_PATTERNS.interface_declaration.lastIndex = 0;
 
-    while (
-      (match = this.INTERFACE_PATTERNS.interface_declaration.exec(content)) !==
-      null
-    ) {
+    while ((match = this.INTERFACE_PATTERNS.interface_declaration.exec(content)) !== null) {
       const [fullMatch, name, extendsClause, body] = match;
       const lineNumber = this.getLineNumber(content, match.index);
 
@@ -382,9 +351,7 @@ export class InterfaceMapper {
 
     // Parse type aliases that are interface-like
     this.INTERFACE_PATTERNS.type_alias.lastIndex = 0;
-    while (
-      (match = this.INTERFACE_PATTERNS.type_alias.exec(content)) !== null
-    ) {
+    while ((match = this.INTERFACE_PATTERNS.type_alias.exec(content)) !== null) {
       const [fullMatch, name, typeDefinition] = match;
 
       // Only process object-like type aliases
@@ -406,11 +373,7 @@ export class InterfaceMapper {
           is_state_interface: this.isStateInterface(name, properties),
           complexity_score: this.calculateComplexityScore(properties),
           usage_frequency: 0,
-          semantic_type: this.determineSemanticType(
-            name,
-            properties,
-            typeDefinition,
-          ),
+          semantic_type: this.determineSemanticType(name, properties, typeDefinition),
           documentation: this.extractDocumentation(lines, lineNumber - 1),
         };
 
@@ -429,14 +392,10 @@ export class InterfaceMapper {
     const properties: InterfaceProperty[] = [];
 
     // Clean up the body
-    const cleanBody = body
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/.*$/gm, "");
+    const cleanBody = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
     // Parse properties
-    const propertyMatches = cleanBody.matchAll(
-      this.INTERFACE_PATTERNS.property_declaration,
-    );
+    const propertyMatches = cleanBody.matchAll(this.INTERFACE_PATTERNS.property_declaration);
     for (const match of propertyMatches) {
       const [, name, optional, type] = match;
 
@@ -450,9 +409,7 @@ export class InterfaceMapper {
     }
 
     // Parse methods
-    const methodMatches = cleanBody.matchAll(
-      this.INTERFACE_PATTERNS.method_declaration,
-    );
+    const methodMatches = cleanBody.matchAll(this.INTERFACE_PATTERNS.method_declaration);
     for (const match of methodMatches) {
       const [, name, optional, params, returnType] = match;
 
@@ -479,9 +436,7 @@ export class InterfaceMapper {
     const implementations: InterfaceImplementation[] = [];
 
     // Look for class implementations in the same file
-    const classMatches = fileContent.matchAll(
-      this.INTERFACE_PATTERNS.class_implements,
-    );
+    const classMatches = fileContent.matchAll(this.INTERFACE_PATTERNS.class_implements);
     for (const match of classMatches) {
       const [fullMatch, className, implementsList] = match;
 
@@ -518,10 +473,7 @@ export class InterfaceMapper {
 
       let componentMatch;
       while ((componentMatch = componentPattern.exec(fileContent)) !== null) {
-        const lineNumber = this.getLineNumber(
-          fileContent,
-          componentMatch.index,
-        );
+        const lineNumber = this.getLineNumber(fileContent, componentMatch.index);
 
         implementations.push({
           implementing_entity: componentName,
@@ -590,9 +542,7 @@ export class InterfaceMapper {
           }
         }
       } catch (error) {
-        logger.debug(
-          `Could not read file for usage analysis: ${file.file_path}`,
-        );
+        logger.debug(`Could not read file for usage analysis: ${file.file_path}`);
       }
     }
 
@@ -630,29 +580,19 @@ export class InterfaceMapper {
           interface: otherInterface,
           relationship_type: "extends",
           similarity_score: 0.9,
-          shared_properties: this.findSharedProperties(
-            interfaceInfo,
-            otherInterface,
-          ),
+          shared_properties: this.findSharedProperties(interfaceInfo, otherInterface),
           reasoning: `${interfaceInfo.name} explicitly extends ${otherInterface.name}`,
         });
         continue;
       }
 
       // Check for property similarity
-      const sharedProperties = this.findSharedProperties(
-        interfaceInfo,
-        otherInterface,
-      );
+      const sharedProperties = this.findSharedProperties(interfaceInfo, otherInterface);
       if (sharedProperties.length > 0) {
-        const similarityScore = this.calculatePropertySimilarity(
-          interfaceInfo,
-          otherInterface,
-        );
+        const similarityScore = this.calculatePropertySimilarity(interfaceInfo, otherInterface);
 
         if (similarityScore > 0.3) {
-          let relationshipType: RelatedInterface["relationship_type"] =
-            "similar";
+          let relationshipType: RelatedInterface["relationship_type"] = "similar";
 
           if (this.isComposedOf(interfaceInfo, otherInterface)) {
             relationshipType = "composed_of";
@@ -694,28 +634,18 @@ export class InterfaceMapper {
     // In reality, you'd need sophisticated analysis to track data transformations
 
     // Look for function signatures that transform between interfaces
-    const functionPattern =
-      /function\s+(\w+)\s*\([^)]*:\s*(\w+)[^)]*\)\s*:\s*(\w+)/g;
+    const functionPattern = /function\s+(\w+)\s*\([^)]*:\s*(\w+)[^)]*\)\s*:\s*(\w+)/g;
     let match;
 
     while ((match = functionPattern.exec(fileContent)) !== null) {
       const [, functionName, inputType, outputType] = match;
 
-      if (
-        inputType === interfaceInfo.name ||
-        outputType === interfaceInfo.name
-      ) {
+      if (inputType === interfaceInfo.name || outputType === interfaceInfo.name) {
         let flowType: DataFlowMapping["flow_type"] = "transformation";
 
-        if (
-          inputType === interfaceInfo.name &&
-          outputType !== interfaceInfo.name
-        ) {
+        if (inputType === interfaceInfo.name && outputType !== interfaceInfo.name) {
           flowType = "output";
-        } else if (
-          inputType !== interfaceInfo.name &&
-          outputType === interfaceInfo.name
-        ) {
+        } else if (inputType !== interfaceInfo.name && outputType === interfaceInfo.name) {
           flowType = "input";
         }
 
@@ -759,11 +689,7 @@ export class InterfaceMapper {
         const [, method, path] = match;
 
         // Check if this endpoint uses the interface
-        const surroundingCode = this.getSurroundingCode(
-          fileContent,
-          match.index,
-          10,
-        );
+        const surroundingCode = this.getSurroundingCode(fileContent, match.index, 10);
         if (surroundingCode.includes(interfaceInfo.name)) {
           endpoints.push({
             endpoint_path: path,
@@ -854,40 +780,20 @@ export class InterfaceMapper {
     return line.includes("export");
   }
 
-  private isAPIContract(
-    name: string,
-    properties: InterfaceProperty[],
-  ): boolean {
-    const apiKeywords = [
-      "request",
-      "response",
-      "api",
-      "endpoint",
-      "payload",
-      "dto",
-    ];
-    const nameMatch = apiKeywords.some((keyword) =>
-      name.toLowerCase().includes(keyword),
-    );
+  private isAPIContract(name: string, properties: InterfaceProperty[]): boolean {
+    const apiKeywords = ["request", "response", "api", "endpoint", "payload", "dto"];
+    const nameMatch = apiKeywords.some((keyword) => name.toLowerCase().includes(keyword));
     const propertyMatch = properties.some((prop) =>
-      ["status", "code", "message", "data", "error"].includes(
-        prop.name.toLowerCase(),
-      ),
+      ["status", "code", "message", "data", "error"].includes(prop.name.toLowerCase()),
     );
     return nameMatch || propertyMatch;
   }
 
-  private isPropsInterface(
-    name: string,
-    properties: InterfaceProperty[],
-  ): boolean {
+  private isPropsInterface(name: string, properties: InterfaceProperty[]): boolean {
     return name.endsWith("Props") || name.endsWith("Properties");
   }
 
-  private isStateInterface(
-    name: string,
-    properties: InterfaceProperty[],
-  ): boolean {
+  private isStateInterface(name: string, properties: InterfaceProperty[]): boolean {
     return name.endsWith("State") || name.includes("State");
   }
 
@@ -913,17 +819,13 @@ export class InterfaceMapper {
   ): CodeSemanticType {
     if (this.isAPIContract(name, properties)) return "api_endpoint";
     if (this.isPropsInterface(name, properties)) return "interface_definition";
-    if (name.includes("Config") || name.includes("Settings"))
-      return "configuration";
+    if (name.includes("Config") || name.includes("Settings")) return "configuration";
     if (body.includes("extends") || properties.some((p) => p.name === "id"))
       return "interface_definition";
     return "type_annotation";
   }
 
-  private extractDocumentation(
-    lines: string[],
-    lineIndex: number,
-  ): string | undefined {
+  private extractDocumentation(lines: string[], lineIndex: number): string | undefined {
     // Look for JSDoc comment above the interface
     let docLines: string[] = [];
     let i = lineIndex - 1;
@@ -976,9 +878,7 @@ export class InterfaceMapper {
     fileContent: string,
   ): Promise<{ score: number; missing: string[]; additional: string[] }> {
     // Simplified analysis - in reality you'd need proper AST parsing
-    const requiredProps = interfaceInfo.properties
-      .filter((p) => !p.is_optional)
-      .map((p) => p.name);
+    const requiredProps = interfaceInfo.properties.filter((p) => !p.is_optional).map((p) => p.name);
     const missing: string[] = [];
     const additional: string[] = [];
 
@@ -1030,8 +930,7 @@ export class InterfaceMapper {
   ): boolean {
     return (
       interface1.properties.length > interface2.properties.length &&
-      this.findSharedProperties(interface1, interface2).length >=
-        interface2.properties.length * 0.8
+      this.findSharedProperties(interface1, interface2).length >= interface2.properties.length * 0.8
     );
   }
 
@@ -1040,17 +939,11 @@ export class InterfaceMapper {
     interface2: EnhancedInterfaceInfo,
   ): boolean {
     return interface1.properties.some(
-      (p) =>
-        p.type.includes(interface2.name) ||
-        (p.is_method && p.type.includes(interface2.name)),
+      (p) => p.type.includes(interface2.name) || (p.is_method && p.type.includes(interface2.name)),
     );
   }
 
-  private getSurroundingCode(
-    content: string,
-    index: number,
-    lines: number,
-  ): string {
+  private getSurroundingCode(content: string, index: number, lines: number): string {
     const start = Math.max(0, content.lastIndexOf("\n", index - 1));
     const end = Math.min(content.length, content.indexOf("\n", index + 1));
 
@@ -1061,18 +954,13 @@ export class InterfaceMapper {
     return [...linesBefore, currentLine, ...linesAfter].join("\n");
   }
 
-  private calculateInterfaceCentrality(
-    result: InterfaceAnalysisResult,
-  ): number {
+  private calculateInterfaceCentrality(result: InterfaceAnalysisResult): number {
     const usageWeight = result.usages.length * 0.3;
     const implementationWeight = result.implementations.length * 0.4;
     const relationshipWeight = result.related_interfaces.length * 0.2;
     const apiWeight = result.api_endpoints?.length || 0 * 0.1;
 
-    return Math.min(
-      1.0,
-      usageWeight + implementationWeight + relationshipWeight + apiWeight,
-    );
+    return Math.min(1.0, usageWeight + implementationWeight + relationshipWeight + apiWeight);
   }
 
   private createInterfaceClusters(
@@ -1091,8 +979,7 @@ export class InterfaceMapper {
         domain = "state-management";
       else if (iface.name.includes("Config") || iface.name.includes("Settings"))
         domain = "configuration";
-      else if (iface.name.includes("Data") || iface.name.includes("Model"))
-        domain = "data-layer";
+      else if (iface.name.includes("Data") || iface.name.includes("Model")) domain = "data-layer";
 
       if (!clusters.has(domain)) {
         clusters.set(domain, []);
@@ -1146,8 +1033,7 @@ export class InterfaceMapper {
       cache_size: this.interfaceCache.size,
       relationship_cache_size: this.relationshipCache.size,
       api_contracts: allInterfaces.filter((i) => i.is_api_contract).length,
-      props_interfaces: allInterfaces.filter((i) => i.is_props_interface)
-        .length,
+      props_interfaces: allInterfaces.filter((i) => i.is_props_interface).length,
       complexity_distribution: complexityDistribution,
     };
   }

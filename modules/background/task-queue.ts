@@ -59,9 +59,7 @@ export class BackgroundTaskQueue {
     }
 
     if (task.coalesceKey) {
-      const existing = this.pending.find(
-        (queued) => queued.coalesceKey === task.coalesceKey,
-      );
+      const existing = this.pending.find((queued) => queued.coalesceKey === task.coalesceKey);
       if (existing) {
         this.coalesced++;
         task.onDrop?.("coalesced");
@@ -186,9 +184,7 @@ export class BackgroundTaskScheduler {
   private queues = new Map<BackgroundQueueName, BackgroundTaskQueue>();
 
   constructor(
-    config: Partial<
-      Record<BackgroundQueueName, { concurrency: number; maxQueued: number }>
-    > = {},
+    config: Partial<Record<BackgroundQueueName, { concurrency: number; maxQueued: number }>> = {},
   ) {
     for (const name of QUEUE_NAMES) {
       this.queues.set(

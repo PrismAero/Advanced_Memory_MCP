@@ -45,12 +45,7 @@ export class RelationshipPredictor {
         { from: "service", to: "interface", confidence: 0.9 },
         { from: "component", to: "interface", confidence: 0.8 },
       ],
-      patterns: [
-        "implements",
-        "realizes",
-        "fulfills",
-        "provides implementation",
-      ],
+      patterns: ["implements", "realizes", "fulfills", "provides implementation"],
       examples: [
         "DatabaseService implements DataInterface specification",
         "UserRepository implements RepositoryInterface contract",
@@ -115,12 +110,7 @@ export class RelationshipPredictor {
         { from: "decision", to: "decision", confidence: 0.7 },
         { from: "requirement", to: "requirement", confidence: 0.6 },
       ],
-      patterns: [
-        "related to",
-        "connected with",
-        "associated with",
-        "linked to",
-      ],
+      patterns: ["related to", "connected with", "associated with", "linked to"],
       examples: [
         "User Authentication relates to User Authorization",
         "Frontend Components relate to Backend Services",
@@ -159,7 +149,7 @@ export class RelationshipPredictor {
       existingRelations?: Relation[];
       branchName?: string;
       confidenceThreshold?: number;
-    }
+    },
   ): Promise<
     Array<{
       targetEntity: Entity;
@@ -193,11 +183,7 @@ export class RelationshipPredictor {
       if (candidate.name === sourceEntity.name) continue;
 
       try {
-        const prediction = await this.predictSingleRelationship(
-          sourceEntity,
-          candidate,
-          context
-        );
+        const prediction = await this.predictSingleRelationship(sourceEntity, candidate, context);
 
         if (prediction.confidence >= confidenceThreshold) {
           predictions.push(prediction);
@@ -205,7 +191,7 @@ export class RelationshipPredictor {
       } catch (error) {
         logger.error(
           `Error predicting relationship between ${sourceEntity.name} and ${candidate.name}:`,
-          error
+          error,
         );
       }
     }
@@ -223,7 +209,7 @@ export class RelationshipPredictor {
     context?: {
       existingRelations?: Relation[];
       branchName?: string;
-    }
+    },
   ): Promise<{
     targetEntity: Entity;
     predictedRelationType: string;
@@ -239,7 +225,7 @@ export class RelationshipPredictor {
     // Calculate base semantic similarity
     const semanticSimilarity = await this.similarityEngine.calculateSimilarity(
       sourceEntity,
-      targetEntity
+      targetEntity,
     );
 
     // Analyze each relationship type
@@ -254,15 +240,13 @@ export class RelationshipPredictor {
       };
     }> = [];
 
-    for (const [relationType, template] of Object.entries(
-      this.RELATIONSHIP_TEMPLATES
-    )) {
+    for (const [relationType, template] of Object.entries(this.RELATIONSHIP_TEMPLATES)) {
       const analysis = await this.analyzeRelationshipType(
         sourceEntity,
         targetEntity,
         relationType,
         template,
-        semanticSimilarity
+        semanticSimilarity,
       );
 
       relationshipScores.push(analysis);
@@ -277,7 +261,7 @@ export class RelationshipPredictor {
       sourceEntity,
       targetEntity,
       bestPrediction.type,
-      context
+      context,
     );
 
     const finalConfidence = Math.min(bestPrediction.score + contextBoost, 1.0);
@@ -286,11 +270,7 @@ export class RelationshipPredictor {
       targetEntity,
       predictedRelationType: bestPrediction.type,
       confidence: finalConfidence,
-      reasoning: this.generatePredictionReasoning(
-        bestPrediction,
-        semanticSimilarity,
-        contextBoost
-      ),
+      reasoning: this.generatePredictionReasoning(bestPrediction, semanticSimilarity, contextBoost),
       semanticSimilarity,
       contextFactors: bestPrediction.contextFactors,
     };
@@ -304,7 +284,7 @@ export class RelationshipPredictor {
     targetEntity: Entity,
     relationType: string,
     template: (typeof this.RELATIONSHIP_TEMPLATES)[string],
-    baseSimilarity: number
+    baseSimilarity: number,
   ): Promise<{
     type: string;
     score: number;
@@ -319,21 +299,21 @@ export class RelationshipPredictor {
     const typeCompatibility = this.calculateTypeCompatibility(
       sourceEntity.entityType,
       targetEntity.entityType,
-      template.entityTypePairs
+      template.entityTypePairs,
     );
 
     // Factor 2: Pattern matching in entity content
     const patternMatching = this.calculatePatternMatching(
       sourceEntity,
       targetEntity,
-      template.patterns
+      template.patterns,
     );
 
     // Factor 3: Semantic relevance to relationship context
     const semanticRelevance = await this.calculateSemanticRelevance(
       sourceEntity,
       targetEntity,
-      template.semanticContext
+      template.semanticContext,
     );
 
     // Combine factors with weights
@@ -350,7 +330,7 @@ export class RelationshipPredictor {
         relationType,
         typeCompatibility,
         patternMatching,
-        semanticRelevance
+        semanticRelevance,
       ),
       contextFactors: {
         typeCompatibility,
@@ -366,11 +346,9 @@ export class RelationshipPredictor {
   private calculateTypeCompatibility(
     sourceType: string,
     targetType: string,
-    typePairs: Array<{ from: string; to: string; confidence: number }>
+    typePairs: Array<{ from: string; to: string; confidence: number }>,
   ): number {
-    const exactMatch = typePairs.find(
-      (pair) => pair.from === sourceType && pair.to === targetType
-    );
+    const exactMatch = typePairs.find((pair) => pair.from === sourceType && pair.to === targetType);
 
     if (exactMatch) {
       return exactMatch.confidence;
@@ -378,7 +356,7 @@ export class RelationshipPredictor {
 
     // Check reverse direction with lower confidence
     const reverseMatch = typePairs.find(
-      (pair) => pair.from === targetType && pair.to === sourceType
+      (pair) => pair.from === targetType && pair.to === sourceType,
     );
 
     if (reverseMatch) {
@@ -399,7 +377,7 @@ export class RelationshipPredictor {
   private calculatePatternMatching(
     sourceEntity: Entity,
     targetEntity: Entity,
-    patterns: string[]
+    patterns: string[],
   ): number {
     const combinedText = [
       sourceEntity.name,
@@ -413,7 +391,7 @@ export class RelationshipPredictor {
       .toLowerCase();
 
     const matchingPatterns = patterns.filter((pattern) =>
-      combinedText.includes(pattern.toLowerCase())
+      combinedText.includes(pattern.toLowerCase()),
     );
 
     return matchingPatterns.length / patterns.length;
@@ -425,7 +403,7 @@ export class RelationshipPredictor {
   private async calculateSemanticRelevance(
     sourceEntity: Entity,
     targetEntity: Entity,
-    relationshipContext: string
+    relationshipContext: string,
   ): Promise<number> {
     try {
       // Create a synthetic entity representing the relationship context
@@ -439,12 +417,12 @@ export class RelationshipPredictor {
       // Calculate how well both entities relate to this relationship context
       const sourceRelevance = await this.similarityEngine.calculateSimilarity(
         sourceEntity,
-        contextEntity
+        contextEntity,
       );
 
       const targetRelevance = await this.similarityEngine.calculateSimilarity(
         targetEntity,
-        contextEntity
+        contextEntity,
       );
 
       // Return average relevance
@@ -465,7 +443,7 @@ export class RelationshipPredictor {
     context?: {
       existingRelations?: Relation[];
       branchName?: string;
-    }
+    },
   ): Promise<number> {
     let boost = 0;
 
@@ -477,7 +455,7 @@ export class RelationshipPredictor {
           rel.from === sourceEntity.name ||
           rel.to === sourceEntity.name ||
           rel.from === targetEntity.name ||
-          rel.to === targetEntity.name
+          rel.to === targetEntity.name,
       );
 
       boost += Math.min(similarPatterns.length * 0.05, 0.15);
@@ -487,9 +465,7 @@ export class RelationshipPredictor {
     if (sourceEntity.entityType && targetEntity.entityType) {
       const template = this.RELATIONSHIP_TEMPLATES[predictedType];
       const typeMatch = template.entityTypePairs.find(
-        (pair) =>
-          pair.from === sourceEntity.entityType &&
-          pair.to === targetEntity.entityType
+        (pair) => pair.from === sourceEntity.entityType && pair.to === targetEntity.entityType,
       );
 
       if (typeMatch && typeMatch.confidence > 0.8) {
@@ -507,22 +483,14 @@ export class RelationshipPredictor {
     relationType: string,
     typeCompatibility: number,
     patternMatching: number,
-    semanticRelevance: number
+    semanticRelevance: number,
   ): string {
     const factors: string[] = [];
 
     if (typeCompatibility > 0.7) {
-      factors.push(
-        `Strong entity type compatibility (${(typeCompatibility * 100).toFixed(
-          0
-        )}%)`
-      );
+      factors.push(`Strong entity type compatibility (${(typeCompatibility * 100).toFixed(0)}%)`);
     } else if (typeCompatibility > 0.4) {
-      factors.push(
-        `Moderate entity type compatibility (${(
-          typeCompatibility * 100
-        ).toFixed(0)}%)`
-      );
+      factors.push(`Moderate entity type compatibility (${(typeCompatibility * 100).toFixed(0)}%)`);
     }
 
     if (patternMatching > 0.6) {
@@ -552,20 +520,18 @@ export class RelationshipPredictor {
       reasoning: string;
     },
     semanticSimilarity: number,
-    contextBoost: number
+    contextBoost: number,
   ): string {
     const components: string[] = [];
 
     components.push(
-      `Predicted ${bestPrediction.type} relationship (${(
-        bestPrediction.score * 100
-      ).toFixed(1)}% base confidence)`
+      `Predicted ${bestPrediction.type} relationship (${(bestPrediction.score * 100).toFixed(
+        1,
+      )}% base confidence)`,
     );
 
     if (semanticSimilarity > 0.6) {
-      components.push(
-        `High semantic similarity (${(semanticSimilarity * 100).toFixed(1)}%)`
-      );
+      components.push(`High semantic similarity (${(semanticSimilarity * 100).toFixed(1)}%)`);
     }
 
     components.push(bestPrediction.reasoning);
@@ -586,7 +552,7 @@ export class RelationshipPredictor {
       existingRelations?: Relation[];
       branchName?: string;
       confidenceThreshold?: number;
-    }
+    },
   ): Promise<
     Map<
       string,
@@ -610,11 +576,7 @@ export class RelationshipPredictor {
 
     for (const { source, targets } of entityPairs) {
       try {
-        const predictions = await this.predictRelationships(
-          source,
-          targets,
-          context
-        );
+        const predictions = await this.predictRelationships(source, targets, context);
         results.set(
           source.name,
           predictions.map((p) => ({
@@ -622,7 +584,7 @@ export class RelationshipPredictor {
             predictedRelationType: p.predictedRelationType,
             confidence: p.confidence,
             reasoning: p.reasoning,
-          }))
+          })),
         );
       } catch (error) {
         logger.error(`Error in batch prediction for ${source.name}:`, error);
@@ -653,9 +615,7 @@ export class RelationshipPredictor {
     } = {};
     const averageConfidenceThresholds: { [key: string]: number } = {};
 
-    for (const [type, template] of Object.entries(
-      this.RELATIONSHIP_TEMPLATES
-    )) {
+    for (const [type, template] of Object.entries(this.RELATIONSHIP_TEMPLATES)) {
       typeTemplates[type] = {
         description: template.description,
         examples: template.examples,
@@ -663,10 +623,8 @@ export class RelationshipPredictor {
 
       // Calculate average confidence threshold for this type
       const avgConfidence =
-        template.entityTypePairs.reduce(
-          (sum, pair) => sum + pair.confidence,
-          0
-        ) / template.entityTypePairs.length;
+        template.entityTypePairs.reduce((sum, pair) => sum + pair.confidence, 0) /
+        template.entityTypePairs.length;
       averageConfidenceThresholds[type] = avgConfidence;
     }
 

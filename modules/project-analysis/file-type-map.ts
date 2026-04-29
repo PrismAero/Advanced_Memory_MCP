@@ -74,19 +74,50 @@ export function buildFileTypeMap(): Map<string, FileTypeInfo> {
   map.set(".qml", source(".qml", "qml", true, false));
   map.set(".cs", source(".cs", "csharp", true, false));
   for (const ext of [".m", ".mm"]) map.set(ext, source(ext, "objective-c", true, false));
-  for (const ext of [".swift", ".rb", ".php", ".lua", ".pl", ".pm", ".r", ".R", ".scala", ".dart", ".ex", ".exs", ".erl", ".hrl", ".hs", ".zig"]) {
+  for (const ext of [
+    ".swift",
+    ".rb",
+    ".php",
+    ".lua",
+    ".pl",
+    ".pm",
+    ".r",
+    ".R",
+    ".scala",
+    ".dart",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".hrl",
+    ".hs",
+    ".zig",
+  ]) {
     const language = ext === ".R" ? "r" : ext.slice(1);
     map.set(ext, source(ext, language));
   }
 
-  for (const ext of [".proto", ".pbtxt", ".graphql", ".gql", ".avsc", ".avdl", ".thrift", ".fbs", ".capnp", ".jsonschema"]) {
+  for (const ext of [
+    ".proto",
+    ".pbtxt",
+    ".graphql",
+    ".gql",
+    ".avsc",
+    ".avdl",
+    ".thrift",
+    ".fbs",
+    ".capnp",
+    ".jsonschema",
+  ]) {
     const language = ext === ".proto" ? "protobuf" : ext.slice(1);
-    map.set(ext, typeInfo(ext, language, ext === ".proto" ? "protocol" : "schema", {
-      canDefineInterfaces: false,
-      hasImports: ext === ".proto" || ext === ".graphql" || ext === ".gql",
-      hasExports: false,
-      contextRole: "dependency",
-    }));
+    map.set(
+      ext,
+      typeInfo(ext, language, ext === ".proto" ? "protocol" : "schema", {
+        canDefineInterfaces: false,
+        hasImports: ext === ".proto" || ext === ".graphql" || ext === ".gql",
+        hasExports: false,
+        contextRole: "dependency",
+      }),
+    );
   }
 
   map.set(".json", config(".json", "json", "data"));
@@ -99,15 +130,33 @@ export function buildFileTypeMap(): Map<string, FileTypeInfo> {
   map.set(".env", config(".env", "dotenv"));
   map.set(".ui", typeInfo(".ui", "xml", "schema", { canDefineInterfaces: false }));
   map.set(".qrc", typeInfo(".qrc", "xml", "schema", { canDefineInterfaces: false }));
-  for (const ext of [".pro", ".pri", ".cmake", ".mk", ".ninja", ".meson", ".bazel", ".bzl", ".gradle", ".pom", ".csproj", ".sln", ".tf", ".tfvars"]) {
-    map.set(ext, typeInfo(ext, ext.slice(1) || "build", "build", {
-      hasImports: false,
-      hasExports: false,
-      canDefineInterfaces: false,
-      fileKind: "build",
-      contextRole: "dependency",
-      shouldParseContent: false,
-    }));
+  for (const ext of [
+    ".pro",
+    ".pri",
+    ".cmake",
+    ".mk",
+    ".ninja",
+    ".meson",
+    ".bazel",
+    ".bzl",
+    ".gradle",
+    ".pom",
+    ".csproj",
+    ".sln",
+    ".tf",
+    ".tfvars",
+  ]) {
+    map.set(
+      ext,
+      typeInfo(ext, ext.slice(1) || "build", "build", {
+        hasImports: false,
+        hasExports: false,
+        canDefineInterfaces: false,
+        fileKind: "build",
+        contextRole: "dependency",
+        shouldParseContent: false,
+      }),
+    );
   }
   for (const ext of [".dockerfile", ".compose", ".lock"]) {
     map.set(ext, config(ext, ext.slice(1), "build"));
@@ -122,16 +171,47 @@ export function buildFileTypeMap(): Map<string, FileTypeInfo> {
       shouldParseContent: false,
     }),
   });
-  map.set(".rst", typeInfo(".rst", "restructuredtext", "documentation", { canDefineInterfaces: false, hasImports: false, hasExports: false, shouldParseContent: false }));
-  map.set(".dox", typeInfo(".dox", "doxygen", "documentation", { canDefineInterfaces: false, hasImports: false, hasExports: false, shouldParseContent: false }));
-  map.set(".txt", typeInfo(".txt", "text", "documentation", { canDefineInterfaces: false, hasImports: false, hasExports: false, contextRole: "metadata", shouldParseContent: false }));
+  map.set(
+    ".rst",
+    typeInfo(".rst", "restructuredtext", "documentation", {
+      canDefineInterfaces: false,
+      hasImports: false,
+      hasExports: false,
+      shouldParseContent: false,
+    }),
+  );
+  map.set(
+    ".dox",
+    typeInfo(".dox", "doxygen", "documentation", {
+      canDefineInterfaces: false,
+      hasImports: false,
+      hasExports: false,
+      shouldParseContent: false,
+    }),
+  );
+  map.set(
+    ".txt",
+    typeInfo(".txt", "text", "documentation", {
+      canDefineInterfaces: false,
+      hasImports: false,
+      hasExports: false,
+      contextRole: "metadata",
+      shouldParseContent: false,
+    }),
+  );
   for (const ext of [".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte"]) {
-    map.set(ext, typeInfo(ext, ext.slice(1), ext === ".html" || ext === ".htm" ? "documentation" : "source", {
-      canDefineInterfaces: ext === ".vue" || ext === ".svelte",
-      hasImports: ext === ".vue" || ext === ".svelte",
-      hasExports: ext === ".vue" || ext === ".svelte",
-      contextRole: ext === ".css" || ext === ".scss" || ext === ".sass" || ext === ".less" ? "metadata" : "code",
-    }));
+    map.set(
+      ext,
+      typeInfo(ext, ext.slice(1), ext === ".html" || ext === ".htm" ? "documentation" : "source", {
+        canDefineInterfaces: ext === ".vue" || ext === ".svelte",
+        hasImports: ext === ".vue" || ext === ".svelte",
+        hasExports: ext === ".vue" || ext === ".svelte",
+        contextRole:
+          ext === ".css" || ext === ".scss" || ext === ".sass" || ext === ".less"
+            ? "metadata"
+            : "code",
+      }),
+    );
   }
 
   map.set(".unknown", {

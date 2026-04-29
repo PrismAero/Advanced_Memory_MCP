@@ -170,11 +170,7 @@ export class ContextEngine {
 
     for (const entity of originalResults.entities) {
       try {
-        const enhanced = await this.enhanceEntityWithContext(
-          entity,
-          searchQuery,
-          sessionId,
-        );
+        const enhanced = await this.enhanceEntityWithContext(entity, searchQuery, sessionId);
         enhancedResults.push(enhanced);
       } catch (error) {
         logger.warn(`Failed to enhance entity ${entity.name}:`, error);
@@ -216,16 +212,11 @@ export class ContextEngine {
     // Generate different types of suggestions
     const interfaceContextSuggestions =
       await this.generateInterfaceContextSuggestions(currentContext);
-    const importSuggestions =
-      await this.generateImportSuggestions(currentContext);
-    const dependencySuggestions =
-      await this.generateDependencyPredictions(currentContext);
-    const componentSuggestions =
-      await this.generateRelatedComponentSuggestions(currentContext);
-    const monorepoSuggestions =
-      await this.generateMonorepoModuleSuggestions(currentContext);
-    const evidenceSuggestions =
-      await this.generateEvidenceSuggestions(currentContext);
+    const importSuggestions = await this.generateImportSuggestions(currentContext);
+    const dependencySuggestions = await this.generateDependencyPredictions(currentContext);
+    const componentSuggestions = await this.generateRelatedComponentSuggestions(currentContext);
+    const monorepoSuggestions = await this.generateMonorepoModuleSuggestions(currentContext);
+    const evidenceSuggestions = await this.generateEvidenceSuggestions(currentContext);
 
     suggestions.push(
       ...interfaceContextSuggestions,
@@ -238,10 +229,7 @@ export class ContextEngine {
 
     // Sort by relevance and confidence
     const sortedSuggestions = suggestions
-      .sort(
-        (a, b) =>
-          b.relevance_score * b.confidence - a.relevance_score * a.confidence,
-      )
+      .sort((a, b) => b.relevance_score * b.confidence - a.relevance_score * a.confidence)
       .slice(0, 20); // Limit to top 20 suggestions
 
     // Cache the results
@@ -254,9 +242,7 @@ export class ContextEngine {
   /**
    * Predict context needs based on current development patterns
    */
-  async predictContextNeeds(
-    workingContext: WorkingContext,
-  ): Promise<ContextPrediction> {
+  async predictContextNeeds(workingContext: WorkingContext): Promise<ContextPrediction> {
     const cacheKey = `prediction_${
       workingContext.session_id
     }_${workingContext.current_files.join(",")}`;
@@ -275,14 +261,10 @@ export class ContextEngine {
     const patterns = await this.analyzeWorkingPatterns(workingContext);
 
     // Predict interface needs
-    prediction.predicted_needs.push(
-      ...(await this.predictInterfaceNeeds(patterns)),
-    );
+    prediction.predicted_needs.push(...(await this.predictInterfaceNeeds(patterns)));
 
     // Predict import needs
-    prediction.predicted_needs.push(
-      ...(await this.predictImportNeeds(patterns)),
-    );
+    prediction.predicted_needs.push(...(await this.predictImportNeeds(patterns)));
 
     // Find integration opportunities
     prediction.potential_integrations.push(
@@ -304,10 +286,7 @@ export class ContextEngine {
   /**
    * Update working context
    */
-  updateWorkingContext(
-    sessionId: string,
-    updates: Partial<WorkingContext>,
-  ): void {
+  updateWorkingContext(sessionId: string, updates: Partial<WorkingContext>): void {
     const existing = this.workingContexts.get(sessionId) || {
       current_files: [],
       active_interfaces: [],
@@ -352,21 +331,16 @@ export class ContextEngine {
     };
 
     // Find related interfaces
-    enhanced.related_interfaces =
-      await this.findRelatedInterfacesForEntity(entity);
+    enhanced.related_interfaces = await this.findRelatedInterfacesForEntity(entity);
 
     // Generate context suggestions
-    enhanced.context_suggestions = await this.generateEntityContextSuggestions(
-      entity,
-      searchQuery,
-    );
+    enhanced.context_suggestions = await this.generateEntityContextSuggestions(entity, searchQuery);
 
     // Suggest imports
     enhanced.suggested_imports = await this.suggestImportsForEntity(entity);
 
     // Find monorepo connections
-    enhanced.monorepo_connections =
-      await this.findMonorepoConnectionsForEntity(entity);
+    enhanced.monorepo_connections = await this.findMonorepoConnectionsForEntity(entity);
 
     return enhanced;
   }
@@ -382,10 +356,7 @@ export class ContextEngine {
   }): Promise<ContextSuggestion[]> {
     const suggestions: ContextSuggestion[] = [];
 
-    if (
-      currentContext.working_interfaces &&
-      currentContext.working_interfaces.length > 0
-    ) {
+    if (currentContext.working_interfaces && currentContext.working_interfaces.length > 0) {
       // Find interfaces related to current working interfaces
       for (const interfaceName of currentContext.working_interfaces) {
         try {
@@ -415,10 +386,7 @@ export class ContextEngine {
             }
           }
         } catch (error) {
-          logger.debug(
-            `Failed to find related interfaces for ${interfaceName}:`,
-            error,
-          );
+          logger.debug(`Failed to find related interfaces for ${interfaceName}:`, error);
         }
       }
     }
@@ -440,11 +408,10 @@ export class ContextEngine {
     if (currentContext.current_file) {
       try {
         // Analyze current file dependencies
-        const dependencies =
-          await this.projectAnalysisOps.getProjectDependencies({
-            // This would need the file ID - simplified for now
-            limit: 20,
-          });
+        const dependencies = await this.projectAnalysisOps.getProjectDependencies({
+          // This would need the file ID - simplified for now
+          limit: 20,
+        });
 
         // Find commonly used imports that might be missing
         const commonImports = this.analyzeCommonImportPatterns(dependencies);
@@ -490,11 +457,7 @@ export class ContextEngine {
       const query = currentContext.search_query.toLowerCase();
 
       // Predict based on query content
-      if (
-        query.includes("api") ||
-        query.includes("fetch") ||
-        query.includes("request")
-      ) {
+      if (query.includes("api") || query.includes("fetch") || query.includes("request")) {
         suggestions.push({
           type: "dependency_prediction",
           title: "HTTP Client Dependency",
@@ -509,11 +472,7 @@ export class ContextEngine {
         });
       }
 
-      if (
-        query.includes("state") ||
-        query.includes("store") ||
-        query.includes("redux")
-      ) {
+      if (query.includes("state") || query.includes("store") || query.includes("redux")) {
         suggestions.push({
           type: "dependency_prediction",
           title: "State Management",
@@ -545,16 +504,15 @@ export class ContextEngine {
         if (entity.entityType === "component") {
           // Find similar components using embedding similarity
           try {
-            const similarEntities =
-              await this.findSimilarEntitiesByEmbedding(entity);
+            const similarEntities = await this.findSimilarEntitiesByEmbedding(entity);
 
             for (const similar of similarEntities.slice(0, 2)) {
               suggestions.push({
                 type: "related_component",
                 title: `Related Component: ${similar.entity.name}`,
-                description: `Similar component with ${(
-                  similar.similarity * 100
-                ).toFixed(0)}% similarity`,
+                description: `Similar component with ${(similar.similarity * 100).toFixed(
+                  0,
+                )}% similarity`,
                 relevance_score: similar.similarity,
                 confidence: similar.confidence,
                 suggested_action: `Review ${similar.entity.name} for reusable patterns`,
@@ -565,10 +523,7 @@ export class ContextEngine {
               });
             }
           } catch (error) {
-            logger.debug(
-              `Failed to find similar entities for ${entity.name}:`,
-              error,
-            );
+            logger.debug(`Failed to find similar entities for ${entity.name}:`, error);
           }
         }
       }
@@ -597,8 +552,7 @@ export class ContextEngine {
 
       // Look for package.json files that indicate workspaces
       const workspaceFiles = workspaceContexts.filter(
-        (f) =>
-          f.file_path.includes("package.json") && f.relative_path.includes("/"),
+        (f) => f.file_path.includes("package.json") && f.relative_path.includes("/"),
       );
 
       for (const workspace of workspaceFiles.slice(0, 3)) {
@@ -653,8 +607,7 @@ export class ContextEngine {
         confidence: 0.75,
         suggested_action: `Review ${item.name}`,
         related_files: item.kind === "file" && item.ref ? [item.ref] : undefined,
-        related_interfaces:
-          item.kind === "interface" ? [item.name] : undefined,
+        related_interfaces: item.kind === "interface" ? [item.name] : undefined,
         reasoning: item.why,
       }));
   }
@@ -717,9 +670,7 @@ export class ContextEngine {
     }
     if (
       searchQuery &&
-      entity.observations.some((obs) =>
-        obs.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
+      entity.observations.some((obs) => obs.toLowerCase().includes(searchQuery.toLowerCase()))
     ) {
       suggestions.push({
         type: "similar_implementation",
@@ -739,13 +690,13 @@ export class ContextEngine {
       .split(/[^A-Za-z0-9_./:-]+/)
       .filter((term) => term.length >= 4)
       .slice(0, 8);
-    const deps = await this.projectAnalysisOps.getProjectDependencies({ limit: 100 });
+    const deps = await this.projectAnalysisOps.getProjectDependencies({
+      limit: 100,
+    });
     return deps
       .filter((dep) =>
         terms.some((term) =>
-          `${dep.source_identifier} ${dep.target_identifier || ""} ${
-            dep.external_package || ""
-          }`
+          `${dep.source_identifier} ${dep.target_identifier || ""} ${dep.external_package || ""}`
             .toLowerCase()
             .includes(term.toLowerCase()),
         ),
@@ -758,9 +709,7 @@ export class ContextEngine {
       }));
   }
 
-  private async findMonorepoConnectionsForEntity(
-    entity: Entity,
-  ): Promise<any[]> {
+  private async findMonorepoConnectionsForEntity(entity: Entity): Promise<any[]> {
     const files = await this.projectAnalysisOps.getProjectFiles({
       category: "config",
       limit: 50,
@@ -779,9 +728,7 @@ export class ContextEngine {
       }));
   }
 
-  private async findSimilarInterfaces(
-    iface: CodeInterfaceRecord,
-  ): Promise<any[]> {
+  private async findSimilarInterfaces(iface: CodeInterfaceRecord): Promise<any[]> {
     const candidates = await this.projectAnalysisOps.getCodeInterfaces({
       language: iface.language,
       kind: iface.kind,
@@ -805,10 +752,7 @@ export class ContextEngine {
     package: string;
     frequency: number;
   }> {
-    const counts = new Map<
-      string,
-      { symbol: string; package: string; frequency: number }
-    >();
+    const counts = new Map<string, { symbol: string; package: string; frequency: number }>();
     for (const dep of dependencies) {
       const pkg = dep.external_package || dep.source_identifier;
       if (!pkg) continue;
@@ -838,9 +782,7 @@ export class ContextEngine {
     }));
   }
 
-  private async analyzeWorkingPatterns(
-    workingContext: WorkingContext,
-  ): Promise<any> {
+  private async analyzeWorkingPatterns(workingContext: WorkingContext): Promise<any> {
     return {
       files: workingContext.current_files,
       interfaces: workingContext.active_interfaces,
@@ -860,7 +802,9 @@ export class ContextEngine {
   }
 
   private async predictImportNeeds(patterns: any): Promise<any[]> {
-    const deps = await this.projectAnalysisOps.getProjectDependencies({ limit: 100 });
+    const deps = await this.projectAnalysisOps.getProjectDependencies({
+      limit: 100,
+    });
     const focusText = `${patterns.focus || ""} ${(patterns.searches || []).join(" ")}`;
     return this.analyzeCommonImportPatterns(deps)
       .filter((item) => focusText.toLowerCase().includes(item.symbol.toLowerCase()))
@@ -874,9 +818,7 @@ export class ContextEngine {
       }));
   }
 
-  private async findIntegrationOpportunities(
-    workingContext: WorkingContext,
-  ): Promise<any[]> {
+  private async findIntegrationOpportunities(workingContext: WorkingContext): Promise<any[]> {
     const evidence = await this.evidenceBuilder.buildProjectEvidence({
       searchQuery: workingContext.project_focus,
       activeInterfaces: workingContext.active_interfaces,
@@ -892,21 +834,17 @@ export class ContextEngine {
     }));
   }
 
-  private async identifyRefactoringOpportunities(
-    workingContext: WorkingContext,
-  ): Promise<any[]> {
+  private async identifyRefactoringOpportunities(workingContext: WorkingContext): Promise<any[]> {
     const files = await this.projectAnalysisOps.getProjectFiles({ limit: 100 });
     return files
       .filter(
         (file) =>
           file.complexity === "high" ||
-          (file.documentation_percentage !== undefined &&
-            file.documentation_percentage < 20),
+          (file.documentation_percentage !== undefined && file.documentation_percentage < 20),
       )
       .slice(0, 5)
       .map((file) => ({
-        opportunity_type:
-          file.complexity === "high" ? "reduce_complexity" : "improve_docs",
+        opportunity_type: file.complexity === "high" ? "reduce_complexity" : "improve_docs",
         affected_files: [file.relative_path || file.file_path],
         potential_benefit:
           file.complexity === "high"
@@ -916,10 +854,7 @@ export class ContextEngine {
       }));
   }
 
-  private createSuggestionCacheKey(
-    currentContext: any,
-    sessionId?: string,
-  ): string {
+  private createSuggestionCacheKey(currentContext: any, sessionId?: string): string {
     const contextStr = JSON.stringify(currentContext).substring(0, 100);
     return `${sessionId || "default"}_${contextStr}`;
   }
@@ -952,9 +887,10 @@ export class ContextEngine {
       active_contexts: this.workingContexts.size,
       suggestion_cache_size: this.suggestionCache.size,
       prediction_cache_size: this.contextPredictionCache.size,
-      total_suggestions_generated: Array.from(
-        this.suggestionCache.values(),
-      ).reduce((sum, suggestions) => sum + suggestions.length, 0),
+      total_suggestions_generated: Array.from(this.suggestionCache.values()).reduce(
+        (sum, suggestions) => sum + suggestions.length,
+        0,
+      ),
     };
   }
 

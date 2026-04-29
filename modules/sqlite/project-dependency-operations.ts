@@ -84,11 +84,7 @@ export class ProjectDependencyOperations {
         is_namespace_import: isNamespace,
         is_type_only: false,
         external_package: externalPackage,
-        resolution_status: toFileId
-          ? "resolved"
-          : externalPackage
-            ? "resolved"
-            : "unresolved",
+        resolution_status: toFileId ? "resolved" : externalPackage ? "resolved" : "unresolved",
       };
 
       await this.connection.execute(

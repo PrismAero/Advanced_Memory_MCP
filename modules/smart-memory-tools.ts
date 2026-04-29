@@ -47,8 +47,7 @@ const CORE_TOOLS: Tool[] = [
         },
         purpose: {
           type: "string",
-          description:
-            "One-sentence description of what this branch will contain.",
+          description: "One-sentence description of what this branch will contain.",
         },
       },
       required: ["branch_name"],
@@ -89,8 +88,7 @@ const CORE_TOOLS: Tool[] = [
               },
               entityType: {
                 type: "string",
-                description:
-                  "Free-form category, e.g. 'component', 'decision', 'pattern', 'fact'.",
+                description: "Free-form category, e.g. 'component', 'decision', 'pattern', 'fact'.",
               },
               observations: {
                 type: "array",
@@ -108,13 +106,11 @@ const CORE_TOOLS: Tool[] = [
         },
         branch_name: {
           type: "string",
-          description:
-            "Target branch. Leave empty to auto-suggest based on entity type.",
+          description: "Target branch. Leave empty to auto-suggest based on entity type.",
         },
         auto_create_relations: {
           type: "boolean",
-          description:
-            "Detect and create related-entity links (default: true).",
+          description: "Detect and create related-entity links (default: true).",
         },
         sync_relations: {
           type: "boolean",
@@ -200,13 +196,11 @@ const CORE_TOOLS: Tool[] = [
       properties: {
         query: {
           type: "string",
-          description:
-            "Free-text query. Empty string returns recent/working entities.",
+          description: "Free-text query. Empty string returns recent/working entities.",
         },
         branch_name: {
           type: "string",
-          description:
-            "Specific branch name, or '*' to search across all branches.",
+          description: "Specific branch name, or '*' to search across all branches.",
         },
         include_statuses: {
           type: "array",
@@ -228,8 +222,7 @@ const CORE_TOOLS: Tool[] = [
         },
         working_context_only: {
           type: "boolean",
-          description:
-            "Only return entities currently flagged as working context.",
+          description: "Only return entities currently flagged as working context.",
         },
         include_confidence_scores: {
           type: "boolean",
@@ -242,13 +235,11 @@ const CORE_TOOLS: Tool[] = [
         },
         max_relations: {
           type: "integer",
-          description:
-            "Maximum relations among returned entities. Default: 20, max: 100.",
+          description: "Maximum relations among returned entities. Default: 20, max: 100.",
         },
         max_observations: {
           type: "integer",
-          description:
-            "Cap observations per entity. Default: 5. Use 0 for no cap.",
+          description: "Cap observations per entity. Default: 5. Use 0 for no cap.",
         },
       },
       required: ["query", "branch_name"],
@@ -307,18 +298,15 @@ const CORE_TOOLS: Tool[] = [
         },
         time_window_hours: {
           type: "integer",
-          description:
-            "[continuation] Hours of recent activity to include (default: 24).",
+          description: "[continuation] Hours of recent activity to include (default: 24).",
         },
         include_blockers: {
           type: "boolean",
-          description:
-            "[continuation] Include current blockers in the response (default: true).",
+          description: "[continuation] Include current blockers in the response (default: true).",
         },
         current_focus: {
           type: "string",
-          description:
-            "[related] Free-text description of what you are working on.",
+          description: "[related] Free-text description of what you are working on.",
         },
         entity_names: {
           type: "array",
@@ -364,8 +352,7 @@ const CORE_TOOLS: Tool[] = [
       properties: {
         include_inactive: {
           type: "boolean",
-          description:
-            "Include inactive branches in the report (default: false).",
+          description: "Include inactive branches in the report (default: false).",
         },
         detail_level: {
           type: "string",
@@ -498,8 +485,7 @@ const CORE_TOOLS: Tool[] = [
         mode: {
           type: "string",
           enum: ["phase", "archive"],
-          description:
-            "Required. 'phase' for bulk transitions, 'archive' for completed work.",
+          description: "Required. 'phase' for bulk transitions, 'archive' for completed work.",
         },
         entity_names: {
           type: "array",
@@ -585,8 +571,7 @@ const CORE_TOOLS: Tool[] = [
         },
         workspace_path: {
           type: "string",
-          description:
-            "Defaults to MEMORY_PATH or the current working directory.",
+          description: "Defaults to MEMORY_PATH or the current working directory.",
         },
         project_path: {
           type: "string",
@@ -607,8 +592,7 @@ const CORE_TOOLS: Tool[] = [
         },
         link_existing_entities: {
           type: "boolean",
-          description:
-            "[sync] Create relations from new structure entities to existing ones.",
+          description: "[sync] Create relations from new structure entities to existing ones.",
         },
         current_files: {
           type: "array",
@@ -629,8 +613,7 @@ const CORE_TOOLS: Tool[] = [
         },
         suggest_branches: {
           type: "boolean",
-          description:
-            "[patterns] Return suggested branch names without creating them.",
+          description: "[patterns] Return suggested branch names without creating them.",
         },
         create_suggested_branches: {
           type: "boolean",
@@ -659,8 +642,7 @@ const CORE_TOOLS: Tool[] = [
         batch_size: { type: "number", description: "Default: 16." },
         training_config: {
           type: "object",
-          description:
-            "Alternative nested form. Keys: epochs, learning_rate, batch_size.",
+          description: "Alternative nested form. Keys: epochs, learning_rate, batch_size.",
         },
       },
     },
@@ -684,8 +666,7 @@ const CORE_TOOLS: Tool[] = [
         },
         code_snippet: {
           type: "string",
-          description:
-            "[find_similar] Snippet to match against stored interfaces.",
+          description: "[find_similar] Snippet to match against stored interfaces.",
         },
         limit: {
           type: "number",
@@ -707,13 +688,11 @@ const CORE_TOOLS: Tool[] = [
         },
         file_path: {
           type: "string",
-          description:
-            "[find_similar] Restrict results to matching file paths.",
+          description: "[find_similar] Restrict results to matching file paths.",
         },
         qualified_name: {
           type: "string",
-          description:
-            "[find_similar] Restrict or boost results matching a qualified symbol name.",
+          description: "[find_similar] Restrict or boost results matching a qualified symbol name.",
         },
         min_similarity: {
           type: "number",
@@ -726,13 +705,11 @@ const CORE_TOOLS: Tool[] = [
         },
         include_docs: {
           type: "boolean",
-          description:
-            "[find_similar] Include full bounded documentation text.",
+          description: "[find_similar] Include full bounded documentation text.",
         },
         include_members: {
           type: "boolean",
-          description:
-            "[find_similar] Include bounded member/property details.",
+          description: "[find_similar] Include bounded member/property details.",
         },
         include_snippet: {
           type: "boolean",
@@ -744,18 +721,15 @@ const CORE_TOOLS: Tool[] = [
         },
         max_definition_chars: {
           type: "number",
-          description:
-            "[find_similar] Max characters for documentation/definition fields.",
+          description: "[find_similar] Max characters for documentation/definition fields.",
         },
         file_limit: {
           type: "number",
-          description:
-            "[backfill] Max files to process this run (default: 100).",
+          description: "[backfill] Max files to process this run (default: 100).",
         },
         interface_limit: {
           type: "number",
-          description:
-            "[backfill] Max interfaces to process this run (default: 100).",
+          description: "[backfill] Max interfaces to process this run (default: 100).",
         },
       },
     },

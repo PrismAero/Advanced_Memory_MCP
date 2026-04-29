@@ -59,9 +59,7 @@ export class CodeInterfaceOperations {
     try {
       const now = new Date().toISOString();
       const vector = embedding || iface.embedding;
-      const embeddingBuffer = vector
-        ? Buffer.from(new Float32Array(vector).buffer)
-        : null;
+      const embeddingBuffer = vector ? Buffer.from(new Float32Array(vector).buffer) : null;
 
       const metadata = buildMetadata(iface);
       const stableId =
@@ -208,9 +206,7 @@ export class CodeInterfaceOperations {
     }
   }
 
-  async getCodeInterfaces(
-    criteria: CodeInterfaceQueryCriteria,
-  ): Promise<CodeInterfaceRecord[]> {
+  async getCodeInterfaces(criteria: CodeInterfaceQueryCriteria): Promise<CodeInterfaceRecord[]> {
     let whereClause = "WHERE 1=1";
     const params: any[] = [];
 
@@ -253,11 +249,7 @@ export class CodeInterfaceOperations {
       `SELECT * FROM code_interfaces ${whereClause}
        ORDER BY usage_count DESC, qualified_name ASC, line_number ASC
        LIMIT ? OFFSET ?`,
-      [
-        ...params,
-        clampLimit(criteria.limit, 100, 1000),
-        clampOffset(criteria.offset),
-      ],
+      [...params, clampLimit(criteria.limit, 100, 1000), clampOffset(criteria.offset)],
     );
     return rows || [];
   }
@@ -280,8 +272,7 @@ export class CodeInterfaceOperations {
     let created = 0;
     for (const iface of interfaces || []) {
       const targets = new Set<string>();
-      for (const target of safeJsonArray(iface.extends_interfaces))
-        targets.add(String(target));
+      for (const target of safeJsonArray(iface.extends_interfaces)) targets.add(String(target));
       const metadata = safeJson(iface.metadata);
       for (const relation of metadata.relationships || []) {
         if (relation?.target) targets.add(String(relation.target));
@@ -300,15 +291,7 @@ export class CodeInterfaceOperations {
              from_interface_id, to_interface_id, relationship_type,
              confidence_score, semantic_similarity, usage_frequency, last_detected
            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            iface.id,
-            targetRow.id,
-            "extends",
-            0.9,
-            0,
-            0,
-            new Date().toISOString(),
-          ],
+          [iface.id, targetRow.id, "extends", 0.9, 0, 0, new Date().toISOString()],
         );
         created += result.changes;
       }
@@ -368,8 +351,7 @@ export class CodeInterfaceOperations {
       }
 
       const sorted = results.sort((a, b) => b.similarity - a.similarity);
-      const deduped =
-        options.dedupe === false ? sorted : dedupeSimilarityResults(sorted);
+      const deduped = options.dedupe === false ? sorted : dedupeSimilarityResults(sorted);
       return deduped.slice(
         clampOffset(options.offset),
         clampOffset(options.offset) + clampLimit(limit, 5, 100),
@@ -393,9 +375,7 @@ export class CodeInterfaceOperations {
       );
       if (!interfaces || interfaces.length === 0) return [];
 
-      logger.debug(
-        `[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`,
-      );
+      logger.debug(`[VECTOR] Generating embeddings for ${interfaces.length} interfaces...`);
       const updatedIds: number[] = [];
 
       for (const iface of interfaces) {
@@ -414,9 +394,7 @@ export class CodeInterfaceOperations {
           const embedding = await embeddingGenerator(interfaceContext);
           if (!embedding) continue;
 
-          const embeddingBuffer = Buffer.from(
-            new Float32Array(embedding).buffer,
-          );
+          const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer);
           await this.connection.execute(
             "UPDATE code_interfaces SET embedding = ?, updated_at = ? WHERE id = ?",
             [embeddingBuffer, new Date().toISOString(), iface.id],
@@ -436,17 +414,12 @@ export class CodeInterfaceOperations {
           });
           updatedIds.push(iface.id);
         } catch (error) {
-          logger.warn(
-            `Failed to generate embedding for interface ${iface.name}:`,
-            error,
-          );
+          logger.warn(`Failed to generate embedding for interface ${iface.name}:`, error);
         }
       }
 
       if (updatedIds.length > 0) {
-        logger.debug(
-          `[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`,
-        );
+        logger.debug(`[SUCCESS] Generated embeddings for ${updatedIds.length} interfaces`);
       }
       return updatedIds;
     } catch (error) {
@@ -477,10 +450,7 @@ function addRankingBoost(
   options: CodeInterfaceSimilarityOptions,
 ): number {
   let score = similarity;
-  if (
-    options.qualifiedName &&
-    row.qualified_name?.includes(options.qualifiedName)
-  ) {
+  if (options.qualifiedName && row.qualified_name?.includes(options.qualifiedName)) {
     score += 0.15;
   }
   if (options.kind && row.kind === options.kind) score += 0.08;
@@ -489,9 +459,7 @@ function addRankingBoost(
   return Math.max(-1, Math.min(1, score));
 }
 
-function dedupeSimilarityResults<T extends { interface: CodeInterfaceRecord }>(
-  items: T[],
-): T[] {
+function dedupeSimilarityResults<T extends { interface: CodeInterfaceRecord }>(items: T[]): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const item of items) {
@@ -542,11 +510,7 @@ function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
-function clampLimit(
-  value: number | undefined,
-  fallback: number,
-  max: number,
-): number {
+function clampLimit(value: number | undefined, fallback: number, max: number): number {
   if (!Number.isFinite(value) || !value || value < 1) return fallback;
   return Math.min(Math.floor(value), max);
 }

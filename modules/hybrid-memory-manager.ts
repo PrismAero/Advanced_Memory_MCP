@@ -25,16 +25,13 @@ export class HybridMemoryManager implements IMemoryOperations {
   constructor(
     basePath?: string,
     similarityEngine?: ModernSimilarityEngine,
-    sharedConnection?: SQLiteConnection
+    sharedConnection?: SQLiteConnection,
   ) {
     // MEMORY_PATH should point to your project root
     // The .memory folder will be created inside it
     const memoryPath = basePath || process.env.MEMORY_PATH || process.cwd();
 
-    this.sqliteOps = new ModularSQLiteOperations(
-      sharedConnection ?? memoryPath,
-      similarityEngine
-    );
+    this.sqliteOps = new ModularSQLiteOperations(sharedConnection ?? memoryPath, similarityEngine);
     this.optimizer = new MemoryOptimizer({
       // "minimal" only normalizes whitespace; the optimized form is
       // never read back for retrieval, so heavier compression just
@@ -48,16 +45,11 @@ export class HybridMemoryManager implements IMemoryOperations {
   async initialize(): Promise<void> {
     // Initialize SQLite
     await this.sqliteOps.initialize();
-    logger.info(
-      "SQLite Memory Manager initialized with text optimization and keyword extraction"
-    );
+    logger.info("SQLite Memory Manager initialized with text optimization and keyword extraction");
   }
 
   // SQLite storage operations with optimization
-  async createEntities(
-    entities: Entity[],
-    branchName?: string
-  ): Promise<Entity[]> {
+  async createEntities(entities: Entity[], branchName?: string): Promise<Entity[]> {
     logger.debug(`Creating entities in SQLite`);
 
     // Apply optimization before storing
@@ -80,8 +72,8 @@ export class HybridMemoryManager implements IMemoryOperations {
         `Entity "${entity.name}" optimized: ${
           optimization.originalTokenCount
         } → ${optimization.tokenCount} tokens (${Math.round(
-          optimization.compressionRatio * 100
-        )}%)`
+          optimization.compressionRatio * 100,
+        )}%)`,
       );
       logger.debug(`Keywords: ${optimization.keywords.join(", ")}`);
 
@@ -117,24 +109,15 @@ export class HybridMemoryManager implements IMemoryOperations {
     return await this.sqliteOps.updateEntity(entity, branchName);
   }
 
-  async deleteEntities(
-    entityNames: string[],
-    branchName?: string
-  ): Promise<void> {
+  async deleteEntities(entityNames: string[], branchName?: string): Promise<void> {
     return await this.sqliteOps.deleteEntities(entityNames, branchName);
   }
 
-  async createRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<Relation[]> {
+  async createRelations(relations: Relation[], branchName?: string): Promise<Relation[]> {
     return await this.sqliteOps.createRelations(relations, branchName);
   }
 
-  async deleteRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<void> {
+  async deleteRelations(relations: Relation[], branchName?: string): Promise<void> {
     return await this.sqliteOps.deleteRelations(relations, branchName);
   }
 
@@ -146,27 +129,16 @@ export class HybridMemoryManager implements IMemoryOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
-    }
+    },
   ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
-    return await this.sqliteOps.searchEntities(
-      query,
-      branchName,
-      includeStatuses,
-      options
-    );
+    return await this.sqliteOps.searchEntities(query, branchName, includeStatuses, options);
   }
 
-  async findEntityByName(
-    name: string,
-    branchName?: string
-  ): Promise<Entity | null> {
+  async findEntityByName(name: string, branchName?: string): Promise<Entity | null> {
     return await this.sqliteOps.findEntityByName(name, branchName);
   }
 
-  async createBranch(
-    branchName: string,
-    purpose?: string
-  ): Promise<MemoryBranchInfo> {
+  async createBranch(branchName: string, purpose?: string): Promise<MemoryBranchInfo> {
     return await this.sqliteOps.createBranch(branchName, purpose);
   }
 
@@ -200,7 +172,7 @@ export class HybridMemoryManager implements IMemoryOperations {
   async readGraph(
     branchName?: string,
     includeStatuses?: EntityStatus[],
-    autoCrossContext: boolean = true
+    autoCrossContext: boolean = true,
   ): Promise<KnowledgeGraph> {
     return await this.exportBranch(branchName);
   }
@@ -209,7 +181,7 @@ export class HybridMemoryManager implements IMemoryOperations {
     query: string,
     branchName?: string,
     includeStatuses?: EntityStatus[],
-    autoCrossContext: boolean = true
+    autoCrossContext: boolean = true,
   ): Promise<KnowledgeGraph> {
     return await this.searchEntities(query, branchName, includeStatuses);
   }
@@ -218,7 +190,7 @@ export class HybridMemoryManager implements IMemoryOperations {
     names: string[],
     branchName?: string,
     includeStatuses?: EntityStatus[],
-    autoCrossContext: boolean = true
+    autoCrossContext: boolean = true,
   ): Promise<KnowledgeGraph> {
     // Load the branch data once for performance
     const branchGraph = await this.exportBranch(branchName);
@@ -231,15 +203,12 @@ export class HybridMemoryManager implements IMemoryOperations {
 
       if (entity) {
         // Check status filter if provided
-        if (
-          !includeStatuses ||
-          includeStatuses.includes(entity.status as EntityStatus)
-        ) {
+        if (!includeStatuses || includeStatuses.includes(entity.status as EntityStatus)) {
           foundEntities.push(entity);
 
           // Get relations involving this entity from already-loaded data
           const entityRelations = branchGraph.relations.filter(
-            (r) => r.from === name || r.to === name
+            (r) => r.from === name || r.to === name,
           );
           allRelations.push(...entityRelations);
         }
@@ -253,8 +222,8 @@ export class HybridMemoryManager implements IMemoryOperations {
           (r) =>
             r.from === relation.from &&
             r.to === relation.to &&
-            r.relationType === relation.relationType
-        ) === index
+            r.relationType === relation.relationType,
+        ) === index,
     );
 
     return { entities: foundEntities, relations: uniqueRelations };
@@ -263,14 +232,14 @@ export class HybridMemoryManager implements IMemoryOperations {
   // Additional compatibility methods
   async addObservations(
     observations: { entityName: string; contents: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     return await this.sqliteOps.addObservations(observations, branchName);
   }
 
   async deleteObservations(
     deletions: { entityName: string; observations: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteOps.deleteObservations(deletions, branchName);
   }
@@ -279,7 +248,7 @@ export class HybridMemoryManager implements IMemoryOperations {
     entityName: string,
     newStatus: EntityStatus,
     statusReason?: string,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     const entity = await this.findEntityByName(entityName, branchName);
     if (!entity) {
@@ -300,20 +269,17 @@ export class HybridMemoryManager implements IMemoryOperations {
     entityName: string,
     targetBranch: string,
     targetEntityNames: string[],
-    sourceBranch?: string
+    sourceBranch?: string,
   ): Promise<void> {
     return await this.sqliteOps.createCrossReference(
       entityName,
       targetBranch,
       targetEntityNames,
-      sourceBranch
+      sourceBranch,
     );
   }
 
-  async getCrossContext(
-    entityNames: string[],
-    sourceBranch?: string
-  ): Promise<KnowledgeGraph> {
+  async getCrossContext(entityNames: string[], sourceBranch?: string): Promise<KnowledgeGraph> {
     if (entityNames.length > 0) {
       return await this.searchEntities(entityNames.join(" "), sourceBranch);
     } else {
@@ -325,34 +291,24 @@ export class HybridMemoryManager implements IMemoryOperations {
   async updateEntityRelevanceScore(
     entityName: string,
     score: number,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
-    return await this.sqliteOps.updateEntityRelevanceScore(
-      entityName,
-      score,
-      branchName
-    );
+    return await this.sqliteOps.updateEntityRelevanceScore(entityName, score, branchName);
   }
 
   async updateEntityWorkingContext(
     entityName: string,
     isWorkingContext: boolean,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.sqliteOps.updateEntityWorkingContext(
       entityName,
       isWorkingContext,
-      branchName
+      branchName,
     );
   }
 
-  async updateEntityLastAccessed(
-    entityName: string,
-    branchName?: string
-  ): Promise<void> {
-    return await this.sqliteOps.updateEntityLastAccessed(
-      entityName,
-      branchName
-    );
+  async updateEntityLastAccessed(entityName: string, branchName?: string): Promise<void> {
+    return await this.sqliteOps.updateEntityLastAccessed(entityName, branchName);
   }
 }

@@ -20,10 +20,7 @@ export class IntelligenceEvidenceBuilder {
     const text = `${entity.name} ${entity.entityType} ${entity.observations.join(" ")} ${queryText}`;
     const terms = importantTerms(text);
     const directRelations = graph.relations
-      .filter(
-        (relation) =>
-          relation.from === entity.name || relation.to === entity.name,
-      )
+      .filter((relation) => relation.from === entity.name || relation.to === entity.name)
       .slice(0, max);
     const relatedNames = new Set(
       directRelations.flatMap((relation) => [relation.from, relation.to]),
@@ -42,9 +39,7 @@ export class IntelligenceEvidenceBuilder {
       .filter(
         (candidate) =>
           (candidate.entityType === "blocker" ||
-            candidate.observations.some((obs) =>
-              /block|fail|risk|error/i.test(obs),
-            )) &&
+            candidate.observations.some((obs) => /block|fail|risk|error/i.test(obs))) &&
           (relatedNames.has(candidate.name) ||
             containsAny(candidate.observations.join(" "), terms)),
       )
@@ -66,13 +61,7 @@ export class IntelligenceEvidenceBuilder {
       files,
       interfaces,
       dependencies,
-      reasons: buildReasons(
-        entity,
-        directRelations,
-        interfaces,
-        files,
-        dependencies,
-      ),
+      reasons: buildReasons(entity, directRelations, interfaces, files, dependencies),
     };
   }
 
@@ -133,26 +122,15 @@ export class IntelligenceEvidenceBuilder {
     return Array.from(out.values()).slice(0, max);
   }
 
-  private async findFiles(
-    terms: string[],
-    max: number,
-  ): Promise<ProjectFileRecord[]> {
+  private async findFiles(terms: string[], max: number): Promise<ProjectFileRecord[]> {
     const rows = await this.projectAnalysisOps.getProjectFiles({ limit: 100 });
     if (terms.length === 0) return rows.slice(0, max);
     return rows
-      .filter((row) =>
-        containsAny(
-          `${row.relative_path} ${row.file_type} ${row.language}`,
-          terms,
-        ),
-      )
+      .filter((row) => containsAny(`${row.relative_path} ${row.file_type} ${row.language}`, terms))
       .slice(0, max);
   }
 
-  private async findDependencies(
-    terms: string[],
-    max: number,
-  ): Promise<ProjectDependencyRecord[]> {
+  private async findDependencies(terms: string[], max: number): Promise<ProjectDependencyRecord[]> {
     const rows = await this.projectAnalysisOps.getProjectDependencies({
       limit: 200,
     });
@@ -174,9 +152,7 @@ export function importantTerms(text: string): string[] {
       text
         .split(/[^A-Za-z0-9_./:-]+/)
         .map((term) => term.trim())
-        .filter(
-          (term) => term.length >= 4 && !STOP_WORDS.has(term.toLowerCase()),
-        )
+        .filter((term) => term.length >= 4 && !STOP_WORDS.has(term.toLowerCase()))
         .slice(0, 24),
     ),
   );
@@ -187,10 +163,7 @@ function containsAny(text: string, terms: string[]): boolean {
   return terms.some((term) => lower.includes(term.toLowerCase()));
 }
 
-function extractNextSteps(
-  entities: Entity[],
-  max: number,
-): IntelligenceEvidence["nextSteps"] {
+function extractNextSteps(entities: Entity[], max: number): IntelligenceEvidence["nextSteps"] {
   const out: IntelligenceEvidence["nextSteps"] = [];
   for (const entity of entities) {
     for (const obs of entity.observations || []) {
@@ -200,9 +173,7 @@ function extractNextSteps(
       out.push({
         source: entity.name,
         text: obs,
-        priority: /urgent|critical|block|fail|risk/i.test(obs)
-          ? "high"
-          : "normal",
+        priority: /urgent|critical|block|fail|risk/i.test(obs) ? "high" : "normal",
       });
       if (out.length >= max) return out;
     }
@@ -226,12 +197,7 @@ function buildReasons(
   return reasons.slice(0, 6);
 }
 
-function clamp(
-  value: number | undefined,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
+function clamp(value: number | undefined, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(value) || !value) return fallback;
   return Math.min(max, Math.max(min, Math.floor(value)));
 }

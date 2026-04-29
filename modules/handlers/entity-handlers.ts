@@ -30,7 +30,7 @@ export class EntityHandlers {
   constructor(
     memoryManager: EnhancedMemoryManager,
     modernSimilarity: ModernSimilarityEngine,
-    relationshipIndexer?: RelationshipIndexer
+    relationshipIndexer?: RelationshipIndexer,
   ) {
     this.memoryManager = memoryManager;
     this.modernSimilarity = modernSimilarity;
@@ -43,13 +43,13 @@ export class EntityHandlers {
       const firstEntity = (args.entities as any[])[0];
       createBranch = await this.memoryManager.suggestBranch(
         firstEntity.entityType,
-        firstEntity.observations?.join(" ")
+        firstEntity.observations?.join(" "),
       );
     }
 
     const createdEntities = await this.memoryManager.createEntities(
       args.entities as Entity[],
-      createBranch
+      createBranch,
     );
 
     const autoRelations = args.auto_create_relations !== false;
@@ -70,11 +70,7 @@ export class EntityHandlers {
       created_count: createdEntities.length,
       branch: createBranch || "main",
       entities: sanitizeEntities(createdEntities, { maxObservations: 5 }),
-      relations_mode: autoRelations
-        ? syncMode
-          ? "synchronous"
-          : "deferred-to-indexer"
-        : "off",
+      relations_mode: autoRelations ? (syncMode ? "synchronous" : "deferred-to-indexer") : "off",
       ...(syncResult ? { sync_relations: syncResult } : {}),
     });
   }
@@ -88,18 +84,14 @@ export class EntityHandlers {
    */
   private async detectRelationsSync(
     createdEntities: Entity[],
-    branch?: string
+    branch?: string,
   ): Promise<{
     candidates_considered: number;
     relations_created: number;
     relations: Relation[];
   }> {
     try {
-      const branchGraph = await this.memoryManager.readGraph(
-        branch,
-        ["active", "draft"],
-        false
-      );
+      const branchGraph = await this.memoryManager.readGraph(branch, ["active", "draft"], false);
       const allExisting = branchGraph.entities;
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
@@ -118,16 +110,10 @@ export class EntityHandlers {
 
         if (candidates.length === 0) continue;
 
-        const matches = await this.modernSimilarity.detectSimilarEntities(
-          newEntity,
-          candidates
-        );
+        const matches = await this.modernSimilarity.detectSimilarEntities(newEntity, candidates);
 
         const toCreate: Relation[] = matches
-          .filter(
-            (m) =>
-              m.confidence === "high" || m.similarity > THRESHOLDS.minimum
-          )
+          .filter((m) => m.confidence === "high" || m.similarity > THRESHOLDS.minimum)
           .map((m) => ({
             from: newEntity.name,
             to: m.entity.name,
@@ -168,7 +154,7 @@ export class EntityHandlers {
     }
     const results = await this.memoryManager.addObservations(
       args.observations,
-      args.branch_name as string
+      args.branch_name as string,
     );
     return jsonResponse({
       branch: args.branch_name || "main",
@@ -185,7 +171,7 @@ export class EntityHandlers {
       args.entity_name as string,
       args.status as EntityStatus,
       args.status_reason as string,
-      args.branch_name as string
+      args.branch_name as string,
     );
     return jsonResponse({
       updated: true,
@@ -202,7 +188,7 @@ export class EntityHandlers {
     }
     await this.memoryManager.deleteEntities(
       args.entity_names as string[],
-      args.branch_name as string
+      args.branch_name as string,
     );
     return jsonResponse({
       deleted: true,

@@ -1,8 +1,5 @@
 import { createHash } from "crypto";
-import type {
-  CodeInterfaceKind,
-  NormalizedCodeInterface,
-} from "./interface-types.js";
+import type { CodeInterfaceKind, NormalizedCodeInterface } from "./interface-types.js";
 
 export function lineOf(content: string, index: number): number {
   if (index <= 0) return 1;
@@ -75,45 +72,38 @@ export function buildStableId(
   return `${language}:${relativePath}:${kind}:${qualifiedName}`;
 }
 
-export function makeInterface(
-  input: {
-    name: string;
-    kind: CodeInterfaceKind;
-    language: string;
-    relativePath: string;
-    line: number;
-    signature?: string;
-    definition?: string;
-    documentation?: string;
-    namespace?: string;
-    qualifiedName?: string;
-    endLine?: number;
-    isExported?: boolean;
-    properties?: string[];
-    extends?: string[];
-    members?: NormalizedCodeInterface["members"];
-    parameters?: NormalizedCodeInterface["parameters"];
-    returnType?: string;
-    templateParameters?: string[];
-    attributes?: string[];
-    modifiers?: string[];
-    macroParameters?: string[];
-    macroReplacement?: string;
-    relationships?: NormalizedCodeInterface["relationships"];
-    containerName?: string;
-    visibility?: NormalizedCodeInterface["visibility"];
-  },
-): NormalizedCodeInterface {
+export function makeInterface(input: {
+  name: string;
+  kind: CodeInterfaceKind;
+  language: string;
+  relativePath: string;
+  line: number;
+  signature?: string;
+  definition?: string;
+  documentation?: string;
+  namespace?: string;
+  qualifiedName?: string;
+  endLine?: number;
+  isExported?: boolean;
+  properties?: string[];
+  extends?: string[];
+  members?: NormalizedCodeInterface["members"];
+  parameters?: NormalizedCodeInterface["parameters"];
+  returnType?: string;
+  templateParameters?: string[];
+  attributes?: string[];
+  modifiers?: string[];
+  macroParameters?: string[];
+  macroReplacement?: string;
+  relationships?: NormalizedCodeInterface["relationships"];
+  containerName?: string;
+  visibility?: NormalizedCodeInterface["visibility"];
+}): NormalizedCodeInterface {
   const qualifiedName = input.qualifiedName || qualify(input.namespace, input.name);
   const signature = input.signature || input.definition || `${input.kind} ${qualifiedName}`;
   const definition = input.definition || signature;
   const summary = summarize(input.documentation, signature);
-  const stableId = buildStableId(
-    input.language,
-    input.relativePath,
-    qualifiedName,
-    input.kind,
-  );
+  const stableId = buildStableId(input.language, input.relativePath, qualifiedName, input.kind);
   return {
     name: input.name,
     properties: input.properties || [],

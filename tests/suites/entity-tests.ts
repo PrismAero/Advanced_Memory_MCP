@@ -2,18 +2,10 @@ import { Entity } from "../../memory-types.js";
 
 export interface EntityTestRunner {
   memoryManager: any;
-  runTest(
-    name: string,
-    category: string,
-    testFn: () => Promise<any>,
-  ): Promise<any>;
+  runTest(name: string, category: string, testFn: () => Promise<any>): Promise<any>;
 }
 
-export function createTestEntity(
-  name: string,
-  entityType: string,
-  observations: string[],
-): Entity {
+export function createTestEntity(name: string, entityType: string, observations: string[]): Entity {
   return {
     name,
     entityType,
@@ -41,9 +33,21 @@ export async function runEntityTests(runner: EntityTestRunner): Promise<void> {
 
   await runner.runTest("Create multiple entities", "Entity", async () => {
     const entities = await runner.memoryManager.createEntities([
-      { name: "TestEntity2", entityType: "service", observations: ["Service observation"] },
-      { name: "TestEntity3", entityType: "decision", observations: ["Decision rationale"] },
-      { name: "TestEntity4", entityType: "blocker", observations: ["Blocking issue"] },
+      {
+        name: "TestEntity2",
+        entityType: "service",
+        observations: ["Service observation"],
+      },
+      {
+        name: "TestEntity3",
+        entityType: "decision",
+        observations: ["Decision rationale"],
+      },
+      {
+        name: "TestEntity4",
+        entityType: "blocker",
+        observations: ["Blocking issue"],
+      },
     ]);
     if (entities.length !== 3) throw new Error("Expected 3 entities created");
     return { created: entities.length };
@@ -73,16 +77,8 @@ export async function runEntityTests(runner: EntityTestRunner): Promise<void> {
   });
 
   await runner.runTest("Update entity status", "Entity", async () => {
-    await runner.memoryManager.updateEntityStatus(
-      "TestEntity1",
-      "archived",
-      "Test archival",
-    );
-    const graph = await runner.memoryManager.openNodes(
-      ["TestEntity1"],
-      undefined,
-      ["archived"],
-    );
+    await runner.memoryManager.updateEntityStatus("TestEntity1", "archived", "Test archival");
+    const graph = await runner.memoryManager.openNodes(["TestEntity1"], undefined, ["archived"]);
     if (graph.entities[0].status !== "archived") {
       throw new Error("Status not updated");
     }
@@ -136,7 +132,11 @@ export async function runEntityTests(runner: EntityTestRunner): Promise<void> {
   await runner.runTest("Create entity with unicode characters", "Entity-Edge", async () => {
     const unicodeName = "测试实体_テスト_🎉";
     const entities = await runner.memoryManager.createEntities([
-      { name: unicodeName, entityType: "test", observations: ["unicode test"] },
+      {
+        name: unicodeName,
+        entityType: "test",
+        observations: ["unicode test"],
+      },
     ]);
     if (entities.length !== 1) throw new Error("Failed to create");
     await runner.memoryManager.deleteEntities([unicodeName]);

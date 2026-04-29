@@ -47,10 +47,7 @@ export class RelationshipIndexer {
   private readonly MAX_CANDIDATES = BATCH_CONFIG.maxCandidates;
   private readonly MAX_INITIAL_INDEX = BATCH_CONFIG.maxInitialIndex;
 
-  constructor(
-    memoryManager: EnhancedMemoryManager,
-    similarityEngine: ModernSimilarityEngine
-  ) {
+  constructor(memoryManager: EnhancedMemoryManager, similarityEngine: ModernSimilarityEngine) {
     this.memoryManager = memoryManager;
     this.similarityEngine = similarityEngine;
   }
@@ -108,10 +105,7 @@ export class RelationshipIndexer {
         break;
       case "detect_relationships":
         if (task.entityId) {
-          await this.detectRelationshipsForEntity(
-            task.entityId,
-            task.branchName
-          );
+          await this.detectRelationshipsForEntity(task.entityId, task.branchName);
         }
         break;
       case "cleanup_stale":
@@ -126,7 +120,7 @@ export class RelationshipIndexer {
       (existing) =>
         existing.type === task.type &&
         existing.entityId === task.entityId &&
-        existing.branchName === task.branchName
+        existing.branchName === task.branchName,
     );
 
     if (!exists) {
@@ -134,15 +128,9 @@ export class RelationshipIndexer {
     }
   }
 
-  private async indexEntity(
-    entityId: string,
-    branchName?: string
-  ): Promise<void> {
+  private async indexEntity(entityId: string, branchName?: string): Promise<void> {
     try {
-      const entities = await this.memoryManager.openNodes(
-        [entityId],
-        branchName
-      );
+      const entities = await this.memoryManager.openNodes([entityId], branchName);
       if (entities.entities.length === 0) return;
 
       const entity = entities.entities[0];
@@ -165,10 +153,7 @@ export class RelationshipIndexer {
         // TODO: Add a public method to get embeddings directly from the similarity engine
         embedding = null; // Will be computed on demand
       } catch (error) {
-        logger.error(
-          `Failed to generate embedding for entity ${entity.name}:`,
-          error
-        );
+        logger.error(`Failed to generate embedding for entity ${entity.name}:`, error);
         embedding = null;
       }
 
@@ -195,9 +180,7 @@ export class RelationshipIndexer {
       }
       this.typeIndices.get(entity.entityType)!.add(entity.name);
 
-      logger.debug(
-        `Indexed entity: ${entity.name} (${entity.entityType}) in branch ${branchKey}`
-      );
+      logger.debug(`Indexed entity: ${entity.name} (${entity.entityType}) in branch ${branchKey}`);
 
       // Queue relationship detection
       this.queueTask({
@@ -213,18 +196,12 @@ export class RelationshipIndexer {
     }
   }
 
-  private async detectRelationshipsForEntity(
-    entityId: string,
-    branchName?: string
-  ): Promise<void> {
+  private async detectRelationshipsForEntity(entityId: string, branchName?: string): Promise<void> {
     try {
       const indexEntry = this.entityIndex.get(entityId);
       if (!indexEntry) return;
 
-      const entities = await this.memoryManager.openNodes(
-        [entityId],
-        branchName
-      );
+      const entities = await this.memoryManager.openNodes([entityId], branchName);
       if (entities.entities.length === 0) return;
 
       const targetEntity = entities.entities[0];
@@ -238,15 +215,12 @@ export class RelationshipIndexer {
       const candidateIds = Array.from(entityIds)
         .filter((id) => id !== entityId)
         .slice(0, this.MAX_CANDIDATES); // Limit for performance
-      const candidateEntities = await this.memoryManager.openNodes(
-        candidateIds,
-        branchName
-      );
+      const candidateEntities = await this.memoryManager.openNodes(candidateIds, branchName);
 
       // Use TensorFlow.js embedding similarity
       const similarEntities = await this.similarityEngine.detectSimilarEntities(
         targetEntity,
-        candidateEntities.entities
+        candidateEntities.entities,
       );
 
       // Update index
@@ -266,24 +240,19 @@ export class RelationshipIndexer {
 
       if (similarEntities.length > 0) {
         logger.debug(
-          `[SEARCH] Background indexed ${similarEntities.length} relationship candidates for ${entityId}`
+          `[SEARCH] Background indexed ${similarEntities.length} relationship candidates for ${entityId}`,
         );
         // Log top matches for debugging
         for (const match of similarEntities.slice(0, 3)) {
           logger.debug(
             `   Background match: "${
               match.entity.name
-            }" similarity=${match.similarity.toFixed(3)} confidence=${
-              match.confidence
-            }`
+            }" similarity=${match.similarity.toFixed(3)} confidence=${match.confidence}`,
           );
         }
       }
     } catch (error) {
-      logger.error(
-        `[ERROR] Failed to detect relationships for ${entityId}:`,
-        error
-      );
+      logger.error(`[ERROR] Failed to detect relationships for ${entityId}:`, error);
     }
   }
 
@@ -296,7 +265,7 @@ export class RelationshipIndexer {
         const graph = await this.memoryManager.readGraph(
           branch.name === "main" ? undefined : branch.name,
           ["active", "draft"],
-          false
+          false,
         );
 
         // Queue indexing for each entity
@@ -313,9 +282,7 @@ export class RelationshipIndexer {
         }
       }
 
-      logger.info(
-        `[LOADING] Queued initial indexing for relationship detection`
-      );
+      logger.info(`[LOADING] Queued initial indexing for relationship detection`);
     } catch (error) {
       logger.error("[ERROR] Failed to build initial index:", error);
     }

@@ -33,14 +33,7 @@ import { TrainingDataPoint } from "./adaptive-model-trainer.js";
  * `[LANG: cpp]` marker pulls the nearest-neighbor results toward
  * other C++ embeddings instead of unrelated JS/TS look-alikes.
  */
-export type SeedLanguage =
-  | "any"
-  | "c"
-  | "cpp"
-  | "go"
-  | "javascript"
-  | "typescript"
-  | "python";
+export type SeedLanguage = "any" | "c" | "cpp" | "go" | "javascript" | "typescript" | "python";
 
 /**
  * A canonical concept paired with semantically-related concepts. The
@@ -121,11 +114,7 @@ const SEED_CONCEPTS: SeedConcept[] = [
   },
   {
     concept: "key value store and caching layer",
-    related: [
-      "Redis cache for hot data",
-      "cache invalidation strategy",
-      "TTL based eviction",
-    ],
+    related: ["Redis cache for hot data", "cache invalidation strategy", "TTL based eviction"],
     domain: "database",
   },
   {
@@ -201,11 +190,7 @@ const SEED_CONCEPTS: SeedConcept[] = [
   },
   {
     concept: "global UI state management",
-    related: [
-      "Redux store and reducers",
-      "Zustand atomic state",
-      "context provider pattern",
-    ],
+    related: ["Redux store and reducers", "Zustand atomic state", "context provider pattern"],
     domain: "ui",
     language: "typescript",
   },
@@ -337,11 +322,7 @@ const SEED_CONCEPTS: SeedConcept[] = [
   },
   {
     concept: "end to end browser test",
-    related: [
-      "headless browser automation",
-      "page object model",
-      "flaky test detection and retry",
-    ],
+    related: ["headless browser automation", "page object model", "flaky test detection and retry"],
     domain: "testing",
   },
 
@@ -378,11 +359,7 @@ const SEED_CONCEPTS: SeedConcept[] = [
   // ---------- Infra / Deployment ----------
   {
     concept: "container image build and push",
-    related: [
-      "multi stage Dockerfile",
-      "image layer caching",
-      "container registry tagging",
-    ],
+    related: ["multi stage Dockerfile", "image layer caching", "container registry tagging"],
     domain: "infra",
   },
   {
@@ -1149,9 +1126,7 @@ const SEED_CONCEPTS: SeedConcept[] = [
  * can use the *same* prefix at query time and benefit from the
  * language clustering we trained for here.
  */
-export function languageTag(
-  language: SeedLanguage | string | undefined,
-): string {
+export function languageTag(language: SeedLanguage | string | undefined): string {
   const lang = (language ?? "any").toString().toLowerCase().trim();
   return `[LANG:${lang}]`;
 }
@@ -1171,9 +1146,7 @@ export function languageTag(
  * default `min_confidence_threshold` (0.4) so every seed point
  * actually flows through training.
  */
-export function buildBaselineSeedData(
-  now: Date = new Date(),
-): TrainingDataPoint[] {
+export function buildBaselineSeedData(now: Date = new Date()): TrainingDataPoint[] {
   const points: TrainingDataPoint[] = [];
 
   for (let conceptIdx = 0; conceptIdx < SEED_CONCEPTS.length; conceptIdx++) {

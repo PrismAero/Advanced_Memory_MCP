@@ -2,19 +2,13 @@ import type { Entity } from "../../memory-types.js";
 import type { IntelligenceEvidence, ScoredEvidence } from "./evidence-types.js";
 
 export class ContextScorer {
-  scoreEntity(
-    entity: Entity,
-    query = "",
-    evidence?: IntelligenceEvidence,
-  ): number {
+  scoreEntity(entity: Entity, query = "", evidence?: IntelligenceEvidence): number {
     let score = entity.relevanceScore ?? 0.5;
     if (entity.workingContext) score += 0.25;
     if (entity.entityType === "blocker") score += 0.2;
     if (entity.entityType === "decision") score += 0.15;
     if (entity.lastAccessed) {
-      const ageHours =
-        (Date.now() - new Date(entity.lastAccessed).getTime()) /
-        (1000 * 60 * 60);
+      const ageHours = (Date.now() - new Date(entity.lastAccessed).getTime()) / (1000 * 60 * 60);
       if (ageHours < 24) score += 0.1;
       else if (ageHours < 24 * 7) score += 0.05;
     }

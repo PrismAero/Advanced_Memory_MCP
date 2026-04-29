@@ -369,20 +369,12 @@ export class SQLiteConnection {
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
       // SQLite "duplicate column" error is expected during migration
-      if (
-        errorMessage.includes("duplicate column") ||
-        errorMessage.includes("already exists")
-      ) {
+      if (errorMessage.includes("duplicate column") || errorMessage.includes("already exists")) {
         // Column already exists - this is expected, no need to log
         return;
       }
       // Log unexpected errors but don't fail the migration
-      logger.warn(
-        `Migration warning for query "${query.substring(
-          0,
-          50,
-        )}...": ${errorMessage}`,
-      );
+      logger.warn(`Migration warning for query "${query.substring(0, 50)}...": ${errorMessage}`);
     }
   }
 
@@ -397,9 +389,7 @@ export class SQLiteConnection {
         "ALTER TABLE entities ADD COLUMN working_context INTEGER DEFAULT 0",
       );
 
-      await this.safeAlterTable(
-        "ALTER TABLE entities ADD COLUMN relevance_score REAL DEFAULT 0.5",
-      );
+      await this.safeAlterTable("ALTER TABLE entities ADD COLUMN relevance_score REAL DEFAULT 0.5");
 
       // Add AI enhancement columns to memory_branches table
       await this.safeAlterTable(
@@ -481,9 +471,7 @@ export class SQLiteConnection {
       }
 
       // Add embedding column for TensorFlow.js support
-      await this.safeAlterTable(
-        "ALTER TABLE entities ADD COLUMN embedding BLOB",
-      );
+      await this.safeAlterTable("ALTER TABLE entities ADD COLUMN embedding BLOB");
 
       for (const column of [
         "relative_path TEXT DEFAULT ''",
@@ -504,14 +492,10 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(
-          `ALTER TABLE project_files ADD COLUMN ${column}`,
-        );
+        await this.safeAlterTable(`ALTER TABLE project_files ADD COLUMN ${column}`);
       }
 
-      await this.safeAlterTable(
-        "ALTER TABLE code_interfaces ADD COLUMN embedding BLOB",
-      );
+      await this.safeAlterTable("ALTER TABLE code_interfaces ADD COLUMN embedding BLOB");
 
       for (const column of [
         "language TEXT",
@@ -536,9 +520,7 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(
-          `ALTER TABLE code_interfaces ADD COLUMN ${column}`,
-        );
+        await this.safeAlterTable(`ALTER TABLE code_interfaces ADD COLUMN ${column}`);
       }
 
       for (const column of [
@@ -552,9 +534,7 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(
-          `ALTER TABLE project_dependencies ADD COLUMN ${column}`,
-        );
+        await this.safeAlterTable(`ALTER TABLE project_dependencies ADD COLUMN ${column}`);
       }
 
       for (const column of [
@@ -571,9 +551,7 @@ export class SQLiteConnection {
         "created_at DATETIME",
         "updated_at DATETIME",
       ]) {
-        await this.safeAlterTable(
-          `ALTER TABLE workspace_context ADD COLUMN ${column}`,
-        );
+        await this.safeAlterTable(`ALTER TABLE workspace_context ADD COLUMN ${column}`);
       }
 
       for (const column of [
@@ -583,9 +561,7 @@ export class SQLiteConnection {
         "last_detected DATETIME",
         "created_at DATETIME",
       ]) {
-        await this.safeAlterTable(
-          `ALTER TABLE interface_relationships ADD COLUMN ${column}`,
-        );
+        await this.safeAlterTable(`ALTER TABLE interface_relationships ADD COLUMN ${column}`);
       }
 
       // Create project analysis tables if they don't exist
@@ -753,9 +729,7 @@ export class SQLiteConnection {
         });
       }
 
-      logger.info(
-        "AI enhancements and project analysis migration completed successfully",
-      );
+      logger.info("AI enhancements and project analysis migration completed successfully");
     } catch (error) {
       logger.error("Error during AI enhancements migration:", error);
       // Don't fail initialization if migration has issues
@@ -779,10 +753,7 @@ export class SQLiteConnection {
     });
   }
 
-  async execute(
-    query: string,
-    params: any[] = [],
-  ): Promise<{ lastID: number; changes: number }> {
+  async execute(query: string, params: any[] = []): Promise<{ lastID: number; changes: number }> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error("Database not initialized"));
@@ -842,10 +813,7 @@ export class SQLiteConnection {
         await this.execute(`ROLLBACK TO SAVEPOINT ${savepointName}`);
         await this.execute(`RELEASE SAVEPOINT ${savepointName}`);
       } catch (rollbackError) {
-        logger.error(
-          "Failed to rollback transaction savepoint:",
-          rollbackError,
-        );
+        logger.error("Failed to rollback transaction savepoint:", rollbackError);
       }
       throw error;
     }
@@ -884,25 +852,19 @@ export class SQLiteConnection {
 
   async getBranchId(branchName?: string): Promise<number> {
     const name = branchName || "main";
-    const branch = await this.getQuery(
-      "SELECT id FROM memory_branches WHERE name = ?",
-      [name],
-    );
+    const branch = await this.getQuery("SELECT id FROM memory_branches WHERE name = ?", [name]);
 
     if (branch) {
       return branch.id;
     }
 
     // Create branch if it doesn't exist
-    await this.runQuery(
-      "INSERT OR IGNORE INTO memory_branches (name, purpose) VALUES (?, ?)",
-      [name, `Auto-created branch: ${name}`],
-    );
+    await this.runQuery("INSERT OR IGNORE INTO memory_branches (name, purpose) VALUES (?, ?)", [
+      name,
+      `Auto-created branch: ${name}`,
+    ]);
 
-    const newBranch = await this.getQuery(
-      "SELECT id FROM memory_branches WHERE name = ?",
-      [name],
-    );
+    const newBranch = await this.getQuery("SELECT id FROM memory_branches WHERE name = ?", [name]);
 
     return newBranch.id;
   }

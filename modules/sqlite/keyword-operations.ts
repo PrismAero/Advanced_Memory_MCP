@@ -74,12 +74,8 @@ export class KeywordOperations {
       ),
     ];
 
-    await this.connection.execute("DELETE FROM keyword_links WHERE entity_id = ?", [
-      entityId,
-    ]);
-    await this.connection.execute("DELETE FROM keywords WHERE entity_id = ?", [
-      entityId,
-    ]);
+    await this.connection.execute("DELETE FROM keyword_links WHERE entity_id = ?", [entityId]);
+    await this.connection.execute("DELETE FROM keywords WHERE entity_id = ?", [entityId]);
     await this.upsertSignals(entityId, branchId, signals);
   }
 
@@ -105,14 +101,16 @@ export class KeywordOperations {
 
   async findEntityKeywordMatches(
     query: string,
-    options: { branchId?: number | null; statuses?: string[]; limit?: number } = {},
+    options: {
+      branchId?: number | null;
+      statuses?: string[];
+      limit?: number;
+    } = {},
   ): Promise<Map<number, KeywordMatchSummary>> {
     const uniqueTerms = buildKeywordQueryTerms(query, this.extractor);
     if (uniqueTerms.length === 0) return new Map();
 
-    let whereClause = `WHERE k.normalized_keyword IN (${uniqueTerms
-      .map(() => "?")
-      .join(",")})`;
+    let whereClause = `WHERE k.normalized_keyword IN (${uniqueTerms.map(() => "?").join(",")})`;
     const params: any[] = [...uniqueTerms];
 
     if (options.branchId) {
@@ -301,10 +299,7 @@ export class KeywordOperations {
   }
 }
 
-function buildKeywordQueryTerms(
-  query: string,
-  extractor: ContextualKeywordExtractor,
-): string[] {
+function buildKeywordQueryTerms(query: string, extractor: ContextualKeywordExtractor): string[] {
   const normalizedQuery = normalizeKeyword(query);
   const queryWordCount = normalizedQuery.split(/\s+/).filter(Boolean).length;
   const terms = extractor

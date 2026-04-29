@@ -96,8 +96,16 @@ export class TsJsTreeSitterExtractor implements LanguageInterfaceExtractor {
       const name = match[2];
       const line = lineOf(content, match.index + 1);
       const relationships = [
-        ...splitCsv(match[4]).map((target) => ({ type: "extends" as const, target, confidence: 0.9 })),
-        ...splitCsv(match[5]).map((target) => ({ type: "implements" as const, target, confidence: 0.9 })),
+        ...splitCsv(match[4]).map((target) => ({
+          type: "extends" as const,
+          target,
+          confidence: 0.9,
+        })),
+        ...splitCsv(match[5]).map((target) => ({
+          type: "implements" as const,
+          target,
+          confidence: 0.9,
+        })),
       ];
       results.push(
         makeInterface({
@@ -150,7 +158,8 @@ export class TsJsTreeSitterExtractor implements LanguageInterfaceExtractor {
     lines: string[],
   ): NormalizedCodeInterface[] {
     const results: NormalizedCodeInterface[] = [];
-    const typedefPattern = /\/\*\*([\s\S]*?)\*\/\s*(?:export\s+)?(?:const|let|var|function|class)?\s*([A-Za-z_$][\w$]*)?/g;
+    const typedefPattern =
+      /\/\*\*([\s\S]*?)\*\/\s*(?:export\s+)?(?:const|let|var|function|class)?\s*([A-Za-z_$][\w$]*)?/g;
     let match: RegExpExecArray | null;
     while ((match = typedefPattern.exec(content)) !== null) {
       const doc = match[1];
@@ -172,13 +181,11 @@ export class TsJsTreeSitterExtractor implements LanguageInterfaceExtractor {
           properties: [...doc.matchAll(/@property\s+{([^}]+)}\s+([\w.$]+)/g)].map(
             (property) => property[2],
           ),
-          members: [...doc.matchAll(/@property\s+{([^}]+)}\s+([\w.$]+)/g)].map(
-            (property) => ({
-              name: property[2],
-              kind: "property",
-              type: property[1],
-            }),
-          ),
+          members: [...doc.matchAll(/@property\s+{([^}]+)}\s+([\w.$]+)/g)].map((property) => ({
+            name: property[2],
+            kind: "property",
+            type: property[1],
+          })),
           returnType: doc.match(/@returns?\s+{([^}]+)}/)?.[1],
         }),
       );
@@ -212,7 +219,10 @@ export class TsJsTreeSitterExtractor implements LanguageInterfaceExtractor {
     return members.slice(0, 100);
   }
 
-  private extractClassMembers(lines: string[], startIndex: number): NonNullable<NormalizedCodeInterface["members"]> {
+  private extractClassMembers(
+    lines: string[],
+    startIndex: number,
+  ): NonNullable<NormalizedCodeInterface["members"]> {
     const members: NonNullable<NormalizedCodeInterface["members"]> = [];
     let depth = 0;
     for (let i = startIndex; i < Math.min(lines.length, startIndex + 250); i++) {
@@ -220,7 +230,9 @@ export class TsJsTreeSitterExtractor implements LanguageInterfaceExtractor {
       const line = raw.trim();
       depth += (raw.match(/{/g) || []).length - (raw.match(/}/g) || []).length;
       if (i > startIndex && depth <= 0) break;
-      const method = line.match(/^(public\s+|private\s+|protected\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*([^{;]+))?/);
+      const method = line.match(
+        /^(public\s+|private\s+|protected\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*([^{;]+))?/,
+      );
       if (method) {
         members.push({
           name: method[2],
@@ -248,7 +260,11 @@ export class TsJsTreeSitterExtractor implements LanguageInterfaceExtractor {
   }
 }
 
-function parseTsParameter(param: string): { name: string; type?: string; defaultValue?: string } {
+function parseTsParameter(param: string): {
+  name: string;
+  type?: string;
+  defaultValue?: string;
+} {
   const [withoutDefault, defaultValue] = param.split("=").map((part) => part.trim());
   const [name, type] = withoutDefault.split(":").map((part) => part.trim());
   return { name, type, defaultValue };

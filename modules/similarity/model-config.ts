@@ -57,17 +57,12 @@ export interface ModelSelection {
 export function getDefaultModelSelection(): ModelSelection {
   // Check environment variables for overrides
   const envModel = process.env.TENSORFLOW_MODEL;
-  const envPerformanceMode = process.env.PERFORMANCE_MODE as
-    | "accuracy"
-    | "balanced"
-    | "speed";
+  const envPerformanceMode = process.env.PERFORMANCE_MODE as "accuracy" | "balanced" | "speed";
 
   if (envModel && SUPPORTED_MODELS[envModel]) {
     return {
       preferredModel: envModel,
-      fallbackModels: Object.keys(SUPPORTED_MODELS).filter(
-        (id) => id !== envModel
-      ),
+      fallbackModels: Object.keys(SUPPORTED_MODELS).filter((id) => id !== envModel),
       autoFallback: true,
       performanceMode: envPerformanceMode || "balanced",
     };
@@ -93,7 +88,7 @@ export function getModelConfig(modelId: string): ModelConfig | null {
  * Get models sorted by priority and performance mode
  */
 export function getModelsByPreference(
-  performanceMode: "accuracy" | "balanced" | "speed"
+  performanceMode: "accuracy" | "balanced" | "speed",
 ): ModelConfig[] {
   const models = Object.values(SUPPORTED_MODELS);
 
@@ -102,17 +97,12 @@ export function getModelsByPreference(
     if (performanceMode === "accuracy") {
       if (a.performance.accuracy !== b.performance.accuracy) {
         const accuracyOrder = { high: 3, medium: 2, low: 1 };
-        return (
-          accuracyOrder[b.performance.accuracy] -
-          accuracyOrder[a.performance.accuracy]
-        );
+        return accuracyOrder[b.performance.accuracy] - accuracyOrder[a.performance.accuracy];
       }
     } else if (performanceMode === "speed") {
       if (a.performance.speed !== b.performance.speed) {
         const speedOrder = { fast: 3, medium: 2, slow: 1 };
-        return (
-          speedOrder[b.performance.speed] - speedOrder[a.performance.speed]
-        );
+        return speedOrder[b.performance.speed] - speedOrder[a.performance.speed];
       }
     }
 
@@ -152,9 +142,7 @@ export function validateModelConfig(config: ModelConfig): {
   }
 
   if (config.size > 50) {
-    errors.push(
-      "Model size should be under 50MB for lightweight local execution"
-    );
+    errors.push("Model size should be under 50MB for lightweight local execution");
   }
 
   return {

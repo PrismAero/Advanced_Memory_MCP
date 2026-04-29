@@ -16,12 +16,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json"],
       include: ["modules/**/*.ts", "*.ts"],
-      exclude: [
-        "dist/**",
-        "tests/**",
-        "vitest.config.ts",
-        "**/*.d.ts",
-      ],
+      exclude: ["dist/**", "tests/**", "vitest.config.ts", "**/*.d.ts"],
     },
   },
 });

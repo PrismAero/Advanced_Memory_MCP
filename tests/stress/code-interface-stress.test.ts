@@ -4,7 +4,9 @@ import { InterfaceExtractorRunner } from "../../modules/project-analysis/interfa
 
 describe("code-interface extraction stress", () => {
   it("extracts a large C++ fixture with macros without duplicate symbols or oversized definitions", async () => {
-    const sections = Array.from({ length: 120 }, (_, i) => `
+    const sections = Array.from(
+      { length: 120 },
+      (_, i) => `
 /** Feature ${i} macro. */
 #define FEATURE_${i}(value) ((value) + ${i})
 
@@ -25,7 +27,8 @@ public:
 
 } // namespace module_${i}
 } // namespace stress
-`).join("\n");
+`,
+    ).join("\n");
     const runner = new InterfaceExtractorRunner();
     const started = Date.now();
     const result = await runner.extract(sections, {
@@ -38,8 +41,9 @@ public:
     expect(duration).toBeLessThan(5_000);
     expect(result.interfaces.length).toBeGreaterThanOrEqual(360);
     expect(result.interfaces.filter((iface) => iface.kind === "macro")).toHaveLength(120);
-    expect(new Set(result.interfaces.map((iface) => iface.stableId)).size)
-      .toBe(result.interfaces.length);
+    expect(new Set(result.interfaces.map((iface) => iface.stableId)).size).toBe(
+      result.interfaces.length,
+    );
     for (const iface of result.interfaces) {
       expect((iface.definition || "").length).toBeLessThanOrEqual(4_000);
     }

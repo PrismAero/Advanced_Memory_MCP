@@ -23,10 +23,7 @@ export class SQLiteEntityOperations {
     this.keywordOps = new KeywordOperations(connection);
   }
 
-  async createEntities(
-    entities: Entity[],
-    branchName?: string
-  ): Promise<Entity[]> {
+  async createEntities(entities: Entity[], branchName?: string): Promise<Entity[]> {
     const branchId = await this.connection.getBranchId(branchName);
     const created: Entity[] = [];
 
@@ -49,13 +46,11 @@ export class SQLiteEntityOperations {
     // Find the existing entity
     const existingEntity = await this.connection.getQuery(
       "SELECT id, original_content FROM entities WHERE name = ? AND branch_id = ?",
-      [entity.name, branchId]
+      [entity.name, branchId],
     );
 
     if (!existingEntity) {
-      throw new Error(
-        `Entity "${entity.name}" not found in branch ${branchName || "main"}`
-      );
+      throw new Error(`Entity "${entity.name}" not found in branch ${branchName || "main"}`);
     }
 
     // Update content if provided
@@ -77,25 +72,22 @@ export class SQLiteEntityOperations {
         entity.lastAccessed || new Date().toISOString(),
         entity.workingContext ? 1 : 0,
         entity.relevanceScore || 0.5,
-        entity.embedding
-          ? Buffer.from(new Float32Array(entity.embedding).buffer)
-          : null,
+        entity.embedding ? Buffer.from(new Float32Array(entity.embedding).buffer) : null,
         existingEntity.id,
-      ]
+      ],
     );
 
     // Update observations - delete old ones and insert new ones
-    await this.connection.runQuery(
-      "DELETE FROM observations WHERE entity_id = ?",
-      [existingEntity.id]
-    );
+    await this.connection.runQuery("DELETE FROM observations WHERE entity_id = ?", [
+      existingEntity.id,
+    ]);
 
     if (entity.observations && entity.observations.length > 0) {
       for (let i = 0; i < entity.observations.length; i++) {
         await this.connection.runQuery(
           `INSERT INTO observations (entity_id, content, optimized_content, sequence_order)
            VALUES (?, ?, ?, ?)`,
-          [existingEntity.id, entity.observations[i], entity.observations[i], i]
+          [existingEntity.id, entity.observations[i], entity.observations[i], i],
         );
       }
     }
@@ -108,10 +100,7 @@ export class SQLiteEntityOperations {
     };
   }
 
-  async deleteEntities(
-    entityNames: string[],
-    branchName?: string
-  ): Promise<void> {
+  async deleteEntities(entityNames: string[], branchName?: string): Promise<void> {
     if (!entityNames || entityNames.length === 0) {
       return;
     }
@@ -123,49 +112,37 @@ export class SQLiteEntityOperations {
         // Get entity ID first
         const entity = await this.connection.getQuery(
           "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [entityName, branchId]
+          [entityName, branchId],
         );
 
         if (!entity) {
-          logger.warn(
-            `Entity "${entityName}" not found in branch ${branchName || "main"}`
-          );
+          logger.warn(`Entity "${entityName}" not found in branch ${branchName || "main"}`);
           continue;
         }
 
         // Delete observations first (foreign key constraints)
-        await this.connection.runQuery(
-          "DELETE FROM observations WHERE entity_id = ?",
-          [entity.id]
-        );
+        await this.connection.runQuery("DELETE FROM observations WHERE entity_id = ?", [entity.id]);
 
         // Delete relations involving this entity
         await this.connection.runQuery(
           "DELETE FROM relations WHERE from_entity_id = ? OR to_entity_id = ?",
-          [entity.id, entity.id]
+          [entity.id, entity.id],
         );
 
-        await this.connection.runQuery(
-          "DELETE FROM keyword_links WHERE entity_id = ?",
-          [entity.id]
-        );
-
-        // Delete keywords
-        await this.connection.runQuery(
-          "DELETE FROM keywords WHERE entity_id = ?",
-          [entity.id]
-        );
-
-        // Delete cross references
-        await this.connection.runQuery(
-          "DELETE FROM cross_references WHERE from_entity_id = ?",
-          [entity.id]
-        );
-
-        // Finally delete the entity (FTS trigger will handle FTS cleanup)
-        await this.connection.runQuery("DELETE FROM entities WHERE id = ?", [
+        await this.connection.runQuery("DELETE FROM keyword_links WHERE entity_id = ?", [
           entity.id,
         ]);
+
+        // Delete keywords
+        await this.connection.runQuery("DELETE FROM keywords WHERE entity_id = ?", [entity.id]);
+
+        // Delete cross references
+        await this.connection.runQuery("DELETE FROM cross_references WHERE from_entity_id = ?", [
+          entity.id,
+        ]);
+
+        // Finally delete the entity (FTS trigger will handle FTS cleanup)
+        await this.connection.runQuery("DELETE FROM entities WHERE id = ?", [entity.id]);
 
         logger.info(`Deleted entity "${entityName}" and all related data`);
       } catch (error) {
@@ -175,13 +152,8 @@ export class SQLiteEntityOperations {
     }
   }
 
-  async findEntityByName(
-    name: string,
-    branchName?: string
-  ): Promise<Entity | null> {
-    const branchId = branchName
-      ? await this.connection.getBranchId(branchName)
-      : null;
+  async findEntityByName(name: string, branchName?: string): Promise<Entity | null> {
+    const branchId = branchName ? await this.connection.getBranchId(branchName) : null;
 
     let whereClause = "WHERE e.name = ?";
     let params = [name];
@@ -199,7 +171,7 @@ export class SQLiteEntityOperations {
       ${whereClause}
       GROUP BY e.id
     `,
-      params
+      params,
     );
 
     if (results.length === 0) {
@@ -210,39 +182,31 @@ export class SQLiteEntityOperations {
     return entities[0] || null;
   }
 
-  private async createSingleEntity(
-    entity: Entity,
-    branchId: number
-  ): Promise<Entity> {
+  private async createSingleEntity(entity: Entity, branchId: number): Promise<Entity> {
     const entityWithMeta = entity as EntityWithOptimization;
     const optimizationMeta = entityWithMeta[OPTIMIZATION_METADATA_SYMBOL];
 
     // Validate and sanitize entity data
     const validName = (entity.name || "").toString().trim() || "Unnamed Entity";
-    const validEntityType =
-      (entity.entityType || "").toString().trim() || "Unknown";
+    const validEntityType = (entity.entityType || "").toString().trim() || "Unknown";
     const validContent = (entity.content || "").toString().trim() || "";
     const validObservations = (entity.observations || []).filter(
-      (obs) => obs && obs.toString().trim()
+      (obs) => obs && obs.toString().trim(),
     );
-    const optimizedObservations =
-      optimizationMeta?.optimizedObservations || validObservations;
+    const optimizedObservations = optimizationMeta?.optimizedObservations || validObservations;
 
     // Check if entity already exists
     const existing = await this.connection.getQuery(
       "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-      [validName, branchId]
+      [validName, branchId],
     );
 
     if (existing) {
       // Return the existing entity instead of throwing an error
-      logger.debug(
-        `Entity "${validName}" already exists, returning existing entity`
-      );
-      const existingEntity = await this.connection.getQuery(
-        "SELECT * FROM entities WHERE id = ?",
-        [existing.id]
-      );
+      logger.debug(`Entity "${validName}" already exists, returning existing entity`);
+      const existingEntity = await this.connection.getQuery("SELECT * FROM entities WHERE id = ?", [
+        existing.id,
+      ]);
 
       if (existingEntity) {
         // Get observations for the existing entity (simplified for now)
@@ -270,8 +234,7 @@ export class SQLiteEntityOperations {
         observations: validObservations,
       });
 
-    const optimizedEntityContent =
-      optimizationMeta?.optimizedContent || originalContent;
+    const optimizedEntityContent = optimizationMeta?.optimizedContent || originalContent;
 
     // Insert entity with AI enhancement fields. The INSERT OR IGNORE is
     // intentional: concurrent same-key creates can race after the existence
@@ -310,21 +273,19 @@ export class SQLiteEntityOperations {
         entity.lastAccessed || new Date().toISOString(),
         entity.workingContext ? 1 : 0,
         entity.relevanceScore || 0.5,
-        entity.embedding
-          ? Buffer.from(new Float32Array(entity.embedding).buffer)
-          : null,
-      ]
+        entity.embedding ? Buffer.from(new Float32Array(entity.embedding).buffer) : null,
+      ],
     );
 
     const entityRow = await this.connection.getQuery(
       "SELECT * FROM entities WHERE name = ? AND branch_id = ?",
-      [validName, branchId]
+      [validName, branchId],
     );
 
     if (insertResult.changes === 0) {
       const observations = await this.connection.runQuery(
         "SELECT content FROM observations WHERE entity_id = ? ORDER BY sequence_order",
-        [entityRow.id]
+        [entityRow.id],
       );
       return {
         name: entityRow.name || validName,
@@ -346,12 +307,7 @@ export class SQLiteEntityOperations {
           INSERT INTO observations (entity_id, content, optimized_content, sequence_order)
           VALUES (?, ?, ?, ?)
         `,
-          [
-            entityRow.id,
-            validObservations[i],
-            optimizedObservations[i] || validObservations[i],
-            i,
-          ]
+          [entityRow.id, validObservations[i], optimizedObservations[i] || validObservations[i], i],
         );
       }
     }
@@ -373,7 +329,7 @@ export class SQLiteEntityOperations {
 
   async addObservations(
     observations: { entityName: string; contents: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const branchId = await this.connection.getBranchId(branchName);
     const results: { entityName: string; addedObservations: string[] }[] = [];
@@ -383,22 +339,18 @@ export class SQLiteEntityOperations {
         // Find the entity
         const entity = await this.connection.getQuery(
           "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [obs.entityName, branchId]
+          [obs.entityName, branchId],
         );
 
         if (!entity) {
-          logger.warn(
-            `Entity "${obs.entityName}" not found in branch ${
-              branchName || "main"
-            }`
-          );
+          logger.warn(`Entity "${obs.entityName}" not found in branch ${branchName || "main"}`);
           continue;
         }
 
         // Get current max sequence order
         const maxSeq = await this.connection.getQuery(
           "SELECT COALESCE(MAX(sequence_order), -1) as max_seq FROM observations WHERE entity_id = ?",
-          [entity.id]
+          [entity.id],
         );
 
         const startSeq = (maxSeq?.max_seq || -1) + 1;
@@ -411,17 +363,17 @@ export class SQLiteEntityOperations {
             await this.connection.execute(
               `INSERT INTO observations (entity_id, content, optimized_content, sequence_order)
                VALUES (?, ?, ?, ?)`,
-              [entity.id, content, content, startSeq + i]
+              [entity.id, content, content, startSeq + i],
             );
             addedObservations.push(content);
           }
         }
 
         // Update entity timestamp
-        await this.connection.runQuery(
-          "UPDATE entities SET updated_at = ? WHERE id = ?",
-          [new Date().toISOString(), entity.id]
-        );
+        await this.connection.runQuery("UPDATE entities SET updated_at = ? WHERE id = ?", [
+          new Date().toISOString(),
+          entity.id,
+        ]);
         await this.keywordOps.refreshEntityKeywords(entity.id, branchId);
 
         results.push({
@@ -429,14 +381,9 @@ export class SQLiteEntityOperations {
           addedObservations,
         });
 
-        logger.info(
-          `Added ${addedObservations.length} observations to "${obs.entityName}"`
-        );
+        logger.info(`Added ${addedObservations.length} observations to "${obs.entityName}"`);
       } catch (error) {
-        logger.error(
-          `Failed to add observations to "${obs.entityName}":`,
-          error
-        );
+        logger.error(`Failed to add observations to "${obs.entityName}":`, error);
       }
     }
 
@@ -445,7 +392,7 @@ export class SQLiteEntityOperations {
 
   async deleteObservations(
     deletions: { entityName: string; observations: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     const branchId = await this.connection.getBranchId(branchName);
 
@@ -454,14 +401,12 @@ export class SQLiteEntityOperations {
         // Find the entity
         const entity = await this.connection.getQuery(
           "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [deletion.entityName, branchId]
+          [deletion.entityName, branchId],
         );
 
         if (!entity) {
           logger.warn(
-            `Entity "${deletion.entityName}" not found in branch ${
-              branchName || "main"
-            }`
+            `Entity "${deletion.entityName}" not found in branch ${branchName || "main"}`,
           );
           continue;
         }
@@ -470,25 +415,22 @@ export class SQLiteEntityOperations {
         for (const obsContent of deletion.observations) {
           await this.connection.runQuery(
             "DELETE FROM observations WHERE entity_id = ? AND content = ?",
-            [entity.id, obsContent]
+            [entity.id, obsContent],
           );
         }
 
         // Update entity timestamp
-        await this.connection.runQuery(
-          "UPDATE entities SET updated_at = ? WHERE id = ?",
-          [new Date().toISOString(), entity.id]
-        );
+        await this.connection.runQuery("UPDATE entities SET updated_at = ? WHERE id = ?", [
+          new Date().toISOString(),
+          entity.id,
+        ]);
         await this.keywordOps.refreshEntityKeywords(entity.id, branchId);
 
         logger.info(
-          `Deleted ${deletion.observations.length} observations from "${deletion.entityName}"`
+          `Deleted ${deletion.observations.length} observations from "${deletion.entityName}"`,
         );
       } catch (error) {
-        logger.error(
-          `Failed to delete observations from "${deletion.entityName}":`,
-          error
-        );
+        logger.error(`Failed to delete observations from "${deletion.entityName}":`, error);
       }
     }
   }
@@ -497,7 +439,7 @@ export class SQLiteEntityOperations {
     entityName: string,
     targetBranch: string,
     targetEntityNames: string[],
-    sourceBranch?: string
+    sourceBranch?: string,
   ): Promise<void> {
     const sourceBranchId = await this.connection.getBranchId(sourceBranch);
     const targetBranchId = await this.connection.getBranchId(targetBranch);
@@ -505,13 +447,11 @@ export class SQLiteEntityOperations {
     // Find the source entity
     const sourceEntity = await this.connection.getQuery(
       "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-      [entityName, sourceBranchId]
+      [entityName, sourceBranchId],
     );
 
     if (!sourceEntity) {
-      throw new Error(
-        `Entity "${entityName}" not found in branch ${sourceBranch || "main"}`
-      );
+      throw new Error(`Entity "${entityName}" not found in branch ${sourceBranch || "main"}`);
     }
 
     // Create cross-references for each target entity
@@ -520,13 +460,11 @@ export class SQLiteEntityOperations {
         // Verify target entity exists
         const targetEntity = await this.connection.getQuery(
           "SELECT id FROM entities WHERE name = ? AND branch_id = ?",
-          [targetEntityName, targetBranchId]
+          [targetEntityName, targetBranchId],
         );
 
         if (!targetEntity) {
-          logger.warn(
-            `Target entity "${targetEntityName}" not found in branch "${targetBranch}"`
-          );
+          logger.warn(`Target entity "${targetEntityName}" not found in branch "${targetBranch}"`);
           continue;
         }
 
@@ -534,17 +472,14 @@ export class SQLiteEntityOperations {
         await this.connection.runQuery(
           `INSERT OR IGNORE INTO cross_references (from_entity_id, target_branch_id, target_entity_name)
            VALUES (?, ?, ?)`,
-          [sourceEntity.id, targetBranchId, targetEntityName]
+          [sourceEntity.id, targetBranchId, targetEntityName],
         );
 
         logger.info(
-          `Created cross-reference: "${entityName}" -> "${targetEntityName}" (${targetBranch})`
+          `Created cross-reference: "${entityName}" -> "${targetEntityName}" (${targetBranch})`,
         );
       } catch (error) {
-        logger.error(
-          `Failed to create cross-reference to "${targetEntityName}":`,
-          error
-        );
+        logger.error(`Failed to create cross-reference to "${targetEntityName}":`, error);
       }
     }
   }
@@ -554,11 +489,9 @@ export class SQLiteEntityOperations {
    */
   async getEntitiesWithEmbeddings(
     branchName?: string,
-    includeStatuses?: EntityStatus[]
+    includeStatuses?: EntityStatus[],
   ): Promise<Entity[]> {
-    const branchId = branchName
-      ? await this.connection.getBranchId(branchName)
-      : null;
+    const branchId = branchName ? await this.connection.getBranchId(branchName) : null;
     let whereClause = "WHERE embedding IS NOT NULL";
     const params: any[] = [];
 
@@ -567,17 +500,11 @@ export class SQLiteEntityOperations {
       params.push(branchId);
     }
 
-    const statuses =
-      includeStatuses && includeStatuses.length > 0
-        ? includeStatuses
-        : ["active"];
+    const statuses = includeStatuses && includeStatuses.length > 0 ? includeStatuses : ["active"];
     whereClause += ` AND status IN (${statuses.map(() => "?").join(",")})`;
     params.push(...statuses);
 
-    const rows = await this.connection.runQuery(
-      `SELECT * FROM entities ${whereClause}`,
-      params
-    );
+    const rows = await this.connection.runQuery(`SELECT * FROM entities ${whereClause}`, params);
 
     return this.convertRowsToEntities(rows);
   }
@@ -588,7 +515,7 @@ export class SQLiteEntityOperations {
   async updateEntityEmbedding(
     entityName: string,
     embedding: number[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     const branchId = await this.connection.getBranchId(branchName);
     const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer);
@@ -597,7 +524,7 @@ export class SQLiteEntityOperations {
       `UPDATE entities 
        SET embedding = ?, updated_at = CURRENT_TIMESTAMP 
        WHERE name = ? AND branch_id = ?`,
-      [embeddingBuffer, entityName, branchId]
+      [embeddingBuffer, entityName, branchId],
     );
 
     logger.debug(`Updated embedding for entity "${entityName}"`);
@@ -626,14 +553,11 @@ export class SQLiteEntityOperations {
           const float32Array = new Float32Array(
             buffer.buffer,
             buffer.byteOffset,
-            buffer.byteLength / 4
+            buffer.byteLength / 4,
           );
           entity.embedding = Array.from(float32Array);
         } catch (error) {
-          logger.warn(
-            `Failed to parse embedding for entity "${row.name}":`,
-            error
-          );
+          logger.warn(`Failed to parse embedding for entity "${row.name}":`, error);
         }
       }
 
@@ -647,7 +571,7 @@ export class SQLiteEntityOperations {
   async updateEntityRelevanceScore(
     entityName: string,
     relevanceScore: number,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     const branchId = await this.connection.getBranchId(branchName);
 
@@ -655,12 +579,10 @@ export class SQLiteEntityOperations {
       `UPDATE entities 
        SET relevance_score = ?, updated_at = CURRENT_TIMESTAMP 
        WHERE name = ? AND branch_id = ?`,
-      [relevanceScore, entityName, branchId]
+      [relevanceScore, entityName, branchId],
     );
 
-    logger.debug(
-      `Updated relevance score for entity "${entityName}" to ${relevanceScore}`
-    );
+    logger.debug(`Updated relevance score for entity "${entityName}" to ${relevanceScore}`);
   }
 
   /**
@@ -669,7 +591,7 @@ export class SQLiteEntityOperations {
   async updateEntityWorkingContext(
     entityName: string,
     isWorkingContext: boolean,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     const branchId = await this.connection.getBranchId(branchName);
 
@@ -677,28 +599,23 @@ export class SQLiteEntityOperations {
       `UPDATE entities 
        SET working_context = ?, updated_at = CURRENT_TIMESTAMP 
        WHERE name = ? AND branch_id = ?`,
-      [isWorkingContext ? 1 : 0, entityName, branchId]
+      [isWorkingContext ? 1 : 0, entityName, branchId],
     );
 
-    logger.debug(
-      `Updated working context for entity "${entityName}" to ${isWorkingContext}`
-    );
+    logger.debug(`Updated working context for entity "${entityName}" to ${isWorkingContext}`);
   }
 
   /**
    * Update entity last accessed timestamp
    */
-  async updateEntityLastAccessed(
-    entityName: string,
-    branchName?: string
-  ): Promise<void> {
+  async updateEntityLastAccessed(entityName: string, branchName?: string): Promise<void> {
     const branchId = await this.connection.getBranchId(branchName);
 
     await this.connection.runQuery(
       `UPDATE entities 
        SET last_accessed = CURRENT_TIMESTAMP 
        WHERE name = ? AND branch_id = ?`,
-      [entityName, branchId]
+      [entityName, branchId],
     );
   }
 
@@ -706,20 +623,13 @@ export class SQLiteEntityOperations {
    * Batch update relevance scores for efficiency
    */
   async batchUpdateRelevanceScores(
-    updates: { entityName: string; score: number; branchName?: string }[]
+    updates: { entityName: string; score: number; branchName?: string }[],
   ): Promise<void> {
     for (const update of updates) {
       try {
-        await this.updateEntityRelevanceScore(
-          update.entityName,
-          update.score,
-          update.branchName
-        );
+        await this.updateEntityRelevanceScore(update.entityName, update.score, update.branchName);
       } catch (error) {
-        logger.warn(
-          `Failed to update relevance score for ${update.entityName}:`,
-          error
-        );
+        logger.warn(`Failed to update relevance score for ${update.entityName}:`, error);
       }
     }
   }

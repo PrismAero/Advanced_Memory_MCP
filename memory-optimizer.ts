@@ -159,9 +159,7 @@ export class MemoryOptimizer {
       ? this.keywordExtractor.extractText(text)
       : [];
     const keywords = keywordSignals.slice(0, 15).map((signal) => signal.normalizedKeyword);
-    const entities = this.config.extractEntities
-      ? this.extractEntities(text)
-      : [];
+    const entities = this.config.extractEntities ? this.extractEntities(text) : [];
 
     let optimized = text;
 
@@ -179,8 +177,7 @@ export class MemoryOptimizer {
     }
 
     const optimizedTokenCount = this.countTokens(optimized);
-    const compressionRatio =
-      originalTokenCount > 0 ? optimizedTokenCount / originalTokenCount : 1;
+    const compressionRatio = originalTokenCount > 0 ? optimizedTokenCount / originalTokenCount : 1;
 
     return {
       original: text,
@@ -278,14 +275,11 @@ export class MemoryOptimizer {
 
     // Find technical terms (camelCase, PascalCase, snake_case)
     const technicalTerms =
-      text.match(
-        /\b[a-z]+[A-Z][a-zA-Z]*\b|\b[A-Z][a-z]*[A-Z][a-zA-Z]*\b|\b[a-z]+_[a-z]+\b/g
-      ) || [];
+      text.match(/\b[a-z]+[A-Z][a-zA-Z]*\b|\b[A-Z][a-z]*[A-Z][a-zA-Z]*\b|\b[a-z]+_[a-z]+\b/g) || [];
     technicalTerms.forEach((term) => entities.add(term));
 
     // Find terms with numbers (versions, IDs, etc.)
-    const numberedTerms =
-      text.match(/\b[a-zA-Z]+\d+[a-zA-Z]*\b|\b[a-zA-Z]*\d+[a-zA-Z]+\b/g) || [];
+    const numberedTerms = text.match(/\b[a-zA-Z]+\d+[a-zA-Z]*\b|\b[a-zA-Z]*\d+[a-zA-Z]+\b/g) || [];
     numberedTerms.forEach((term) => entities.add(term));
 
     return Array.from(entities).slice(0, 15); // Limit to top 15 entities

@@ -77,9 +77,7 @@ class TensorFlowRuntime {
       }
       this.initialized = true;
       this.loadTimeMs = Date.now() - started;
-      logger.debug(
-        `[TENSORFLOW] Runtime ready: backend=${backend}, load=${this.loadTimeMs}ms`,
-      );
+      logger.debug(`[TENSORFLOW] Runtime ready: backend=${backend}, load=${this.loadTimeMs}ms`);
     } catch (error) {
       this.initializationPromise = null;
       throw new Error(

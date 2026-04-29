@@ -74,7 +74,7 @@ export async function analyzeQmlBindings(
     include_usage?: boolean;
     branch_name?: string;
   },
-  memoryCore: IMemoryOperations
+  memoryCore: IMemoryOperations,
 ): Promise<any> {
   const branchName = args.branch_name || "main";
   const className = args.class_name;
@@ -83,24 +83,19 @@ export async function analyzeQmlBindings(
   logger.info(`Analyzing QML bindings for class: ${className}`);
 
   // Get project files from memory
-  const graph = await memoryCore.searchEntities(
-    `${className} class`,
-    branchName
-  );
+  const graph = await memoryCore.searchEntities(`${className} class`, branchName);
   const entities = graph.entities;
 
   // Find the C++ file containing this class
   const cppFiles = entities.filter(
     (e: EntityWithMetadata) =>
-      e.entityType === "interface" &&
-      (e.name === className || e.name.endsWith(`::${className}`))
+      e.entityType === "interface" && (e.name === className || e.name.endsWith(`::${className}`)),
   );
 
   if (cppFiles.length === 0) {
     return {
       error: `Class ${className} not found in project`,
-      suggestion:
-        "Make sure the project has been analyzed and the class name is correct",
+      suggestion: "Make sure the project has been analyzed and the class name is correct",
     };
   }
 
@@ -198,16 +193,14 @@ export async function analyzeQmlBindings(
   // If includeUsage is true, search QML files for usage
   if (includeUsage) {
     const qmlFiles = entities.filter((e: EntityWithMetadata) =>
-      e.metadata?.filePath?.endsWith(".qml")
+      e.metadata?.filePath?.endsWith(".qml"),
     );
 
     for (const property of properties) {
       property.qmlUsage = await findPropertyUsageInQml(
         property.name,
         className,
-        qmlFiles
-          .map((f: EntityWithMetadata) => f.metadata?.filePath)
-          .filter(Boolean) as string[]
+        qmlFiles.map((f: EntityWithMetadata) => f.metadata?.filePath).filter(Boolean) as string[],
       );
     }
 
@@ -215,9 +208,7 @@ export async function analyzeQmlBindings(
       invokable.qmlCalls = await findMethodCallsInQml(
         invokable.name,
         className,
-        qmlFiles
-          .map((f: EntityWithMetadata) => f.metadata?.filePath)
-          .filter(Boolean) as string[]
+        qmlFiles.map((f: EntityWithMetadata) => f.metadata?.filePath).filter(Boolean) as string[],
       );
     }
   }
@@ -263,7 +254,7 @@ export async function findQtControllers(
     namespace_filter?: string;
     branch_name?: string;
   },
-  memoryCore: IMemoryOperations
+  memoryCore: IMemoryOperations,
 ): Promise<any> {
   const branchName = args.branch_name || "main";
   const includeProperties = args.include_properties !== false;
@@ -273,10 +264,7 @@ export async function findQtControllers(
   logger.info("Finding Qt controllers with QML registration");
 
   // Search for files with QML registration
-  const graph = await memoryCore.searchEntities(
-    "QML_ELEMENT qmlRegisterType class",
-    branchName
-  );
+  const graph = await memoryCore.searchEntities("QML_ELEMENT qmlRegisterType class", branchName);
   const entities = graph.entities;
 
   const controllers: QtController[] = [];
@@ -286,7 +274,7 @@ export async function findQtControllers(
     (e: EntityWithMetadata) =>
       e.entityType === "interface" &&
       e.metadata?.filePath &&
-      /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath)
+      /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath),
   );
 
   for (const entity of cppEntities) {
@@ -326,11 +314,7 @@ export async function findQtControllers(
           if (line.trim().startsWith("signals:")) {
             // Count signals in the next few lines
             const signalsIndex = lines.indexOf(line);
-            for (
-              let i = signalsIndex + 1;
-              i < Math.min(signalsIndex + 20, lines.length);
-              i++
-            ) {
+            for (let i = signalsIndex + 1; i < Math.min(signalsIndex + 20, lines.length); i++) {
               const sigLine = lines[i].trim();
               if (
                 sigLine.startsWith("public:") ||
@@ -338,11 +322,7 @@ export async function findQtControllers(
                 sigLine.startsWith("protected:")
               )
                 break;
-              if (
-                sigLine &&
-                sigLine.includes("(") &&
-                !sigLine.startsWith("//")
-              ) {
+              if (sigLine && sigLine.includes("(") && !sigLine.startsWith("//")) {
                 controller.signalCount++;
               }
             }
@@ -379,7 +359,7 @@ export async function analyzeLayerArchitecture(
     show_violations?: boolean;
     branch_name?: string;
   },
-  memoryCore: IMemoryOperations
+  memoryCore: IMemoryOperations,
 ): Promise<any> {
   const branchName = args.branch_name || "main";
   const layerFocus = args.layer_focus || "all";
@@ -413,10 +393,7 @@ export async function analyzeLayerArchitecture(
         const violations = await checkQmlViolations(filePath);
         analysis.violations.push(...violations);
       }
-    } else if (
-      entity.entityType === "interface" &&
-      /\.(cpp|hpp|h)$/.test(filePath)
-    ) {
+    } else if (entity.entityType === "interface" && /\.(cpp|hpp|h)$/.test(filePath)) {
       // Check if it's a controller (has QML registration)
       try {
         const content = await fs.readFile(filePath, "utf-8");
@@ -440,9 +417,9 @@ export async function analyzeLayerArchitecture(
   // Analyze relationships
   // Controllers should use Services, UI should use Controllers
   for (const controller of analysis.controllers) {
-    const controllerEntity = entities.find(
-      (e: EntityWithMetadata) => e.name === controller
-    ) as EntityWithMetadata | undefined;
+    const controllerEntity = entities.find((e: EntityWithMetadata) => e.name === controller) as
+      | EntityWithMetadata
+      | undefined;
     if (controllerEntity?.metadata?.imports) {
       for (const imp of controllerEntity.metadata.imports) {
         if (analysis.services.includes(imp)) {
@@ -487,7 +464,7 @@ export async function findQmlUsage(
     usage_type?: "property" | "method" | "signal" | "all";
     branch_name?: string;
   },
-  memoryCore: IMemoryOperations
+  memoryCore: IMemoryOperations,
 ): Promise<any> {
   const branchName = args.branch_name || "main";
   const controllerName = args.controller_name;
@@ -500,7 +477,7 @@ export async function findQmlUsage(
   const entities = graph.entities;
 
   const qmlFiles = entities.filter((e: EntityWithMetadata) =>
-    e.metadata?.filePath?.endsWith(".qml")
+    e.metadata?.filePath?.endsWith(".qml"),
   );
 
   const usages: Array<{
@@ -532,10 +509,7 @@ export async function findQmlUsage(
         }
 
         // Check for property access
-        if (
-          (usageType === "property" || usageType === "all") &&
-          line.includes(".")
-        ) {
+        if ((usageType === "property" || usageType === "all") && line.includes(".")) {
           // Simple pattern: objectName.propertyName
           const pattern = new RegExp(`\\w+\\.\\w+`, "g");
           if (pattern.test(line)) {
@@ -597,7 +571,7 @@ export async function listQProperties(
     include_qml_usage?: boolean;
     branch_name?: string;
   },
-  memoryCore: IMemoryOperations
+  memoryCore: IMemoryOperations,
 ): Promise<any> {
   const branchName = args.branch_name || "main";
   const className = args.class_name;
@@ -606,10 +580,7 @@ export async function listQProperties(
 
   logger.info("Listing Q_PROPERTY declarations");
 
-  const graph = await memoryCore.searchEntities(
-    className || "Q_PROPERTY class",
-    branchName
-  );
+  const graph = await memoryCore.searchEntities(className || "Q_PROPERTY class", branchName);
   const entities = graph.entities;
 
   const properties: QProperty[] = [];
@@ -617,16 +588,11 @@ export async function listQProperties(
   // Filter C++ files
   const cppFiles = entities.filter(
     (e: EntityWithMetadata) =>
-      e.metadata?.filePath &&
-      /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath)
+      e.metadata?.filePath && /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath),
   );
 
   for (const entity of cppFiles) {
-    if (
-      className &&
-      entity.name !== className &&
-      !entity.name.endsWith(`::${className}`)
-    ) {
+    if (className && entity.name !== className && !entity.name.endsWith(`::${className}`)) {
       continue;
     }
 
@@ -662,11 +628,7 @@ export async function listQProperties(
       .filter(Boolean) as string[];
 
     for (const property of properties) {
-      property.qmlUsage = await findPropertyUsageInQml(
-        property.name,
-        property.className,
-        qmlFiles
-      );
+      property.qmlUsage = await findPropertyUsageInQml(property.name, property.className, qmlFiles);
     }
   }
 
@@ -698,7 +660,7 @@ export async function listQInvokables(
     include_qml_calls?: boolean;
     branch_name?: string;
   },
-  memoryCore: IMemoryOperations
+  memoryCore: IMemoryOperations,
 ): Promise<any> {
   const branchName = args.branch_name || "main";
   const className = args.class_name;
@@ -706,10 +668,7 @@ export async function listQInvokables(
 
   logger.info("Listing Q_INVOKABLE methods");
 
-  const graph = await memoryCore.searchEntities(
-    className || "Q_INVOKABLE class",
-    branchName
-  );
+  const graph = await memoryCore.searchEntities(className || "Q_INVOKABLE class", branchName);
   const entities = graph.entities;
 
   const invokables: QInvokable[] = [];
@@ -717,16 +676,11 @@ export async function listQInvokables(
   // Filter C++ files
   const cppFiles = entities.filter(
     (e: EntityWithMetadata) =>
-      e.metadata?.filePath &&
-      /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath)
+      e.metadata?.filePath && /\.(cpp|hpp|h|hxx|cc|cxx)$/.test(e.metadata.filePath),
   );
 
   for (const entity of cppFiles) {
-    if (
-      className &&
-      entity.name !== className &&
-      !entity.name.endsWith(`::${className}`)
-    ) {
+    if (className && entity.name !== className && !entity.name.endsWith(`::${className}`)) {
       continue;
     }
 
@@ -740,13 +694,7 @@ export async function listQInvokables(
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes("Q_INVOKABLE")) {
-          const invokable = parseQInvokable(
-            line,
-            lines,
-            i,
-            entity.name,
-            filePath
-          );
+          const invokable = parseQInvokable(line, lines, i, entity.name, filePath);
           if (invokable) {
             invokables.push(invokable);
           }
@@ -769,7 +717,7 @@ export async function listQInvokables(
       invokable.qmlCalls = await findMethodCallsInQml(
         invokable.name,
         invokable.className,
-        qmlFiles
+        qmlFiles,
       );
     }
   }
@@ -798,7 +746,7 @@ function parseQProperty(
   line: string,
   className: string,
   filePath: string,
-  lineNumber: number
+  lineNumber: number,
 ): QProperty | null {
   // Q_PROPERTY(type name READ getter WRITE setter NOTIFY signal)
   const match = line.match(/Q_PROPERTY\s*\(\s*(\w+(?:\s*\*)?)\s+(\w+)/);
@@ -829,7 +777,7 @@ function parseQInvokable(
   lines: string[],
   lineIndex: number,
   className: string,
-  filePath: string
+  filePath: string,
 ): QInvokable | null {
   // Q_INVOKABLE can be on the same line or the next line
   let methodLine = line.replace("Q_INVOKABLE", "").trim();
@@ -845,9 +793,7 @@ function parseQInvokable(
   const name = match[2];
   const paramsStr = match[3];
 
-  const parameters: string[] = paramsStr
-    ? paramsStr.split(",").map((p) => p.trim())
-    : [];
+  const parameters: string[] = paramsStr ? paramsStr.split(",").map((p) => p.trim()) : [];
 
   return {
     name,
@@ -861,10 +807,7 @@ function parseQInvokable(
   };
 }
 
-function findQmlRegistration(
-  lines: string[],
-  className: string
-): string | null {
+function findQmlRegistration(lines: string[], className: string): string | null {
   for (const line of lines) {
     if (
       line.includes("QML_ELEMENT") ||
@@ -880,7 +823,7 @@ function findQmlRegistration(
 async function findPropertyUsageInQml(
   propertyName: string,
   className: string,
-  qmlFiles: string[]
+  qmlFiles: string[],
 ): Promise<Array<{ file: string; line: number; usage: string }>> {
   const usages: Array<{ file: string; line: number; usage: string }> = [];
 
@@ -892,10 +835,7 @@ async function findPropertyUsageInQml(
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         // Look for property access patterns
-        if (
-          line.includes(propertyName) &&
-          (line.includes(":") || line.includes("."))
-        ) {
+        if (line.includes(propertyName) && (line.includes(":") || line.includes("."))) {
           usages.push({
             file: qmlFile,
             line: i + 1,
@@ -914,7 +854,7 @@ async function findPropertyUsageInQml(
 async function findMethodCallsInQml(
   methodName: string,
   className: string,
-  qmlFiles: string[]
+  qmlFiles: string[],
 ): Promise<Array<{ file: string; line: number; context: string }>> {
   const calls: Array<{ file: string; line: number; context: string }> = [];
 
@@ -943,10 +883,8 @@ async function findMethodCallsInQml(
 }
 
 async function checkQmlViolations(
-  qmlFile: string
-): Promise<
-  Array<{ file: string; issue: string; severity: "warning" | "error" }>
-> {
+  qmlFile: string,
+): Promise<Array<{ file: string; issue: string; severity: "warning" | "error" }>> {
   const violations: Array<{
     file: string;
     issue: string;
@@ -964,8 +902,7 @@ async function checkQmlViolations(
       const functionIndex = line.indexOf("function ");
       if (functionIndex !== -1) {
         const commentIndex = line.indexOf("//");
-        const isCommentedOut =
-          commentIndex !== -1 && commentIndex < functionIndex;
+        const isCommentedOut = commentIndex !== -1 && commentIndex < functionIndex;
 
         // Check if the 'function' keyword is inside a string literal
         let inSingleQuote = false;
@@ -1004,17 +941,12 @@ async function checkQmlViolations(
       if (line.includes("XMLHttpRequest") || line.includes("fetch(")) {
         violations.push({
           file: qmlFile,
-          issue: `Line ${
-            i + 1
-          }: Network request in QML. Should be handled in Service layer.`,
+          issue: `Line ${i + 1}: Network request in QML. Should be handled in Service layer.`,
           severity: "error",
         });
       }
 
-      if (
-        line.includes("Qt.createComponent") ||
-        line.includes("Qt.createQmlObject")
-      ) {
+      if (line.includes("Qt.createComponent") || line.includes("Qt.createQmlObject")) {
         violations.push({
           file: qmlFile,
           issue: `Line ${

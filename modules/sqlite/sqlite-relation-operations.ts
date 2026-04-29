@@ -14,10 +14,7 @@ export class SQLiteRelationOperations {
     this.keywordOps = new KeywordOperations(connection);
   }
 
-  async createRelations(
-    relations: Relation[],
-    branchName?: string,
-  ): Promise<Relation[]> {
+  async createRelations(relations: Relation[], branchName?: string): Promise<Relation[]> {
     if (!relations || relations.length === 0) {
       return [];
     }
@@ -33,9 +30,7 @@ export class SQLiteRelationOperations {
     if (validRelations.length === 0) return [];
 
     const entityNames = Array.from(
-      new Set(
-        validRelations.flatMap((relation) => [relation.from, relation.to]),
-      ),
+      new Set(validRelations.flatMap((relation) => [relation.from, relation.to])),
     );
     const placeholders = entityNames.map(() => "?").join(",");
     const entityRows = await this.connection.runQuery(
@@ -52,20 +47,12 @@ export class SQLiteRelationOperations {
         const toEntityId = entityIds.get(relation.to);
 
         if (!fromEntityId) {
-          logger.warn(
-            `From entity "${relation.from}" not found in branch ${
-              branchName || "main"
-            }`,
-          );
+          logger.warn(`From entity "${relation.from}" not found in branch ${branchName || "main"}`);
           continue;
         }
 
         if (!toEntityId) {
-          logger.warn(
-            `To entity "${relation.to}" not found in branch ${
-              branchName || "main"
-            }`,
-          );
+          logger.warn(`To entity "${relation.to}" not found in branch ${branchName || "main"}`);
           continue;
         }
 
@@ -113,10 +100,7 @@ export class SQLiteRelationOperations {
     return createdRelations;
   }
 
-  async deleteRelations(
-    relations: Relation[],
-    branchName?: string,
-  ): Promise<void> {
+  async deleteRelations(relations: Relation[], branchName?: string): Promise<void> {
     if (!relations || relations.length === 0) {
       return;
     }
@@ -154,18 +138,12 @@ export class SQLiteRelationOperations {
           [fromEntity.id, toEntity.id, relation.relationType, branchId],
         );
       } catch (error) {
-        logger.error(
-          `Failed to delete relation: ${relation.from} -> ${relation.to}:`,
-          error,
-        );
+        logger.error(`Failed to delete relation: ${relation.from} -> ${relation.to}:`, error);
       }
     }
   }
 
-  async getRelationsForEntities(
-    entityNames: string[],
-    branchId?: number,
-  ): Promise<Relation[]> {
+  async getRelationsForEntities(entityNames: string[], branchId?: number): Promise<Relation[]> {
     if (!entityNames || entityNames.length === 0) {
       return [];
     }

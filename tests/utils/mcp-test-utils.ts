@@ -5,10 +5,7 @@ import { afterEach, expect } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-import {
-  createMcpServerApp,
-  type McpServerApp,
-} from "../../modules/mcp-server-app.js";
+import { createMcpServerApp, type McpServerApp } from "../../modules/mcp-server-app.js";
 
 export function createTempMemoryRoot(prefix = "advanced-memory-mcp-"): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -39,9 +36,11 @@ export function parseTextResponse(result: any): any {
   return JSON.parse(text);
 }
 
-export async function createInitializedApp(
-  memoryRoot = createTempMemoryRoot(),
-): Promise<{ app: McpServerApp; memoryRoot: string; cleanup: () => Promise<void> }> {
+export async function createInitializedApp(memoryRoot = createTempMemoryRoot()): Promise<{
+  app: McpServerApp;
+  memoryRoot: string;
+  cleanup: () => Promise<void>;
+}> {
   const previousMemoryPath = process.env.MEMORY_PATH;
   process.env.MEMORY_PATH = memoryRoot;
 
@@ -81,8 +80,8 @@ export async function createStdioClient(
   close: () => Promise<void>;
 }> {
   const env = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] =>
-      typeof entry[1] === "string",
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   );
   env.MEMORY_PATH = memoryRoot;

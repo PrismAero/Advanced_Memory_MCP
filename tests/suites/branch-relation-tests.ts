@@ -1,10 +1,6 @@
 export interface MemoryGraphTestRunner {
   memoryManager: any;
-  runTest(
-    name: string,
-    category: string,
-    testFn: () => Promise<any>,
-  ): Promise<any>;
+  runTest(name: string, category: string, testFn: () => Promise<any>): Promise<any>;
 }
 
 export async function runBranchTests(runner: MemoryGraphTestRunner): Promise<void> {
@@ -84,9 +80,21 @@ export async function runRelationTests(runner: MemoryGraphTestRunner): Promise<v
   console.log("\n🔗 RELATION TESTS\n");
 
   await runner.memoryManager.createEntities([
-    { name: "RelTest_ServiceA", entityType: "service", observations: ["Service A"] },
-    { name: "RelTest_ServiceB", entityType: "service", observations: ["Service B"] },
-    { name: "RelTest_Controller", entityType: "controller", observations: ["Controller"] },
+    {
+      name: "RelTest_ServiceA",
+      entityType: "service",
+      observations: ["Service A"],
+    },
+    {
+      name: "RelTest_ServiceB",
+      entityType: "service",
+      observations: ["Service B"],
+    },
+    {
+      name: "RelTest_Controller",
+      entityType: "controller",
+      observations: ["Controller"],
+    },
   ]);
 
   await runner.runTest("Create relation", "Relation", async () => {
@@ -97,18 +105,23 @@ export async function runRelationTests(runner: MemoryGraphTestRunner): Promise<v
         relationType: "depends_on",
       },
     ]);
-    const graph = await runner.memoryManager.openNodes([
-      "RelTest_ServiceA",
-      "RelTest_ServiceB",
-    ]);
+    const graph = await runner.memoryManager.openNodes(["RelTest_ServiceA", "RelTest_ServiceB"]);
     if (graph.relations.length === 0) throw new Error("Relation not created");
     return { created: true };
   });
 
   await runner.runTest("Create multiple relations", "Relation", async () => {
     await runner.memoryManager.createRelations([
-      { from: "RelTest_Controller", to: "RelTest_ServiceA", relationType: "uses" },
-      { from: "RelTest_Controller", to: "RelTest_ServiceB", relationType: "uses" },
+      {
+        from: "RelTest_Controller",
+        to: "RelTest_ServiceA",
+        relationType: "uses",
+      },
+      {
+        from: "RelTest_Controller",
+        to: "RelTest_ServiceB",
+        relationType: "uses",
+      },
     ]);
     const graph = await runner.memoryManager.openNodes(["RelTest_Controller"]);
     if (graph.relations.length < 2) throw new Error("Relations not created");
@@ -123,10 +136,7 @@ export async function runRelationTests(runner: MemoryGraphTestRunner): Promise<v
         relationType: "depends_on",
       },
     ]);
-    const graph = await runner.memoryManager.openNodes([
-      "RelTest_ServiceA",
-      "RelTest_ServiceB",
-    ]);
+    const graph = await runner.memoryManager.openNodes(["RelTest_ServiceA", "RelTest_ServiceB"]);
     const remaining = graph.relations.filter(
       (relation: any) =>
         relation.from === "RelTest_ServiceA" &&
@@ -176,14 +186,20 @@ export async function runRelationTests(runner: MemoryGraphTestRunner): Promise<v
   ]);
 }
 
-export async function runWorkingContextTests(
-  runner: MemoryGraphTestRunner,
-): Promise<void> {
+export async function runWorkingContextTests(runner: MemoryGraphTestRunner): Promise<void> {
   console.log("\n💼 WORKING CONTEXT TESTS\n");
 
   await runner.memoryManager.createEntities([
-    { name: "WCTest_Entity1", entityType: "task", observations: ["Active task"] },
-    { name: "WCTest_Entity2", entityType: "task", observations: ["Another task"] },
+    {
+      name: "WCTest_Entity1",
+      entityType: "task",
+      observations: ["Active task"],
+    },
+    {
+      name: "WCTest_Entity2",
+      entityType: "task",
+      observations: ["Another task"],
+    },
   ]);
 
   await runner.runTest("Update working context", "WorkingContext", async () => {

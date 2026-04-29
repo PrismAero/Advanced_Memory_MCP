@@ -20,10 +20,7 @@ class Logger {
   constructor() {
     const logLevel = parseLogLevel(process.env.LOG_LEVEL, "info");
     this.level = LOG_LEVELS[logLevel] ?? LOG_LEVELS.info;
-    const consoleLevel = parseLogLevel(
-      process.env.ADVANCED_MEMORY_CONSOLE_LOG_LEVEL,
-      "warn",
-    );
+    const consoleLevel = parseLogLevel(process.env.ADVANCED_MEMORY_CONSOLE_LOG_LEVEL, "warn");
     this.consoleLevel = LOG_LEVELS[consoleLevel] ?? LOG_LEVELS.warn;
   }
 
@@ -78,9 +75,7 @@ class Logger {
       // don't end up writing literal " undefined" to the log stream.
       const cleanArgs = args.filter((arg) => arg !== undefined);
       const suffix =
-        cleanArgs.length > 0
-          ? " " + cleanArgs.map((arg) => this.formatArg(arg)).join(" ")
-          : "";
+        cleanArgs.length > 0 ? " " + cleanArgs.map((arg) => this.formatArg(arg)).join(" ") : "";
       const fullMessage = formattedMessage + suffix;
 
       if (LOG_LEVELS[level] >= this.level) {
@@ -175,8 +170,7 @@ function ensureGitignoreEntry(rootPath: string, entry: string): void {
     return;
   }
 
-  const separator =
-    existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+  const separator = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
   try {
     fs.writeFileSync(
       gitignorePath,

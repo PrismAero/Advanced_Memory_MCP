@@ -4,10 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ProjectAnalysisOperations } from "../../modules/sqlite/project-analysis-operations.js";
 import { SQLiteConnection } from "../../modules/sqlite/sqlite-connection.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("project cleanup operations", () => {
   let root: string | undefined;
@@ -25,7 +22,9 @@ describe("project cleanup operations", () => {
 
   it("removes project data, interfaces, dependencies, and vectors for newly ignored files", async () => {
     root = createTempMemoryRoot("advanced-memory-project-cleanup-");
-    await fs.mkdir(path.join(root, "generated", "subfolder"), { recursive: true });
+    await fs.mkdir(path.join(root, "generated", "subfolder"), {
+      recursive: true,
+    });
     await fs.writeFile(
       path.join(root, "generated", "subfolder", "ignored.cpp"),
       "int ignored();\n",
@@ -126,14 +125,7 @@ describe("project cleanup operations", () => {
     const vector = Buffer.from(new Float32Array(Array.from({ length: 512 }, () => 0.1)).buffer);
     await connection.execute(
       "INSERT INTO vectors (id, vector, metadata) VALUES (?, ?, ?), (?, ?, ?)",
-      [
-        `file_${ignoredFile.lastID}`,
-        vector,
-        "{}",
-        `interface_${iface.lastID}`,
-        vector,
-        "{}",
-      ],
+      [`file_${ignoredFile.lastID}`, vector, "{}", `interface_${iface.lastID}`, vector, "{}"],
     );
 
     const removed = await projectOps.cleanupIgnoredFiles(root);
@@ -159,19 +151,18 @@ describe("project cleanup operations", () => {
     ).toBe(0);
     expect(
       (
-        await connection.getQuery(
-          "SELECT COUNT(*) as count FROM vectors WHERE id IN (?, ?)",
-          [`file_${ignoredFile.lastID}`, `interface_${iface.lastID}`],
-        )
+        await connection.getQuery("SELECT COUNT(*) as count FROM vectors WHERE id IN (?, ?)", [
+          `file_${ignoredFile.lastID}`,
+          `interface_${iface.lastID}`,
+        ])
       ).count,
     ).toBe(0);
   });
 
   async function expectCount(table: string, id: number, expected: number): Promise<void> {
     expect(
-      (await connection!.getQuery(`SELECT COUNT(*) as count FROM ${table} WHERE id = ?`, [
-        id,
-      ])).count,
+      (await connection!.getQuery(`SELECT COUNT(*) as count FROM ${table} WHERE id = ?`, [id]))
+        .count,
     ).toBe(expected);
   }
 });

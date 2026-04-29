@@ -61,18 +61,8 @@ export class MLHandlers {
   }
 
   async handleTrainProjectModel(args: any): Promise<any> {
-    const epochs = clampNumber(
-      args.epochs ?? args.training_config?.epochs,
-      1,
-      50,
-      10,
-    );
-    const batchSize = clampNumber(
-      args.batch_size ?? args.training_config?.batch_size,
-      1,
-      128,
-      16,
-    );
+    const epochs = clampNumber(args.epochs ?? args.training_config?.epochs, 1, 50, 10);
+    const batchSize = clampNumber(args.batch_size ?? args.training_config?.batch_size, 1, 128, 16);
     const learningRate = clampNumber(
       args.learning_rate ?? args.training_config?.learning_rate,
       0.000001,
@@ -119,16 +109,15 @@ export class MLHandlers {
         results.push({ name, status: "not_found" });
         continue;
       }
-      const embedding =
-        await this.projectEmbeddingEngine.generateProjectEmbedding(
-          iface.definition,
-          "interface_definition",
-          {
-            interface_name: iface.name,
-            file_path: "unknown",
-            line_number: iface.line_number,
-          },
-        );
+      const embedding = await this.projectEmbeddingEngine.generateProjectEmbedding(
+        iface.definition,
+        "interface_definition",
+        {
+          interface_name: iface.name,
+          file_path: "unknown",
+          line_number: iface.line_number,
+        },
+      );
       results.push({
         name,
         status: "success",
@@ -145,23 +134,17 @@ export class MLHandlers {
     }
     const limit = clampNumber(args.limit ?? args.max_results, 1, 50, 5);
     const offset = clampNumber(args.offset, 0, 10_000, 0);
-    const maxDefinitionChars = clampNumber(
-      args.max_definition_chars,
-      80,
-      4_000,
-      240,
-    );
+    const maxDefinitionChars = clampNumber(args.max_definition_chars, 80, 4_000, 240);
     const maxMembers = clampNumber(args.max_members, 0, 100, 8);
     const includeDocs = args.include_docs === true;
     const includeMembers = args.include_members === true;
     const includeSnippet = args.include_snippet === true;
 
     try {
-      const queryEmbedding =
-        await this.projectEmbeddingEngine.generateProjectEmbedding(
-          args.code_snippet,
-          "business_logic",
-        );
+      const queryEmbedding = await this.projectEmbeddingEngine.generateProjectEmbedding(
+        args.code_snippet,
+        "business_logic",
+      );
       if (!queryEmbedding) {
         throw new Error("Failed to generate embedding for query");
       }
@@ -231,16 +214,14 @@ export class MLHandlers {
         return r?.embedding || null;
       };
 
-      const updatedFiles =
-        await this.projectAnalysisOps.generateMissingFileEmbeddings(
-          fileGen,
-          fileLimit,
-        );
-      const updatedInterfaces =
-        await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
-          interfaceGen,
-          interfaceLimit,
-        );
+      const updatedFiles = await this.projectAnalysisOps.generateMissingFileEmbeddings(
+        fileGen,
+        fileLimit,
+      );
+      const updatedInterfaces = await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
+        interfaceGen,
+        interfaceLimit,
+      );
 
       return jsonResponse({
         action: "backfill",
@@ -253,14 +234,8 @@ export class MLHandlers {
           interfaces: updatedInterfaces.length,
         },
         remaining: {
-          files: Math.max(
-            0,
-            status.filesWithoutEmbeddings - updatedFiles.length,
-          ),
-          interfaces: Math.max(
-            0,
-            status.interfacesWithoutEmbeddings - updatedInterfaces.length,
-          ),
+          files: Math.max(0, status.filesWithoutEmbeddings - updatedFiles.length),
+          interfaces: Math.max(0, status.interfacesWithoutEmbeddings - updatedInterfaces.length),
         },
       });
     } catch (error) {
@@ -300,25 +275,16 @@ function formatCodeInterfaceResult(
     why: buildWhy(iface, similarity),
   };
   if (options.includeDocs && iface.documentation) {
-    out.documentation = truncate(
-      iface.documentation,
-      options.maxDefinitionChars,
-    );
+    out.documentation = truncate(iface.documentation, options.maxDefinitionChars);
   } else if (iface.documentation) {
     out.documentation_preview = truncate(iface.documentation, 180);
   }
   if (options.includeMembers) {
     out.members = (metadata.members || []).slice(0, options.maxMembers);
-    out.members_truncated = Math.max(
-      0,
-      (metadata.members || []).length - options.maxMembers,
-    );
+    out.members_truncated = Math.max(0, (metadata.members || []).length - options.maxMembers);
   }
   if (options.includeSnippet) {
-    out.definition = truncate(
-      iface.definition || "",
-      options.maxDefinitionChars,
-    );
+    out.definition = truncate(iface.definition || "", options.maxDefinitionChars);
   } else {
     out.definition_preview = truncate(
       iface.definition || "",
@@ -350,18 +316,12 @@ function truncate(value: string, maxChars: number): string {
 
 function buildWhy(iface: any, similarity: number): string {
   const parts = [`semantic similarity ${similarity.toFixed(3)}`];
-  if (iface.kind || iface.interface_type)
-    parts.push(`kind ${iface.kind || iface.interface_type}`);
+  if (iface.kind || iface.interface_type) parts.push(`kind ${iface.kind || iface.interface_type}`);
   if (iface.language) parts.push(`language ${iface.language}`);
   return parts.join("; ");
 }
 
-function clampNumber(
-  value: unknown,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, numeric));

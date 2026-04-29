@@ -2,11 +2,7 @@ import { Entity, MemoryBranchInfo } from "../../memory-types.js";
 import { BackgroundProcessor } from "../background-processor.js";
 import { IntelligenceContextService } from "../intelligence/context-service.js";
 import { logger } from "../logger.js";
-import {
-  jsonResponse,
-  sanitizeEntities,
-  sanitizeEntity,
-} from "./response-utils.js";
+import { jsonResponse, sanitizeEntities, sanitizeEntity } from "./response-utils.js";
 
 /**
  * AI Context Retrieval Handlers.
@@ -28,8 +24,7 @@ export class ContextHandlers {
     this.intelligenceContext = new IntelligenceContextService(
       memoryManager,
       () => this.backgroundProcessor?.getContextEngine() || null,
-      (name, coAccessed) =>
-        this.backgroundProcessor?.recordEntityAccess(name, coAccessed),
+      (name, coAccessed) => this.backgroundProcessor?.recordEntityAccess(name, coAccessed),
     );
   }
 
@@ -84,12 +79,9 @@ export class ContextHandlers {
     let targetEntities: string[] = args.entity_names || [];
 
     if (targetEntities.length === 0) {
-      const working = await this.memoryManager.searchEntities(
-        "",
-        branchName,
-        ["active", "draft"],
-        { workingContextOnly: true },
-      );
+      const working = await this.memoryManager.searchEntities("", branchName, ["active", "draft"], {
+        workingContextOnly: true,
+      });
       targetEntities = working.entities.map((e: Entity) => e.name);
     }
 
@@ -101,11 +93,7 @@ export class ContextHandlers {
       });
     }
 
-    const dependencies = await this.traceDependencies(
-      targetEntities,
-      branchName,
-      dependencyDepth,
-    );
+    const dependencies = await this.traceDependencies(targetEntities, branchName, dependencyDepth);
 
     return jsonResponse({
       branch: branchName,
@@ -123,12 +111,7 @@ export class ContextHandlers {
     const entityName = args.entity_name;
 
     const decisions = entityName
-      ? await this.getDecisionChainForEntity(
-          entityName,
-          branchName,
-          maxDecisions,
-          timeWindowDays,
-        )
+      ? await this.getDecisionChainForEntity(entityName, branchName, maxDecisions, timeWindowDays)
       : await this.getRecentDecisions(branchName, maxDecisions, timeWindowDays);
 
     return jsonResponse({
@@ -150,20 +133,14 @@ export class ContextHandlers {
 
   // ---------- helpers ----------
 
-  private async getBranchStatus(
-    branch: MemoryBranchInfo,
-    detailLevel: string,
-  ): Promise<any> {
+  private async getBranchStatus(branch: MemoryBranchInfo, detailLevel: string): Promise<any> {
     const branchGraph = await this.memoryManager.exportBranch(branch.name);
-    const workingEntities = branchGraph.entities.filter(
-      (e: Entity) => e.workingContext,
-    ).length;
+    const workingEntities = branchGraph.entities.filter((e: Entity) => e.workingContext).length;
     const recentDecisions = branchGraph.entities.filter(
       (e: Entity) =>
         e.entityType === "decision" &&
         e.lastUpdated &&
-        new Date(e.lastUpdated) >
-          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        new Date(e.lastUpdated) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
     ).length;
 
     const base: any = {
@@ -270,9 +247,7 @@ export class ContextHandlers {
     return (branchGraph.entities as Entity[])
       .filter((e) => e.entityType === "decision")
       .filter(
-        (e) =>
-          decisionNames.has(e.name) ||
-          (e.lastUpdated && new Date(e.lastUpdated) > cutoff),
+        (e) => decisionNames.has(e.name) || (e.lastUpdated && new Date(e.lastUpdated) > cutoff),
       )
       .sort((a, b) => {
         const ta = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
@@ -294,10 +269,7 @@ export class ContextHandlers {
     timeWindowDays: number,
   ): Promise<any[]> {
     const cutoff = new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000);
-    const results = await this.memoryManager.searchEntities("", branchName, [
-      "active",
-      "draft",
-    ]);
+    const results = await this.memoryManager.searchEntities("", branchName, ["active", "draft"]);
 
     return results.entities
       .filter(
@@ -305,9 +277,7 @@ export class ContextHandlers {
           e.lastUpdated &&
           new Date(e.lastUpdated) > cutoff &&
           (e.entityType === "decision" ||
-            e.observations.some(
-              (o) => o.includes("decision") || o.includes("decided"),
-            )),
+            e.observations.some((o) => o.includes("decision") || o.includes("decided"))),
       )
       .slice(0, maxDecisions)
       .map((e: Entity) => ({
@@ -319,10 +289,7 @@ export class ContextHandlers {
       }));
   }
 
-  private async getRecentActivity(
-    branchName: string,
-    cutoff: Date,
-  ): Promise<any[]> {
+  private async getRecentActivity(branchName: string, cutoff: Date): Promise<any[]> {
     const all = await this.memoryManager.exportBranch(branchName);
     return all.entities
       .filter((e: Entity) => e.lastUpdated && new Date(e.lastUpdated) > cutoff)
@@ -332,29 +299,18 @@ export class ContextHandlers {
         timestamp: e.lastUpdated,
         entity_type: e.entityType,
       }))
-      .sort(
-        (a: any, b: any) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      )
+      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5);
   }
 
   private async getCurrentBlockers(branchName: string): Promise<any[]> {
-    const blockers = await this.memoryManager.searchEntities(
-      "blocker",
-      branchName,
-      ["active"],
-    );
+    const blockers = await this.memoryManager.searchEntities("blocker", branchName, ["active"]);
     return blockers.entities
-      .filter(
-        (e: Entity) => e.entityType === "blocker" || e.status === "active",
-      )
+      .filter((e: Entity) => e.entityType === "blocker" || e.status === "active")
       .slice(0, 5)
       .map((e: Entity) => ({
         blocker_name: e.name,
-        severity: e.observations.some((o) =>
-          o.toLowerCase().includes("critical"),
-        )
+        severity: e.observations.some((o) => o.toLowerCase().includes("critical"))
           ? "critical"
           : "normal",
         description: e.observations[0] || "",
@@ -366,18 +322,11 @@ export class ContextHandlers {
     for (const entity of entities) {
       for (const obs of entity.observations) {
         const lower = obs.toLowerCase();
-        if (
-          lower.includes("next") ||
-          lower.includes("todo") ||
-          lower.includes("action")
-        ) {
+        if (lower.includes("next") || lower.includes("todo") || lower.includes("action")) {
           steps.push({
             source_entity: entity.name,
             step_description: obs,
-            priority:
-              lower.includes("urgent") || lower.includes("critical")
-                ? "high"
-                : "normal",
+            priority: lower.includes("urgent") || lower.includes("critical") ? "high" : "normal",
           });
         }
       }
@@ -393,12 +342,7 @@ export class ContextHandlers {
   }
 }
 
-function clampInteger(
-  value: unknown,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
+function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(numeric)));

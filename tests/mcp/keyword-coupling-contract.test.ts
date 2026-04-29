@@ -1,9 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  createInitializedApp,
-  parseTextResponse,
-} from "../utils/mcp-test-utils.js";
+import { createInitializedApp, parseTextResponse } from "../utils/mcp-test-utils.js";
 
 describe("MCP keyword coupling retrieval contract", () => {
   let ctx: Awaited<ReturnType<typeof createInitializedApp>>;

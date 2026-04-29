@@ -100,8 +100,7 @@ export function applyNodeCompatPolyfills(): void {
           exportedThing.isString = (arg: any) => typeof arg === "string";
         }
         if (!exportedThing.isObject) {
-          exportedThing.isObject = (arg: any) =>
-            typeof arg === "object" && arg !== null;
+          exportedThing.isObject = (arg: any) => typeof arg === "object" && arg !== null;
         }
       }
       return exportedThing;
@@ -109,16 +108,10 @@ export function applyNodeCompatPolyfills(): void {
 
     initialized = true;
   } catch (error) {
-    console.error(
-      "[COMPATIBILITY] Failed to apply Node.js compatibility polyfills:",
-      error
-    );
-    throw new Error(
-      "Failed to initialize Node.js compatibility layer for TensorFlow.js"
-    );
+    console.error("[COMPATIBILITY] Failed to apply Node.js compatibility polyfills:", error);
+    throw new Error("Failed to initialize Node.js compatibility layer for TensorFlow.js");
   }
 }
 
 // Auto-apply on import
 applyNodeCompatPolyfills();
-

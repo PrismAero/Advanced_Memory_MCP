@@ -46,11 +46,31 @@ const STOP_WORDS = new Set([
   "using",
 ]);
 
-const TYPE_HINTS: Array<{ pattern: RegExp; type: KeywordType; weight: number }> = [
-  { pattern: /\b(depends?|requires?|needs?|blocked?|blocks?)\b/i, type: "dependency", weight: 1.5 },
-  { pattern: /\b(decision|decided|chosen|rationale|tradeoff)\b/i, type: "decision", weight: 1.4 },
-  { pattern: /\b(status|progress|phase|active|draft|deprecated|archived)\b/i, type: "status", weight: 1.25 },
-  { pattern: /\b(error|exception|failure|bug|crash|fault)\b/i, type: "error", weight: 1.35 },
+const TYPE_HINTS: Array<{
+  pattern: RegExp;
+  type: KeywordType;
+  weight: number;
+}> = [
+  {
+    pattern: /\b(depends?|requires?|needs?|blocked?|blocks?)\b/i,
+    type: "dependency",
+    weight: 1.5,
+  },
+  {
+    pattern: /\b(decision|decided|chosen|rationale|tradeoff)\b/i,
+    type: "decision",
+    weight: 1.4,
+  },
+  {
+    pattern: /\b(status|progress|phase|active|draft|deprecated|archived)\b/i,
+    type: "status",
+    weight: 1.25,
+  },
+  {
+    pattern: /\b(error|exception|failure|bug|crash|fault)\b/i,
+    type: "error",
+    weight: 1.35,
+  },
 ];
 
 export class ContextualKeywordExtractor {
@@ -129,7 +149,7 @@ export class ContextualKeywordExtractor {
         keywordType: "path",
         position: match.index,
         phraseLength: 1,
-          weightMultiplier: 2,
+        weightMultiplier: 2,
       }),
     );
   }
@@ -146,10 +166,8 @@ export class ContextualKeywordExtractor {
   ): KeywordSignal {
     const normalized = normalizeKeyword(keyword);
     const sourceWeight = sourceWeightFor(input.sourceType);
-    const typeBoost =
-      TYPE_HINTS.find((hint) => hint.pattern.test(keyword))?.weight || 1;
-    const weight =
-      (input.baseWeight || 1) * sourceWeight * options.weightMultiplier * typeBoost;
+    const typeBoost = TYPE_HINTS.find((hint) => hint.pattern.test(keyword))?.weight || 1;
+    const weight = (input.baseWeight || 1) * sourceWeight * options.weightMultiplier * typeBoost;
     return {
       keyword,
       normalizedKeyword: normalized,
@@ -167,8 +185,7 @@ export class ContextualKeywordExtractor {
       links: input.sourceId
         ? [
             {
-              linkedType:
-                input.sourceType === "observation" ? "observation" : "entity",
+              linkedType: input.sourceType === "observation" ? "observation" : "entity",
               linkedId: input.observationId || input.sourceId,
               relationType: "source",
               weight: Number(weight.toFixed(3)),

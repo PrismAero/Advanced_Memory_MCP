@@ -1,13 +1,7 @@
 import { logger } from "../logger.js";
 import { TensorFlowModelManager } from "../similarity/tensorflow-model-manager.js";
-import {
-  CodeInterfaceRecord,
-  ProjectFileRecord,
-} from "../sqlite/project-analysis-operations.js";
-import {
-  AdaptiveModelTrainer,
-  TrainingDataPoint,
-} from "./adaptive-model-trainer.js";
+import { CodeInterfaceRecord, ProjectFileRecord } from "../sqlite/project-analysis-operations.js";
+import { AdaptiveModelTrainer, TrainingDataPoint } from "./adaptive-model-trainer.js";
 
 /**
  * Code semantic types for better embeddings
@@ -94,10 +88,7 @@ export class ProjectEmbeddingEngine {
   private cacheHitCount = 0;
   private cacheMissCount = 0;
 
-  constructor(
-    baseModelManager: TensorFlowModelManager,
-    adaptiveTrainer: AdaptiveModelTrainer
-  ) {
+  constructor(baseModelManager: TensorFlowModelManager, adaptiveTrainer: AdaptiveModelTrainer) {
     this.baseModelManager = baseModelManager;
     this.adaptiveTrainer = adaptiveTrainer;
 
@@ -110,7 +101,7 @@ export class ProjectEmbeddingEngine {
   async generateProjectEmbedding(
     text: string,
     semanticType?: CodeSemanticType,
-    context?: CodeContext
+    context?: CodeContext,
   ): Promise<ProjectEmbedding | null> {
     try {
       // Create cache key
@@ -126,11 +117,7 @@ export class ProjectEmbeddingEngine {
       this.cacheMissCount++;
 
       // Prepare enhanced text with context
-      const enhancedText = this.prepareEnhancedText(
-        text,
-        semanticType,
-        context
-      );
+      const enhancedText = this.prepareEnhancedText(text, semanticType, context);
 
       // Generate embedding using trained model or fallback to base
       let embedding: number[] | null;
@@ -138,24 +125,17 @@ export class ProjectEmbeddingEngine {
 
       try {
         // Try adaptive model first
-        embedding = await this.adaptiveTrainer.generateEnhancedEmbedding(
-          enhancedText
-        );
+        embedding = await this.adaptiveTrainer.generateEnhancedEmbedding(enhancedText);
         confidence = 0.9; // Higher confidence for trained model
       } catch (error) {
         logger.debug("Adaptive model unavailable, using base model:", error);
-        const embeddings = await this.baseModelManager.generateEmbeddings([
-          enhancedText,
-        ]);
+        const embeddings = await this.baseModelManager.generateEmbeddings([enhancedText]);
         embedding = embeddings[0];
         confidence = 0.7; // Lower confidence for base model
       }
 
       if (!embedding) {
-        logger.warn(
-          "Failed to generate embedding for text:",
-          text.substring(0, 100)
-        );
+        logger.warn("Failed to generate embedding for text:", text.substring(0, 100));
         return null;
       }
 
@@ -199,20 +179,16 @@ export class ProjectEmbeddingEngine {
    */
   async generateInterfaceEmbedding(
     interfaceRecord: CodeInterfaceRecord,
-    context?: CodeContext
+    context?: CodeContext,
   ): Promise<ProjectEmbedding | null> {
     // Create comprehensive interface text
     const interfaceText = this.createInterfaceText(interfaceRecord);
 
-    return this.generateProjectEmbedding(
-      interfaceText,
-      "interface_definition",
-      {
-        ...context,
-        interface_name: interfaceRecord.name,
-        line_number: interfaceRecord.line_number,
-      }
-    );
+    return this.generateProjectEmbedding(interfaceText, "interface_definition", {
+      ...context,
+      interface_name: interfaceRecord.name,
+      line_number: interfaceRecord.line_number,
+    });
   }
 
   /**
@@ -220,7 +196,7 @@ export class ProjectEmbeddingEngine {
    */
   async generateFileEmbedding(
     fileRecord: ProjectFileRecord,
-    context?: CodeContext
+    context?: CodeContext,
   ): Promise<ProjectEmbedding | null> {
     // Create file summary text
     const fileText = this.createFileText(fileRecord);
@@ -240,7 +216,7 @@ export class ProjectEmbeddingEngine {
   async findSimilarInterfaces(
     targetInterface: CodeInterfaceRecord,
     candidateInterfaces: CodeInterfaceRecord[],
-    threshold: number = 0.7
+    threshold: number = 0.7,
   ): Promise<InterfaceSimilarityResult[]> {
     const results: InterfaceSimilarityResult[] = [];
 
@@ -249,13 +225,9 @@ export class ProjectEmbeddingEngine {
     }
 
     // Generate embedding for target interface
-    const targetEmbedding = await this.generateInterfaceEmbedding(
-      targetInterface
-    );
+    const targetEmbedding = await this.generateInterfaceEmbedding(targetInterface);
     if (!targetEmbedding) {
-      logger.warn(
-        `Could not generate embedding for target interface: ${targetInterface.name}`
-      );
+      logger.warn(`Could not generate embedding for target interface: ${targetInterface.name}`);
       return results;
     }
 
@@ -264,26 +236,23 @@ export class ProjectEmbeddingEngine {
       if (candidate.id === targetInterface.id) continue;
 
       try {
-        const candidateEmbedding = await this.generateInterfaceEmbedding(
-          candidate
-        );
+        const candidateEmbedding = await this.generateInterfaceEmbedding(candidate);
         if (!candidateEmbedding) continue;
 
         const similarity = this.calculateCosineSimilarity(
           targetEmbedding.embedding,
-          candidateEmbedding.embedding
+          candidateEmbedding.embedding,
         );
 
         if (similarity >= threshold) {
           const { confidence, reasoning } = this.determineInterfaceConfidence(
             similarity,
             targetInterface,
-            candidate
+            candidate,
           );
 
           // Find related interfaces (simplified - could be enhanced)
-          const relatedInterfaces: InterfaceSimilarityResult["related_interfaces"] =
-            [];
+          const relatedInterfaces: InterfaceSimilarityResult["related_interfaces"] = [];
 
           results.push({
             interface: candidate,
@@ -294,10 +263,7 @@ export class ProjectEmbeddingEngine {
           });
         }
       } catch (error) {
-        logger.warn(
-          `Failed to process candidate interface ${candidate.name}:`,
-          error
-        );
+        logger.warn(`Failed to process candidate interface ${candidate.name}:`, error);
       }
     }
 
@@ -314,7 +280,7 @@ export class ProjectEmbeddingEngine {
     targetText: string,
     candidateTexts: string[],
     semanticType?: CodeSemanticType,
-    context?: CodeContext
+    context?: CodeContext,
   ): Promise<Array<{ text: string; similarity: number; confidence: number }>> {
     const results: Array<{
       text: string;
@@ -323,11 +289,7 @@ export class ProjectEmbeddingEngine {
     }> = [];
 
     // Generate embedding for target
-    const targetEmbedding = await this.generateProjectEmbedding(
-      targetText,
-      semanticType,
-      context
-    );
+    const targetEmbedding = await this.generateProjectEmbedding(targetText, semanticType, context);
     if (!targetEmbedding) {
       return results;
     }
@@ -338,20 +300,19 @@ export class ProjectEmbeddingEngine {
         const candidateEmbedding = await this.generateProjectEmbedding(
           candidateText,
           semanticType,
-          context
+          context,
         );
 
         if (candidateEmbedding) {
           const similarity = this.calculateCosineSimilarity(
             targetEmbedding.embedding,
-            candidateEmbedding.embedding
+            candidateEmbedding.embedding,
           );
 
           results.push({
             text: candidateText,
             similarity,
-            confidence:
-              (targetEmbedding.confidence + candidateEmbedding.confidence) / 2,
+            confidence: (targetEmbedding.confidence + candidateEmbedding.confidence) / 2,
           });
         }
       } catch (error) {
@@ -370,7 +331,7 @@ export class ProjectEmbeddingEngine {
     targetText: string,
     similarity: number,
     userFeedback?: number, // 1-5 rating
-    sessionId?: string
+    sessionId?: string,
   ): Promise<void> {
     if (similarity < 0.5) return; // Only learn from good matches
 
@@ -388,9 +349,7 @@ export class ProjectEmbeddingEngine {
     };
 
     await this.adaptiveTrainer.addTrainingData(trainingPoint);
-    logger.debug(
-      ` Added similarity training data: confidence=${trainingPoint.confidence}`
-    );
+    logger.debug(` Added similarity training data: confidence=${trainingPoint.confidence}`);
   }
 
   /**
@@ -399,7 +358,7 @@ export class ProjectEmbeddingEngine {
   async learnFromInterfaceUsage(
     interfaceRecord: CodeInterfaceRecord,
     usageContext: string,
-    successRate: number
+    successRate: number,
   ): Promise<void> {
     const trainingPoint: TrainingDataPoint = {
       id: `interface_usage_${interfaceRecord.id}_${Date.now()}`,
@@ -427,8 +386,7 @@ export class ProjectEmbeddingEngine {
     semantic_types_supported: CodeSemanticType[];
   } {
     const totalRequests = this.cacheHitCount + this.cacheMissCount;
-    const cacheHitRate =
-      totalRequests > 0 ? this.cacheHitCount / totalRequests : 0;
+    const cacheHitRate = totalRequests > 0 ? this.cacheHitCount / totalRequests : 0;
 
     return {
       cache_size: this.embeddingCache.size,
@@ -462,12 +420,10 @@ export class ProjectEmbeddingEngine {
   private createCacheKey(
     text: string,
     semanticType?: CodeSemanticType,
-    context?: CodeContext
+    context?: CodeContext,
   ): string {
     const contextHash = context ? JSON.stringify(context).substring(0, 50) : "";
-    return `${text.substring(0, 100)}_${
-      semanticType || "generic"
-    }_${contextHash}`;
+    return `${text.substring(0, 100)}_${semanticType || "generic"}_${contextHash}`;
   }
 
   /**
@@ -476,7 +432,7 @@ export class ProjectEmbeddingEngine {
   private prepareEnhancedText(
     text: string,
     semanticType?: CodeSemanticType,
-    context?: CodeContext
+    context?: CodeContext,
   ): string {
     let enhancedText = text;
 
@@ -510,7 +466,7 @@ export class ProjectEmbeddingEngine {
    */
   private applySemanticTypeAdjustment(
     embedding: number[],
-    semanticType: CodeSemanticType
+    semanticType: CodeSemanticType,
   ): number[] {
     // Simple adjustment based on semantic type
     // In a more sophisticated implementation, this could use learned type vectors
@@ -544,9 +500,7 @@ export class ProjectEmbeddingEngine {
 
     if (interfaceRecord.extends_interfaces) {
       try {
-        const extendsInterfaces = JSON.parse(
-          interfaceRecord.extends_interfaces
-        );
+        const extendsInterfaces = JSON.parse(interfaceRecord.extends_interfaces);
         if (extendsInterfaces.length > 0) {
           text += ` extends ${extendsInterfaces.join(", ")}`;
         }
@@ -594,18 +548,12 @@ export class ProjectEmbeddingEngine {
   /**
    * Determine semantic type for file
    */
-  private determineFileSemanticType(
-    fileRecord: ProjectFileRecord
-  ): CodeSemanticType {
+  private determineFileSemanticType(fileRecord: ProjectFileRecord): CodeSemanticType {
     if (fileRecord.category === "test") return "test_case";
     if (fileRecord.category === "config") return "configuration";
     if (fileRecord.category === "documentation") return "documentation";
-    if (fileRecord.file_type === ".ts" || fileRecord.file_type === ".tsx")
-      return "type_annotation";
-    if (
-      fileRecord.language === "javascript" ||
-      fileRecord.language === "typescript"
-    )
+    if (fileRecord.file_type === ".ts" || fileRecord.file_type === ".tsx") return "type_annotation";
+    if (fileRecord.language === "javascript" || fileRecord.language === "typescript")
       return "business_logic";
 
     return "business_logic"; // Default
@@ -614,10 +562,7 @@ export class ProjectEmbeddingEngine {
   /**
    * Calculate cosine similarity between embeddings
    */
-  private calculateCosineSimilarity(
-    embedding1: number[],
-    embedding2: number[]
-  ): number {
+  private calculateCosineSimilarity(embedding1: number[], embedding2: number[]): number {
     if (embedding1.length !== embedding2.length) {
       throw new Error("Embeddings must have the same dimension");
     }
@@ -645,7 +590,7 @@ export class ProjectEmbeddingEngine {
   private determineInterfaceConfidence(
     similarity: number,
     targetInterface: CodeInterfaceRecord,
-    candidateInterface: CodeInterfaceRecord
+    candidateInterface: CodeInterfaceRecord,
   ): { confidence: "high" | "medium" | "low"; reasoning: string } {
     let confidence: "high" | "medium" | "low" = "low";
     const reasoningFactors: string[] = [];
@@ -653,28 +598,18 @@ export class ProjectEmbeddingEngine {
     // Similarity-based confidence
     if (similarity >= 0.9) {
       confidence = "high";
-      reasoningFactors.push(
-        `Very high semantic similarity (${(similarity * 100).toFixed(1)}%)`
-      );
+      reasoningFactors.push(`Very high semantic similarity (${(similarity * 100).toFixed(1)}%)`);
     } else if (similarity >= 0.75) {
       confidence = "medium";
-      reasoningFactors.push(
-        `High semantic similarity (${(similarity * 100).toFixed(1)}%)`
-      );
+      reasoningFactors.push(`High semantic similarity (${(similarity * 100).toFixed(1)}%)`);
     } else {
-      reasoningFactors.push(
-        `Moderate semantic similarity (${(similarity * 100).toFixed(1)}%)`
-      );
+      reasoningFactors.push(`Moderate semantic similarity (${(similarity * 100).toFixed(1)}%)`);
     }
 
     // Name similarity boost
     if (
-      targetInterface.name
-        .toLowerCase()
-        .includes(candidateInterface.name.toLowerCase()) ||
-      candidateInterface.name
-        .toLowerCase()
-        .includes(targetInterface.name.toLowerCase())
+      targetInterface.name.toLowerCase().includes(candidateInterface.name.toLowerCase()) ||
+      candidateInterface.name.toLowerCase().includes(targetInterface.name.toLowerCase())
     ) {
       reasoningFactors.push("Similar interface names");
       if (confidence === "low") confidence = "medium";

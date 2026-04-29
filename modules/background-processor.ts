@@ -13,10 +13,7 @@ import { FileWatcher } from "./project-analysis/file-watcher.js";
 import { IgnorePolicy } from "./project-analysis/ignore-policy.js";
 import { InterfaceMapper } from "./project-analysis/interface-mapper.js";
 import { ProjectIndexer } from "./project-analysis/project-indexer.js";
-import {
-  BACKGROUND_CONFIG,
-  BATCH_CONFIG,
-} from "./similarity/similarity-config.js";
+import { BACKGROUND_CONFIG, BATCH_CONFIG } from "./similarity/similarity-config.js";
 import { ModernSimilarityEngine } from "./similarity/similarity-engine.js";
 import { ProjectAnalysisOperations } from "./sqlite/project-analysis-operations.js";
 
@@ -66,10 +63,8 @@ export class BackgroundProcessor {
     "ADVANCED_MEMORY_PERIODIC_FULL_SCAN_INTERVAL_MS",
     0,
   );
-  private readonly enableStartupFullSweep =
-    process.env.ADVANCED_MEMORY_STARTUP_FULL_SWEEP !== "0";
-  private readonly enableFileWatcher =
-    process.env.ADVANCED_MEMORY_ENABLE_FILE_WATCHER !== "0";
+  private readonly enableStartupFullSweep = process.env.ADVANCED_MEMORY_STARTUP_FULL_SWEEP !== "0";
+  private readonly enableFileWatcher = process.env.ADVANCED_MEMORY_ENABLE_FILE_WATCHER !== "0";
   private readonly enableBackgroundInterfaceAnalysis =
     process.env.ADVANCED_MEMORY_ENABLE_BACKGROUND_INTERFACE_ANALYSIS === "1";
   private readonly runInitialBackgroundTasks =
@@ -260,9 +255,7 @@ export class BackgroundProcessor {
       this.lastProjectAnalysis = null;
       this.hasExistingProjectIndex = false;
     }
-    logger.info(
-      `[BACKGROUND] Set monitored project path: ${this.currentProjectPath}`,
-    );
+    logger.info(`[BACKGROUND] Set monitored project path: ${this.currentProjectPath}`);
 
     this.loadProjectIndexState().catch((error) => {
       logger.debug("Project index state check failed:", error);
@@ -293,16 +286,13 @@ export class BackgroundProcessor {
     if (!this.currentProjectPath) return;
 
     if (this.projectMaintenanceIntervalMs > 0) {
-      this.projectMonitoringInterval = setInterval(
-        async () => {
-          try {
-            await this.enqueueProjectScan("periodic");
-          } catch (error) {
-            logger.error("Project monitoring error:", error);
-          }
-        },
-        this.projectMaintenanceIntervalMs,
-      );
+      this.projectMonitoringInterval = setInterval(async () => {
+        try {
+          await this.enqueueProjectScan("periodic");
+        } catch (error) {
+          logger.error("Project monitoring error:", error);
+        }
+      }, this.projectMaintenanceIntervalMs);
     }
 
     // File watching still requires chokidar to walk large directory trees, so it
@@ -317,9 +307,7 @@ export class BackgroundProcessor {
       });
 
       this.fileWatcher.on("significantChanges", (changes) => {
-        logger.debug(
-          `[FOLDER] Detected ${changes.length} significant file changes`,
-        );
+        logger.debug(`[FOLDER] Detected ${changes.length} significant file changes`);
         void this.enqueueFileChanges(changes);
       });
     } else if (!this.enableFileWatcher) {
@@ -344,19 +332,16 @@ export class BackgroundProcessor {
       this.initialProjectScanTimeout = null;
     }
 
-    const delayMs = Number(
-      process.env.ADVANCED_MEMORY_INITIAL_SCAN_DELAY_MS || 60_000,
+    const delayMs = Number(process.env.ADVANCED_MEMORY_INITIAL_SCAN_DELAY_MS || 60_000);
+    this.initialProjectScanTimeout = setTimeout(
+      () => {
+        this.initialProjectScanTimeout = null;
+        void this.enqueueProjectScan("startup", true);
+      },
+      Math.max(0, delayMs),
     );
-    this.initialProjectScanTimeout = setTimeout(() => {
-      this.initialProjectScanTimeout = null;
-      void this.enqueueProjectScan("startup", true);
-    }, Math.max(0, delayMs));
 
-    logger.info(
-      `[BACKGROUND] Initial project scan scheduled in ${Math.round(
-        delayMs / 1000,
-      )}s`,
-    );
+    logger.info(`[BACKGROUND] Initial project scan scheduled in ${Math.round(delayMs / 1000)}s`);
   }
 
   private async runStartupProjectSweep(): Promise<void> {
@@ -401,9 +386,7 @@ export class BackgroundProcessor {
 
   private async cleanupIgnoredProjectFiles(): Promise<void> {
     if (!this.projectAnalysisOps || !this.currentProjectPath) return;
-    const removed = await this.projectAnalysisOps.cleanupIgnoredFiles(
-      this.currentProjectPath,
-    );
+    const removed = await this.projectAnalysisOps.cleanupIgnoredFiles(this.currentProjectPath);
     if (removed > 0) {
       logger.info(`[MEMORYIGNORE] Removed ${removed} ignored project files`);
     }
@@ -451,7 +434,10 @@ export class BackgroundProcessor {
    *      table. This is allowed to be slow / interrupted.
    */
   private async monitorProjectStructure(
-    options: { force?: boolean; reason?: "startup" | "periodic" | "manual" } = {},
+    options: {
+      force?: boolean;
+      reason?: "startup" | "periodic" | "manual";
+    } = {},
   ): Promise<void> {
     if (!this.currentProjectPath || !this.projectAnalysisOps) return;
 
@@ -462,23 +448,16 @@ export class BackgroundProcessor {
         return;
       }
 
-      const projectInfo = await this.projectIndexer.analyzeProject(
-        this.currentProjectPath,
-      );
+      const projectInfo = await this.projectIndexer.analyzeProject(this.currentProjectPath);
       await this.projectAnalysisOps.storeWorkspaceContext(projectInfo);
 
-      const files = await this.projectIndexer.scanProjectFiles(
-        this.currentProjectPath,
-      );
-      logger.info(
-        `[ANALYSIS] Persisting ${files.length} project files (embeddings will follow)`,
-      );
+      const files = await this.projectIndexer.scanProjectFiles(this.currentProjectPath);
+      logger.info(`[ANALYSIS] Persisting ${files.length} project files (embeddings will follow)`);
 
       // Phase 1 — persist file + interface + dependency metadata before
       // doing any embedding work, so even a short-lived process leaves
       // a useful snapshot in the database.
-      const storedFiles =
-        await this.projectAnalysisOps.storeProjectFiles(files);
+      const storedFiles = await this.projectAnalysisOps.storeProjectFiles(files);
       const storedFilesByPath = new Map(
         storedFiles
           .filter((f) => typeof f.id === "number")
@@ -490,10 +469,7 @@ export class BackgroundProcessor {
         if (!storedId) continue;
 
         if (file.interfaces && file.interfaces.length > 0) {
-          await this.projectAnalysisOps.storeCodeInterfaces(
-            storedId,
-            file.interfaces,
-          );
+          await this.projectAnalysisOps.storeCodeInterfaces(storedId, file.interfaces);
         }
 
         if (
@@ -514,9 +490,7 @@ export class BackgroundProcessor {
       try {
         void this.enqueueIgnoredCleanup(`project-scan:${options.reason || "periodic"}`);
 
-        await this.projectAnalysisOps.cleanupDeletedFiles(
-          files.map((f) => f.filePath),
-        );
+        await this.projectAnalysisOps.cleanupDeletedFiles(files.map((f) => f.filePath));
       } catch (error) {
         logger.warn("Cleanup of deleted files failed:", error);
       }
@@ -547,9 +521,7 @@ export class BackgroundProcessor {
     if (!this.hasExistingProjectIndex) return false;
 
     if (this.periodicFullScanIntervalMs <= 0) {
-      logger.debug(
-        "[DATA] Existing project index found; periodic full project scans are disabled",
-      );
+      logger.debug("[DATA] Existing project index found; periodic full project scans are disabled");
       return true;
     }
 
@@ -567,20 +539,13 @@ export class BackgroundProcessor {
       logger.debug("[SEARCH] Analyzing project interfaces");
 
       // Also check and backfill missing embeddings
-      if (
-        this.enableEmbeddingBackfill &&
-        this.projectAnalysisOps &&
-        this.projectEmbeddingEngine
-      ) {
+      if (this.enableEmbeddingBackfill && this.projectAnalysisOps && this.projectEmbeddingEngine) {
         await this.enqueueEmbeddingBackfill("interface-analysis");
       }
 
       if (this.projectAnalysisOps) {
-        const created =
-          await this.projectAnalysisOps.refreshInterfaceRelationships();
-        logger.debug(
-          `Interface relationship refresh created ${created} relationships`,
-        );
+        const created = await this.projectAnalysisOps.refreshInterfaceRelationships();
+        logger.debug(`Interface relationship refresh created ${created} relationships`);
       }
     } catch (error) {
       logger.error("Failed to analyze project interfaces:", error);
@@ -612,10 +577,7 @@ export class BackgroundProcessor {
 
     try {
       const before = await this.projectAnalysisOps.getMissingEmbeddingCounts();
-      if (
-        before.filesWithoutEmbeddings === 0 &&
-        before.interfacesWithoutEmbeddings === 0
-      ) {
+      if (before.filesWithoutEmbeddings === 0 && before.interfacesWithoutEmbeddings === 0) {
         logger.debug("[VECTOR] No embedding backlog to backfill");
         return;
       }
@@ -626,37 +588,33 @@ export class BackgroundProcessor {
 
       // Generate embeddings for files without them in a bounded low-priority batch.
       const fileEmbeddingGenerator = async (fileContext: string) => {
-        const result =
-          await this.projectEmbeddingEngine!.generateProjectEmbedding(
-            fileContext,
-            "documentation",
-            {},
-          );
+        const result = await this.projectEmbeddingEngine!.generateProjectEmbedding(
+          fileContext,
+          "documentation",
+          {},
+        );
         return result?.embedding || null;
       };
 
-      const updatedFiles =
-        await this.projectAnalysisOps.generateMissingFileEmbeddings(
-          fileEmbeddingGenerator,
-          this.embeddingBackfillBatchSize,
-        );
+      const updatedFiles = await this.projectAnalysisOps.generateMissingFileEmbeddings(
+        fileEmbeddingGenerator,
+        this.embeddingBackfillBatchSize,
+      );
 
       // Generate embeddings for interfaces without them in a bounded low-priority batch.
       const interfaceEmbeddingGenerator = async (interfaceContext: string) => {
-        const result =
-          await this.projectEmbeddingEngine!.generateProjectEmbedding(
-            interfaceContext,
-            "interface_definition",
-            {},
-          );
+        const result = await this.projectEmbeddingEngine!.generateProjectEmbedding(
+          interfaceContext,
+          "interface_definition",
+          {},
+        );
         return result?.embedding || null;
       };
 
-      const updatedInterfaces =
-        await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
-          interfaceEmbeddingGenerator,
-          this.embeddingBackfillBatchSize,
-        );
+      const updatedInterfaces = await this.projectAnalysisOps.generateMissingInterfaceEmbeddings(
+        interfaceEmbeddingGenerator,
+        this.embeddingBackfillBatchSize,
+      );
 
       const after = await this.projectAnalysisOps.getMissingEmbeddingCounts();
       logger.info(
@@ -715,10 +673,7 @@ export class BackgroundProcessor {
         await this.updateProjectIndexForFileChange(change);
 
         // Extract relevant information for training data
-        if (
-          this.trainingDataCollector &&
-          this.shouldCollectTrainingData(change)
-        ) {
+        if (this.trainingDataCollector && this.shouldCollectTrainingData(change)) {
           // This would collect training data from file changes
           logger.debug(` Would collect training data from: ${change.path}`);
         }
@@ -774,11 +729,7 @@ export class BackgroundProcessor {
       return;
     }
 
-    const changedPath = resolveOwnedPath(
-      change.path,
-      "changed_file",
-      this.currentProjectPath,
-    );
+    const changedPath = resolveOwnedPath(change.path, "changed_file", this.currentProjectPath);
     if (this.isIgnoreConfigFile(changedPath)) {
       await this.enqueueIgnoredCleanup("ignore-config-change");
       return;
@@ -800,10 +751,7 @@ export class BackgroundProcessor {
     const stats = await fs.stat(changedPath).catch(() => null);
     if (!stats?.isFile()) return;
 
-    const file = await this.projectIndexer.analyzeFile(
-      changedPath,
-      this.currentProjectPath,
-    );
+    const file = await this.projectIndexer.analyzeFile(changedPath, this.currentProjectPath);
     if (!file) return;
 
     const [storedFile] = await this.projectAnalysisOps.storeProjectFiles([file]);
@@ -812,10 +760,7 @@ export class BackgroundProcessor {
     await this.projectAnalysisOps.clearProjectFileDerivedData([storedFile.id]);
 
     if (file.interfaces?.length) {
-      await this.projectAnalysisOps.storeCodeInterfaces(
-        storedFile.id,
-        file.interfaces,
-      );
+      await this.projectAnalysisOps.storeCodeInterfaces(storedFile.id, file.interfaces);
     }
 
     if (file.imports?.length || file.exports?.length) {
@@ -829,19 +774,14 @@ export class BackgroundProcessor {
 
   private isIgnoreConfigFile(filePath: string): boolean {
     if (!this.currentProjectPath) return false;
-    const relativePath = path
-      .relative(this.currentProjectPath, filePath)
-      .replace(/\\/g, "/");
+    const relativePath = path.relative(this.currentProjectPath, filePath).replace(/\\/g, "/");
     return relativePath === ".gitignore" || relativePath === ".memory/.memoryignore";
   }
 
   /**
    * Record entity access for pattern analysis
    */
-  recordEntityAccess(
-    entityName: string,
-    coAccessedEntities: string[] = [],
-  ): void {
+  recordEntityAccess(entityName: string, coAccessedEntities: string[] = []): void {
     const now = new Date();
 
     // Update access history for main entity
@@ -912,10 +852,7 @@ export class BackgroundProcessor {
    * Compute a cheap signature for a branch graph. Used to skip
    * background passes when nothing has changed since the last run.
    */
-  private computeBranchSignature(branchGraph: {
-    entities: Entity[];
-    relations?: any[];
-  }): string {
+  private computeBranchSignature(branchGraph: { entities: Entity[]; relations?: any[] }): string {
     const entityCount = branchGraph.entities.length;
     const relationCount = branchGraph.relations?.length || 0;
     let maxLastAccessed = 0;
@@ -947,9 +884,7 @@ export class BackgroundProcessor {
         const sig = this.computeBranchSignature(branchGraph);
         const sigKey = `relevance:${branch.name}`;
         if (this.branchSignatures.get(sigKey) === sig) {
-          logger.debug(
-            `Skipping relevance pass for unchanged branch '${branch.name}'`,
-          );
+          logger.debug(`Skipping relevance pass for unchanged branch '${branch.name}'`);
           continue;
         }
         this.branchSignatures.set(sigKey, sig);
@@ -962,11 +897,7 @@ export class BackgroundProcessor {
             Math.abs((entity.relevanceScore || 0.5) - newRelevanceScore) >
             BACKGROUND_CONFIG.relevanceUpdateThreshold
           ) {
-            await this.updateEntityRelevanceScore(
-              entity.name,
-              newRelevanceScore,
-              branch.name,
-            );
+            await this.updateEntityRelevanceScore(entity.name, newRelevanceScore, branch.name);
           }
         }
       }
@@ -992,11 +923,8 @@ export class BackgroundProcessor {
     }
 
     // Factor 2: Recency of access
-    const lastAccessed = entity.lastAccessed
-      ? new Date(entity.lastAccessed)
-      : new Date(0);
-    const daysSinceAccess =
-      (Date.now() - lastAccessed.getTime()) / (1000 * 60 * 60 * 24);
+    const lastAccessed = entity.lastAccessed ? new Date(entity.lastAccessed) : new Date(0);
+    const daysSinceAccess = (Date.now() - lastAccessed.getTime()) / (1000 * 60 * 60 * 24);
 
     if (daysSinceAccess < 1)
       score += 0.2; // Very recent
@@ -1040,17 +968,13 @@ export class BackgroundProcessor {
         const sig = this.computeBranchSignature(branchGraph);
         const sigKey = `relations:${branch.name}`;
         if (this.branchSignatures.get(sigKey) === sig) {
-          logger.debug(
-            `Skipping relationship detection for unchanged branch '${branch.name}'`,
-          );
+          logger.debug(`Skipping relationship detection for unchanged branch '${branch.name}'`);
           continue;
         }
         this.branchSignatures.set(sigKey, sig);
 
         // Find potential relationships using similarity and access patterns
-        const newRelationships = await this.findPotentialRelationships(
-          branchGraph.entities,
-        );
+        const newRelationships = await this.findPotentialRelationships(branchGraph.entities);
 
         // Batch all qualifying relationships into a single
         // createRelations call. The legacy implementation looped and
@@ -1068,14 +992,9 @@ export class BackgroundProcessor {
         if (candidates.length === 0) continue;
 
         try {
-          const created = await this.memoryManager.createRelations(
-            candidates,
-            branch.name,
-          );
+          const created = await this.memoryManager.createRelations(candidates, branch.name);
           if (created.length > 0) {
-            logger.debug(
-              `Created ${created.length} relationships in branch ${branch.name}`,
-            );
+            logger.debug(`Created ${created.length} relationships in branch ${branch.name}`);
           }
         } catch (error) {
           // INSERT OR IGNORE inside createRelations swallows duplicates,
@@ -1096,9 +1015,7 @@ export class BackgroundProcessor {
   private async findPotentialRelationships(entities: Entity[]): Promise<any[]> {
     // Optimize for embeddings: Use batch processing for large entity sets
     if (entities.length > BATCH_CONFIG.size) {
-      logger.debug(
-        `Using batch TensorFlow.js processing for ${entities.length} entities`,
-      );
+      logger.debug(`Using batch TensorFlow.js processing for ${entities.length} entities`);
       return this.findPotentialRelationshipsBatch(entities);
     }
 
@@ -1110,21 +1027,19 @@ export class BackgroundProcessor {
         const entity2 = entities[j];
 
         // Check TensorFlow.js embedding-based relationships
-        const similarityResults =
-          await this.similarityEngine.detectSimilarEntities(entity1, [entity2]);
+        const similarityResults = await this.similarityEngine.detectSimilarEntities(entity1, [
+          entity2,
+        ]);
 
         if (
           similarityResults.length > 0 &&
           (similarityResults[0].confidence === "high" ||
-            (similarityResults[0].confidence === "medium" &&
-              similarityResults[0].similarity > 0.8))
+            (similarityResults[0].confidence === "medium" && similarityResults[0].similarity > 0.8))
         ) {
           relationships.push({
             from: entity1.name,
             to: entity2.name,
-            type:
-              similarityResults[0].suggestedRelationType ||
-              "semantically_related",
+            type: similarityResults[0].suggestedRelationType || "semantically_related",
             confidence: similarityResults[0].similarity,
             reason: `TensorFlow.js embedding similarity: ${(
               similarityResults[0].similarity * 100
@@ -1150,10 +1065,7 @@ export class BackgroundProcessor {
         }
 
         // Check type-based relationships
-        if (
-          entity1.entityType === "blocker" &&
-          entity2.entityType === "decision"
-        ) {
+        if (entity1.entityType === "blocker" && entity2.entityType === "decision") {
           relationships.push({
             from: entity1.name,
             to: entity2.name,
@@ -1163,10 +1075,7 @@ export class BackgroundProcessor {
           });
         }
 
-        if (
-          entity1.entityType === "decision" &&
-          entity2.entityType === "current-status"
-        ) {
+        if (entity1.entityType === "decision" && entity2.entityType === "current-status") {
           relationships.push({
             from: entity1.name,
             to: entity2.name,
@@ -1184,20 +1093,15 @@ export class BackgroundProcessor {
   /**
    * Optimized batch relationship detection for large entity sets using TensorFlow.js
    */
-  private async findPotentialRelationshipsBatch(
-    entities: Entity[],
-  ): Promise<any[]> {
+  private async findPotentialRelationshipsBatch(entities: Entity[]): Promise<any[]> {
     const relationships: any[] = [];
     const batchSize = 20; // Process in smaller batches to avoid memory issues
 
-    logger.debug(
-      `Processing ${entities.length} entities in batches of ${batchSize}`,
-    );
+    logger.debug(`Processing ${entities.length} entities in batches of ${batchSize}`);
 
     try {
       // Use the similarity engine's batch calculation for efficiency
-      const batchSimilarities =
-        await this.similarityEngine.calculateBatchSimilarity(entities);
+      const batchSimilarities = await this.similarityEngine.calculateBatchSimilarity(entities);
 
       // Process results to extract relationships
       for (const [entityName, similarities] of batchSimilarities.entries()) {
@@ -1209,9 +1113,9 @@ export class BackgroundProcessor {
               to: similarity.entity.name,
               type: "embedding_similarity",
               confidence: similarity.similarity,
-              reason: `Batch TensorFlow.js processing: ${(
-                similarity.similarity * 100
-              ).toFixed(1)}% similarity`,
+              reason: `Batch TensorFlow.js processing: ${(similarity.similarity * 100).toFixed(
+                1,
+              )}% similarity`,
             });
           }
         }
@@ -1220,14 +1124,11 @@ export class BackgroundProcessor {
       // Add co-access and type-based relationships for batch entities
       for (let i = 0; i < entities.length; i += batchSize) {
         const batch = entities.slice(i, i + batchSize);
-        const batchRelationships =
-          await this.findPatternBasedRelationships(batch);
+        const batchRelationships = await this.findPatternBasedRelationships(batch);
         relationships.push(...batchRelationships);
       }
 
-      logger.debug(
-        `Batch processing found ${relationships.length} potential relationships`,
-      );
+      logger.debug(`Batch processing found ${relationships.length} potential relationships`);
       return relationships;
     } catch (error) {
       logger.error("Error in batch relationship detection:", error);
@@ -1239,9 +1140,7 @@ export class BackgroundProcessor {
   /**
    * Find pattern-based relationships (co-access, type-based) for batch processing
    */
-  private async findPatternBasedRelationships(
-    entities: Entity[],
-  ): Promise<any[]> {
+  private async findPatternBasedRelationships(entities: Entity[]): Promise<any[]> {
     const relationships: any[] = [];
 
     for (let i = 0; i < entities.length; i++) {
@@ -1267,10 +1166,7 @@ export class BackgroundProcessor {
         }
 
         // Enhanced type-based relationship detection
-        const typeRelationship = this.detectTypeBasedRelationship(
-          entity1,
-          entity2,
-        );
+        const typeRelationship = this.detectTypeBasedRelationship(entity1, entity2);
         if (typeRelationship) {
           relationships.push(typeRelationship);
         }
@@ -1283,10 +1179,7 @@ export class BackgroundProcessor {
   /**
    * Detect type-based relationships with enhanced rules for TensorFlow.js context
    */
-  private detectTypeBasedRelationship(
-    entity1: Entity,
-    entity2: Entity,
-  ): any | null {
+  private detectTypeBasedRelationship(entity1: Entity, entity2: Entity): any | null {
     // Enhanced type relationship rules
     const typeRules = [
       { from: "blocker", to: "decision", type: "blocks", confidence: 0.7 },
@@ -1336,9 +1229,7 @@ export class BackgroundProcessor {
   /**
    * Normal (non-batch) relationship processing for fallback
    */
-  private async findPotentialRelationshipsNormal(
-    entities: Entity[],
-  ): Promise<any[]> {
+  private async findPotentialRelationshipsNormal(entities: Entity[]): Promise<any[]> {
     const relationships: any[] = [];
 
     for (let i = 0; i < entities.length; i++) {
@@ -1347,10 +1238,7 @@ export class BackgroundProcessor {
         const entity2 = entities[j];
 
         // Basic similarity check
-        const similarity = await this.similarityEngine.calculateSimilarity(
-          entity1,
-          entity2,
-        );
+        const similarity = await this.similarityEngine.calculateSimilarity(entity1, entity2);
 
         if (similarity > 0.7) {
           relationships.push({
@@ -1383,24 +1271,13 @@ export class BackgroundProcessor {
         const branchGraph = await this.memoryManager.exportBranch(branch.name);
 
         for (const entity of branchGraph.entities) {
-          const shouldBeWorkingContext = this.shouldBeInWorkingContext(
-            entity,
-            recentCutoff,
-          );
+          const shouldBeWorkingContext = this.shouldBeInWorkingContext(entity, recentCutoff);
 
           if (shouldBeWorkingContext && !entity.workingContext) {
-            await this.updateEntityWorkingContext(
-              entity.name,
-              true,
-              branch.name,
-            );
+            await this.updateEntityWorkingContext(entity.name, true, branch.name);
             logger.debug(`Added ${entity.name} to working context`);
           } else if (!shouldBeWorkingContext && entity.workingContext) {
-            await this.updateEntityWorkingContext(
-              entity.name,
-              false,
-              branch.name,
-            );
+            await this.updateEntityWorkingContext(entity.name, false, branch.name);
             logger.debug(`Removed ${entity.name} from working context`);
           }
         }
@@ -1415,22 +1292,14 @@ export class BackgroundProcessor {
   /**
    * Determine if entity should be in working context
    */
-  private shouldBeInWorkingContext(
-    entity: Entity,
-    recentCutoff: Date,
-  ): boolean {
+  private shouldBeInWorkingContext(entity: Entity, recentCutoff: Date): boolean {
     // Always include if explicitly marked as current status or blocker
-    if (
-      entity.entityType === "current-status" ||
-      entity.entityType === "blocker"
-    ) {
+    if (entity.entityType === "current-status" || entity.entityType === "blocker") {
       return true;
     }
 
     // Include if accessed recently
-    const lastAccessed = entity.lastAccessed
-      ? new Date(entity.lastAccessed)
-      : new Date(0);
+    const lastAccessed = entity.lastAccessed ? new Date(entity.lastAccessed) : new Date(0);
     if (lastAccessed > recentCutoff) {
       return true;
     }
@@ -1442,11 +1311,7 @@ export class BackgroundProcessor {
 
     // Include if frequently co-accessed with other working context entities
     const accessHistory = this.accessHistory.get(entity.name);
-    if (
-      accessHistory &&
-      accessHistory.count > 5 &&
-      accessHistory.lastAccess > recentCutoff
-    ) {
+    if (accessHistory && accessHistory.count > 5 && accessHistory.lastAccess > recentCutoff) {
       return true;
     }
 
@@ -1461,8 +1326,7 @@ export class BackgroundProcessor {
 
     try {
       const oldCutoff = new Date(
-        Date.now() -
-          BACKGROUND_CONFIG.workingContextTimeoutDays * 24 * 60 * 60 * 1000,
+        Date.now() - BACKGROUND_CONFIG.workingContextTimeoutDays * 24 * 60 * 60 * 1000,
       );
       const branches = await this.memoryManager.listBranches();
 
@@ -1470,9 +1334,7 @@ export class BackgroundProcessor {
         const branchGraph = await this.memoryManager.exportBranch(branch.name);
 
         for (const entity of branchGraph.entities) {
-          const lastAccessed = entity.lastAccessed
-            ? new Date(entity.lastAccessed)
-            : new Date(0);
+          const lastAccessed = entity.lastAccessed ? new Date(entity.lastAccessed) : new Date(0);
 
           // Remove from working context if not accessed in 14 days and low relevance
           if (
@@ -1480,21 +1342,13 @@ export class BackgroundProcessor {
             lastAccessed < oldCutoff &&
             (!entity.relevanceScore || entity.relevanceScore < 0.4)
           ) {
-            await this.updateEntityWorkingContext(
-              entity.name,
-              false,
-              branch.name,
-            );
+            await this.updateEntityWorkingContext(entity.name, false, branch.name);
             logger.debug(`Cleaned up outdated working context: ${entity.name}`);
           }
 
           // Reset very low relevance scores to default
           if (entity.relevanceScore && entity.relevanceScore < 0.2) {
-            await this.updateEntityRelevanceScore(
-              entity.name,
-              0.5,
-              branch.name,
-            );
+            await this.updateEntityRelevanceScore(entity.name, 0.5, branch.name);
           }
         }
       }
@@ -1523,14 +1377,8 @@ export class BackgroundProcessor {
     branchName: string,
   ): Promise<void> {
     try {
-      await this.memoryManager.updateEntityRelevanceScore(
-        entityName,
-        score,
-        branchName,
-      );
-      logger.debug(
-        `Updated relevance score for ${entityName} to ${score.toFixed(2)}`,
-      );
+      await this.memoryManager.updateEntityRelevanceScore(entityName, score, branchName);
+      logger.debug(`Updated relevance score for ${entityName} to ${score.toFixed(2)}`);
     } catch (error) {
       logger.warn(`Failed to update relevance score for ${entityName}:`, error);
     }
@@ -1542,11 +1390,7 @@ export class BackgroundProcessor {
     branchName: string,
   ): Promise<void> {
     try {
-      await this.memoryManager.updateEntityWorkingContext(
-        entityName,
-        isWorking,
-        branchName,
-      );
+      await this.memoryManager.updateEntityWorkingContext(entityName, isWorking, branchName);
       logger.debug(`Updated working context for ${entityName} to ${isWorking}`);
     } catch (error) {
       logger.warn(`Failed to update working context for ${entityName}:`, error);

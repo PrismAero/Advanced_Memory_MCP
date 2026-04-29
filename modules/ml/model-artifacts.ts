@@ -27,9 +27,7 @@ export interface PreparedUseModelArtifacts {
   downloaded: boolean;
 }
 
-export function getDefaultUseModelArtifactConfig(
-  cacheDir?: string,
-): UseModelArtifactConfig {
+export function getDefaultUseModelArtifactConfig(cacheDir?: string): UseModelArtifactConfig {
   return {
     cacheDir:
       cacheDir ||
@@ -41,10 +39,8 @@ export function getDefaultUseModelArtifactConfig(
       "ADVANCED_MEMORY_MODEL_DOWNLOAD_TIMEOUT_MS",
       readPositiveIntEnv("MODEL_DOWNLOAD_TIMEOUT", 30_000),
     ),
-    modelUrl:
-      process.env.ADVANCED_MEMORY_USE_MODEL_URL || DEFAULT_USE_MODEL_URL,
-    vocabUrl:
-      process.env.ADVANCED_MEMORY_USE_VOCAB_URL || DEFAULT_USE_VOCAB_URL,
+    modelUrl: process.env.ADVANCED_MEMORY_USE_MODEL_URL || DEFAULT_USE_MODEL_URL,
+    vocabUrl: process.env.ADVANCED_MEMORY_USE_VOCAB_URL || DEFAULT_USE_VOCAB_URL,
   };
 }
 
@@ -71,9 +67,7 @@ export async function prepareUseModelArtifacts(
   await downloadUseLiteModel(config, modelDir);
 
   if (!(await validateUseModelArtifacts(modelDir))) {
-    throw new Error(
-      `Downloaded TensorFlow model artifacts failed validation at ${modelDir}`,
-    );
+    throw new Error(`Downloaded TensorFlow model artifacts failed validation at ${modelDir}`);
   }
 
   return {
@@ -87,9 +81,7 @@ export async function prepareUseModelArtifacts(
   };
 }
 
-export async function validateUseModelArtifacts(
-  modelDir: string,
-): Promise<boolean> {
+export async function validateUseModelArtifacts(modelDir: string): Promise<boolean> {
   try {
     const modelJsonPath = path.join(modelDir, "model.json");
     const vocabPath = path.join(modelDir, "vocab.json");
@@ -100,9 +92,7 @@ export async function validateUseModelArtifacts(
     for (const group of modelJson.weightsManifest) {
       if (!Array.isArray(group.paths) || group.paths.length === 0) return false;
       for (const weightPath of group.paths) {
-        await fs.access(
-          path.join(modelDir, sanitizeArtifactFileName(weightPath)),
-        );
+        await fs.access(path.join(modelDir, sanitizeArtifactFileName(weightPath)));
       }
     }
     return true;
@@ -122,9 +112,7 @@ async function downloadUseLiteModel(
 
   for (const group of modelJson.weightsManifest) {
     if (!Array.isArray(group.paths)) {
-      throw new Error(
-        "Downloaded model.json has invalid weightsManifest paths",
-      );
+      throw new Error("Downloaded model.json has invalid weightsManifest paths");
     }
 
     const rewrittenPaths: string[] = [];
@@ -138,10 +126,7 @@ async function downloadUseLiteModel(
     group.paths = rewrittenPaths;
   }
 
-  await fs.writeFile(
-    path.join(modelDir, "model.json"),
-    JSON.stringify(modelJson, null, 2),
-  );
+  await fs.writeFile(path.join(modelDir, "model.json"), JSON.stringify(modelJson, null, 2));
   await fetchBinaryToFile(
     config.vocabUrl,
     path.join(modelDir, "vocab.json"),
@@ -163,10 +148,7 @@ async function downloadUseLiteModel(
   );
 }
 
-function toPreparedArtifacts(
-  modelDir: string,
-  downloaded: boolean,
-): PreparedUseModelArtifacts {
+function toPreparedArtifacts(modelDir: string, downloaded: boolean): PreparedUseModelArtifacts {
   const absoluteModelDir = path.resolve(modelDir);
   const modelJsonPath = path.join(absoluteModelDir, "model.json");
   const vocabPath = path.join(absoluteModelDir, "vocab.json");
@@ -194,11 +176,7 @@ async function fetchJson(url: string, timeoutMs: number): Promise<any> {
   return response.json();
 }
 
-async function fetchBinaryToFile(
-  url: string,
-  filePath: string,
-  timeoutMs: number,
-): Promise<void> {
+async function fetchBinaryToFile(url: string, filePath: string, timeoutMs: number): Promise<void> {
   const response = await fetchWithTimeout(url, timeoutMs);
   if (!response.ok) {
     throw new Error(`Failed to download ${url}: ${response.status}`);
@@ -207,10 +185,7 @@ async function fetchBinaryToFile(
   await fs.writeFile(filePath, bytes);
 }
 
-async function fetchWithTimeout(
-  url: string,
-  timeoutMs: number,
-): Promise<Response> {
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -226,10 +201,7 @@ async function fetchWithTimeout(
   }
 }
 
-function resolveArtifactUrl(
-  modelJsonUrl: string,
-  artifactPath: string,
-): string {
+function resolveArtifactUrl(modelJsonUrl: string, artifactPath: string): string {
   if (/^https?:\/\//i.test(artifactPath)) return artifactPath;
   const base = new URL(modelJsonUrl);
   const query = base.search;

@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { BackgroundTaskScheduler } from "../../modules/background/task-queue.js";
 import { SQLiteConnection } from "../../modules/sqlite/sqlite-connection.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("BackgroundTaskScheduler", () => {
   it("coalesces duplicate queued work and reports stats", async () => {
@@ -39,9 +36,7 @@ describe("BackgroundTaskScheduler", () => {
 
     blocker.resolve();
     await Promise.all([first, second, third]);
-    const stats = scheduler
-      .getStats()
-      .find((queue) => queue.name === "maintenance");
+    const stats = scheduler.getStats().find((queue) => queue.name === "maintenance");
 
     expect(order).toEqual(["hold", "scan-a"]);
     expect(stats?.coalesced).toBe(1);
@@ -74,9 +69,7 @@ describe("BackgroundTaskScheduler", () => {
 
     blocker.resolve();
     await Promise.all([active, queuedA, queuedB, queuedC]);
-    const stats = scheduler
-      .getStats()
-      .find((queue) => queue.name === "file-change");
+    const stats = scheduler.getStats().find((queue) => queue.name === "file-change");
 
     expect(stats?.dropped).toBe(1);
     expect(stats?.queued).toBe(0);
@@ -123,16 +116,12 @@ describe("BackgroundTaskScheduler", () => {
         id: "file-change:first",
         run: async () => {
           await connection.withTransaction(async () => {
-            await connection.execute(
-              "INSERT INTO bg_tx_events (label) VALUES (?)",
-              ["first-start"],
-            );
+            await connection.execute("INSERT INTO bg_tx_events (label) VALUES (?)", [
+              "first-start",
+            ]);
             firstStarted.resolve();
             await firstCanCommit.promise;
-            await connection.execute(
-              "INSERT INTO bg_tx_events (label) VALUES (?)",
-              ["first-end"],
-            );
+            await connection.execute("INSERT INTO bg_tx_events (label) VALUES (?)", ["first-end"]);
           });
         },
       });
@@ -143,10 +132,7 @@ describe("BackgroundTaskScheduler", () => {
         id: "file-change:second",
         run: async () => {
           await connection.withTransaction(async () => {
-            await connection.execute(
-              "INSERT INTO bg_tx_events (label) VALUES (?)",
-              ["second"],
-            );
+            await connection.execute("INSERT INTO bg_tx_events (label) VALUES (?)", ["second"]);
           });
         },
       });
@@ -154,19 +140,10 @@ describe("BackgroundTaskScheduler", () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
       firstCanCommit.resolve();
 
-      await expect(Promise.all([first, second])).resolves.toEqual([
-        undefined,
-        undefined,
-      ]);
+      await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined]);
 
-      const rows = await connection.runQuery(
-        "SELECT label FROM bg_tx_events ORDER BY id ASC",
-      );
-      expect(rows.map((row: any) => row.label)).toEqual([
-        "first-start",
-        "first-end",
-        "second",
-      ]);
+      const rows = await connection.runQuery("SELECT label FROM bg_tx_events ORDER BY id ASC");
+      expect(rows.map((row: any) => row.label)).toEqual(["first-start", "first-end", "second"]);
     } finally {
       scheduler.dispose();
       await connection.close();

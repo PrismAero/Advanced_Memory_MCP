@@ -11,7 +11,11 @@ export interface IntelligenceEvidence {
   directRelations: Relation[];
   decisions: Entity[];
   blockers: Entity[];
-  nextSteps: Array<{ source: string; text: string; priority: "normal" | "high" }>;
+  nextSteps: Array<{
+    source: string;
+    text: string;
+    priority: "normal" | "high";
+  }>;
   files: ProjectFileRecord[];
   interfaces: CodeInterfaceRecord[];
   dependencies: ProjectDependencyRecord[];

@@ -7,10 +7,7 @@ import {
   toTfjsNodeFileUrl,
   validateUseModelArtifacts,
 } from "../../modules/ml/model-artifacts.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("TensorFlow model artifact preparation", () => {
   const originalFetch = globalThis.fetch;
@@ -47,9 +44,7 @@ describe("TensorFlow model artifact preparation", () => {
       generatedBy: "test",
       convertedBy: "test",
       modelTopology: {},
-      weightsManifest: [
-        { paths: ["group1-shard1of1.bin?tfjs-format=file"], weights: [] },
-      ],
+      weightsManifest: [{ paths: ["group1-shard1of1.bin?tfjs-format=file"], weights: [] }],
     };
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes("model.json")) {
@@ -78,9 +73,7 @@ describe("TensorFlow model artifact preparation", () => {
     const savedModel = JSON.parse(
       await fs.readFile(path.join(artifacts.modelDir, "model.json"), "utf-8"),
     );
-    expect(savedModel.weightsManifest[0].paths).toEqual([
-      "group1-shard1of1.bin",
-    ]);
+    expect(savedModel.weightsManifest[0].paths).toEqual(["group1-shard1of1.bin"]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -96,8 +89,7 @@ function jsonResponse(value: unknown): Response {
     ok: true,
     status: 200,
     json: async () => value,
-    arrayBuffer: async () =>
-      Buffer.from(JSON.stringify(value), "utf-8").buffer as ArrayBuffer,
+    arrayBuffer: async () => Buffer.from(JSON.stringify(value), "utf-8").buffer as ArrayBuffer,
   } as Response;
 }
 
@@ -106,9 +98,6 @@ function binaryResponse(value: Uint8Array): Response {
     ok: true,
     status: 200,
     arrayBuffer: async () =>
-      value.buffer.slice(
-        value.byteOffset,
-        value.byteOffset + value.byteLength,
-      ) as ArrayBuffer,
+      value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer,
   } as Response;
 }

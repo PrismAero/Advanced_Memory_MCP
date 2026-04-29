@@ -26,15 +26,11 @@ export class SearchHandlers {
     }
 
     if (!args.branch_name) {
-      throw new Error(
-        "branch_name is required. Use '*' to search all branches.",
-      );
+      throw new Error("branch_name is required. Use '*' to search all branches.");
     }
 
     const searchAllBranches = args.branch_name === "*";
-    const branchToSearch = searchAllBranches
-      ? undefined
-      : (args.branch_name as string);
+    const branchToSearch = searchAllBranches ? undefined : (args.branch_name as string);
 
     // AI-optimized search options
     const includeContext = args.include_context === true;
@@ -42,19 +38,13 @@ export class SearchHandlers {
     const includeConfidenceScores = args.include_confidence_scores === true;
     const expandSimilar = args.expand_similar === true;
     const maxResults =
-      typeof args.max_results === "number"
-        ? clampInteger(args.max_results, 1, 50, 10)
-        : 10;
+      typeof args.max_results === "number" ? clampInteger(args.max_results, 1, 50, 10) : 10;
     const maxRelations =
-      typeof args.max_relations === "number"
-        ? clampInteger(args.max_relations, 0, 100, 20)
-        : 20;
+      typeof args.max_relations === "number" ? clampInteger(args.max_relations, 0, 100, 20) : 20;
 
     logger.info(
       `AI-optimized smart search ${
-        searchAllBranches
-          ? "across all branches"
-          : `isolated to branch: "${args.branch_name}"`
+        searchAllBranches ? "across all branches" : `isolated to branch: "${args.branch_name}"`
       } (context: ${includeContext}, working_only: ${workingContextOnly})`,
     );
 
@@ -74,9 +64,7 @@ export class SearchHandlers {
     // Enhance with similarity engine for related entity detection
     // Disabled by default: broad semantic expansion can swamp precise lookups.
     if (!searchAllBranches && expandSimilar && searchResults.entities.length > 0) {
-      logger.info(
-        `Smart search enhancing results with similarity detection...`,
-      );
+      logger.info(`Smart search enhancing results with similarity detection...`);
 
       try {
         // If we found entities, use similarity engine to find additional related entities
@@ -90,17 +78,14 @@ export class SearchHandlers {
 
         // For each found entity, find similar ones that weren't in the original search
         for (const foundEntity of searchResults.entities) {
-          const similarEntities =
-            await this.modernSimilarity.detectSimilarEntities(
-              foundEntity,
-              allBranchEntities.entities.filter(
-                (e: Entity) =>
-                  e.name !== foundEntity.name &&
-                  !searchResults.entities.some(
-                    (se: Entity) => se.name === e.name,
-                  ),
-              ),
-            );
+          const similarEntities = await this.modernSimilarity.detectSimilarEntities(
+            foundEntity,
+            allBranchEntities.entities.filter(
+              (e: Entity) =>
+                e.name !== foundEntity.name &&
+                !searchResults.entities.some((se: Entity) => se.name === e.name),
+            ),
+          );
 
           // Add medium and high confidence similar entities to context
           for (const match of similarEntities) {
@@ -120,9 +105,7 @@ export class SearchHandlers {
           );
 
           // Merge additional entities into search results
-          const entityNames = new Set(
-            searchResults.entities.map((e: Entity) => e.name),
-          );
+          const entityNames = new Set(searchResults.entities.map((e: Entity) => e.name));
           const newEntities = additionalResults.entities.filter(
             (e: Entity) => !entityNames.has(e.name),
           );
@@ -130,16 +113,11 @@ export class SearchHandlers {
             (r: Relation) =>
               !searchResults.relations.some(
                 (sr: Relation) =>
-                  sr.from === r.from &&
-                  sr.to === r.to &&
-                  sr.relationType === r.relationType,
+                  sr.from === r.from && sr.to === r.to && sr.relationType === r.relationType,
               ),
           );
 
-          const remainingSlots = Math.max(
-            0,
-            maxResults - searchResults.entities.length,
-          );
+          const remainingSlots = Math.max(0, maxResults - searchResults.entities.length);
           searchResults.entities.push(...newEntities.slice(0, remainingSlots));
           searchResults.relations.push(...newRelations);
 
@@ -148,10 +126,7 @@ export class SearchHandlers {
           );
         }
       } catch (error) {
-        logger.warn(
-          "Similarity enhancement failed, using standard search results:",
-          error,
-        );
+        logger.warn("Similarity enhancement failed, using standard search results:", error);
       }
     }
 
@@ -189,18 +164,12 @@ export class SearchHandlers {
     if (!this.recordAccess || entities.length === 0) return;
     const names = entities.map((entity) => entity.name);
     for (const name of names.slice(0, 10)) {
-      this.recordAccess(
-        name,
-        names.filter((otherName) => otherName !== name).slice(0, 10),
-      );
+      this.recordAccess(name, names.filter((otherName) => otherName !== name).slice(0, 10));
     }
   }
 }
 
-function filterRelationsToReturnedEntities(
-  relations: Relation[],
-  entities: Entity[],
-): Relation[] {
+function filterRelationsToReturnedEntities(relations: Relation[], entities: Entity[]): Relation[] {
   const names = new Set(entities.map((entity) => entity.name));
   const seen = new Set<string>();
   return (relations || []).filter((relation) => {
@@ -212,12 +181,7 @@ function filterRelationsToReturnedEntities(
   });
 }
 
-function clampInteger(
-  value: unknown,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
+function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(numeric)));

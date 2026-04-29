@@ -28,9 +28,7 @@ export class ProjectFileOperations {
       }
     }
 
-    logger.info(
-      `[SUCCESS] Stored ${storedFiles.length} project files successfully`,
-    );
+    logger.info(`[SUCCESS] Stored ${storedFiles.length} project files successfully`);
     return storedFiles;
   }
 
@@ -227,10 +225,7 @@ export class ProjectFileOperations {
           });
           updatedIds.push(file.id);
         } catch (error) {
-          logger.warn(
-            `Failed to generate embedding for file ${file.file_path}:`,
-            error,
-          );
+          logger.warn(`Failed to generate embedding for file ${file.file_path}:`, error);
         }
       }
 

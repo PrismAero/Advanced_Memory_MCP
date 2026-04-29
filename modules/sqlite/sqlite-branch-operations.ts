@@ -9,14 +9,11 @@ import { SQLiteConnection } from "./sqlite-connection.js";
 export class SQLiteBranchOperations {
   constructor(private connection: SQLiteConnection) {}
 
-  async createBranch(
-    branchName: string,
-    purpose?: string,
-  ): Promise<MemoryBranchInfo> {
-    await this.connection.runQuery(
-      "INSERT INTO memory_branches (name, purpose) VALUES (?, ?)",
-      [branchName, purpose || `Custom branch: ${branchName}`],
-    );
+  async createBranch(branchName: string, purpose?: string): Promise<MemoryBranchInfo> {
+    await this.connection.runQuery("INSERT INTO memory_branches (name, purpose) VALUES (?, ?)", [
+      branchName,
+      purpose || `Custom branch: ${branchName}`,
+    ]);
 
     return {
       name: branchName,
@@ -34,9 +31,7 @@ export class SQLiteBranchOperations {
     }
 
     const branchId = await this.connection.getBranchId(branchName);
-    await this.connection.runQuery("DELETE FROM memory_branches WHERE id = ?", [
-      branchId,
-    ]);
+    await this.connection.runQuery("DELETE FROM memory_branches WHERE id = ?", [branchId]);
   }
 
   async listBranches(): Promise<MemoryBranchInfo[]> {
@@ -107,18 +102,14 @@ export class SQLiteBranchOperations {
 
       // Score based on common keywords
       if (
-        searchTerms.some((term) =>
-          ["doc", "documentation", "spec", "guide"].includes(term),
-        ) &&
+        searchTerms.some((term) => ["doc", "documentation", "spec", "guide"].includes(term)) &&
         (branchName.includes("doc") || branchPurpose.includes("doc"))
       ) {
         score += 8;
       }
 
       if (
-        searchTerms.some((term) =>
-          ["demo", "example", "sample", "test"].includes(term),
-        ) &&
+        searchTerms.some((term) => ["demo", "example", "sample", "test"].includes(term)) &&
         (branchName.includes("demo") || branchPurpose.includes("demo"))
       ) {
         score += 8;

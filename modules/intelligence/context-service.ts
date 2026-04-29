@@ -1,14 +1,6 @@
-import type {
-  Entity,
-  KnowledgeGraph,
-  MemoryBranchInfo,
-} from "../../memory-types.js";
+import type { Entity, KnowledgeGraph, MemoryBranchInfo } from "../../memory-types.js";
 import type { ContextEngine } from "./context-engine.js";
-import {
-  compactEntityForContext,
-  compactEvidence,
-  compactRelations,
-} from "./compact-context.js";
+import { compactEntityForContext, compactEvidence, compactRelations } from "./compact-context.js";
 import { ContextScorer } from "./context-scorer.js";
 import { IntelligenceEvidenceBuilder } from "./evidence-builder.js";
 
@@ -26,40 +18,27 @@ export class IntelligenceContextService {
     const includeRelated = args.include_related !== false;
     const maxRelated = clampInteger(args.max_related, 1, 50, 10);
     const maxObservations = clampInteger(args.max_observations, 0, 100, 5);
-    const working = await this.memoryManager.searchEntities(
-      "",
-      branchName,
-      ["active", "draft"],
-      {
-        workingContextOnly: true,
-        includeConfidenceScores: true,
-        maxResults: 25,
-      },
-    );
+    const working = await this.memoryManager.searchEntities("", branchName, ["active", "draft"], {
+      workingContextOnly: true,
+      includeConfidenceScores: true,
+      maxResults: 25,
+    });
 
     let allEntities: Entity[] = [...working.entities];
     let relations = [...working.relations];
     if (includeRelated && working.entities.length > 0) {
-      const candidates = await this.memoryManager.searchEntities(
-        "",
-        branchName,
-        ["active"],
-        {
-          includeContext: true,
-          maxResults: maxRelated + working.entities.length,
-        },
-      );
-      const have = new Set(
-        working.entities.map((entity: Entity) => entity.name),
-      );
+      const candidates = await this.memoryManager.searchEntities("", branchName, ["active"], {
+        includeContext: true,
+        maxResults: maxRelated + working.entities.length,
+      });
+      const have = new Set(working.entities.map((entity: Entity) => entity.name));
       const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const related = candidates.entities
         .filter(
           (entity: Entity) =>
             !have.has(entity.name) &&
             ((entity.relevanceScore && entity.relevanceScore > 0.6) ||
-              (entity.lastAccessed &&
-                new Date(entity.lastAccessed).getTime() > cutoff)),
+              (entity.lastAccessed && new Date(entity.lastAccessed).getTime() > cutoff)),
         )
         .slice(0, maxRelated);
       allEntities.push(...related);
@@ -67,12 +46,7 @@ export class IntelligenceContextService {
     }
 
     const graph = { entities: allEntities, relations };
-    const entities = await this.compactEntities(
-      allEntities,
-      graph,
-      "",
-      maxObservations,
-    );
+    const entities = await this.compactEntities(allEntities, graph, "", maxObservations);
     this.recordReturnedAccess(allEntities);
     return {
       mode: "working",
@@ -88,21 +62,14 @@ export class IntelligenceContextService {
 
   async getContinuationContext(args: any): Promise<any> {
     const branchName = args.branch_name || "main";
-    const timeWindowHours = clampInteger(
-      args.time_window_hours,
-      1,
-      24 * 30,
-      24,
-    );
+    const timeWindowHours = clampInteger(args.time_window_hours, 1, 24 * 30, 24);
     const includeBlockers = args.include_blockers !== false;
     const maxObservations = clampInteger(args.max_observations, 0, 100, 5);
     const cutoff = new Date(Date.now() - timeWindowHours * 60 * 60 * 1000);
-    const working = await this.memoryManager.searchEntities(
-      "",
-      branchName,
-      ["active", "draft"],
-      { workingContextOnly: true, maxResults: 25 },
-    );
+    const working = await this.memoryManager.searchEntities("", branchName, ["active", "draft"], {
+      workingContextOnly: true,
+      maxResults: 25,
+    });
     const graph = await this.memoryManager.exportBranch(branchName);
     const workingEntities = await this.compactEntities(
       working.entities,
@@ -129,12 +96,10 @@ export class IntelligenceContextService {
     const maxObservations = clampInteger(args.max_observations, 0, 100, 3);
     let targetEntities: string[] = args.entity_names || [];
     if (targetEntities.length === 0) {
-      const working = await this.memoryManager.searchEntities(
-        "",
-        branchName,
-        ["active", "draft"],
-        { workingContextOnly: true, maxResults: 25 },
-      );
+      const working = await this.memoryManager.searchEntities("", branchName, ["active", "draft"], {
+        workingContextOnly: true,
+        maxResults: 25,
+      });
       targetEntities = working.entities.map((entity: Entity) => entity.name);
     }
     const results = await this.memoryManager.searchEntities(
@@ -202,21 +167,17 @@ export class IntelligenceContextService {
     const branches = includeInactive
       ? allBranches
       : allBranches.filter(
-          (branch: MemoryBranchInfo) =>
-            branch.currentFocus || branch.name === "main",
+          (branch: MemoryBranchInfo) => branch.currentFocus || branch.name === "main",
         );
     const branchStatuses = [];
     for (const branch of branches) {
       const branchGraph = await this.memoryManager.exportBranch(branch.name);
-      const working = branchGraph.entities.filter(
-        (entity: Entity) => entity.workingContext,
-      ).length;
+      const working = branchGraph.entities.filter((entity: Entity) => entity.workingContext).length;
       const recentDecisionCount = branchGraph.entities.filter(
         (entity: Entity) =>
           entity.entityType === "decision" &&
           entity.lastUpdated &&
-          new Date(entity.lastUpdated) >
-            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          new Date(entity.lastUpdated) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
       ).length;
       const base: any = {
         name: branch.name,
@@ -229,9 +190,7 @@ export class IntelligenceContextService {
       };
       if (detailLevel === "comprehensive") {
         base.types = groupEntitiesByType(branchGraph.entities);
-        base.rel_density =
-          branchGraph.relations.length /
-          Math.max(branchGraph.entities.length, 1);
+        base.rel_density = branchGraph.relations.length / Math.max(branchGraph.entities.length, 1);
       }
       branchStatuses.push(base);
     }
@@ -240,14 +199,8 @@ export class IntelligenceContextService {
       counts: {
         branches: branchStatuses.length,
         active: branchStatuses.filter((branch: any) => branch.focus).length,
-        entities: branchStatuses.reduce(
-          (sum: number, branch: any) => sum + branch.entities,
-          0,
-        ),
-        working: branchStatuses.reduce(
-          (sum: number, branch: any) => sum + branch.working,
-          0,
-        ),
+        entities: branchStatuses.reduce((sum: number, branch: any) => sum + branch.entities, 0),
+        working: branchStatuses.reduce((sum: number, branch: any) => sum + branch.working, 0),
       },
       detail: detailLevel,
     };
@@ -277,19 +230,14 @@ export class IntelligenceContextService {
         }),
       );
     }
-    return out.sort(
-      (a, b) => (b.score.evidence || 0) - (a.score.evidence || 0),
-    );
+    return out.sort((a, b) => (b.score.evidence || 0) - (a.score.evidence || 0));
   }
 
   private recordReturnedAccess(entities: Entity[]): void {
     if (!this.recordAccess || entities.length === 0) return;
     const names = entities.map((entity) => entity.name);
     for (const name of names.slice(0, 10)) {
-      this.recordAccess(
-        name,
-        names.filter((otherName) => otherName !== name).slice(0, 10),
-      );
+      this.recordAccess(name, names.filter((otherName) => otherName !== name).slice(0, 10));
     }
   }
 }
@@ -298,9 +246,7 @@ function compactSuggestion(suggestion: any): any {
   return {
     type: suggestion.type,
     title: suggestion.title,
-    score: Number(
-      (suggestion.relevance_score * suggestion.confidence).toFixed(3),
-    ),
+    score: Number((suggestion.relevance_score * suggestion.confidence).toFixed(3)),
     why: suggestion.reasoning || suggestion.description,
     act: suggestion.suggested_action,
     files: suggestion.related_files?.slice(0, 3),
@@ -311,14 +257,8 @@ function compactSuggestion(suggestion: any): any {
 
 function recentActivity(graph: KnowledgeGraph, cutoff: Date): any[] {
   return graph.entities
-    .filter(
-      (entity) => entity.lastUpdated && new Date(entity.lastUpdated) > cutoff,
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.lastUpdated || 0).getTime() -
-        new Date(a.lastUpdated || 0).getTime(),
-    )
+    .filter((entity) => entity.lastUpdated && new Date(entity.lastUpdated) > cutoff)
+    .sort((a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())
     .slice(0, 8)
     .map((entity) => ({
       name: entity.name,
@@ -327,11 +267,7 @@ function recentActivity(graph: KnowledgeGraph, cutoff: Date): any[] {
     }));
 }
 
-function recentDecisions(
-  graph: KnowledgeGraph,
-  cutoff: Date,
-  limit: number,
-): any[] {
+function recentDecisions(graph: KnowledgeGraph, cutoff: Date, limit: number): any[] {
   return graph.entities
     .filter(
       (entity) =>
@@ -354,16 +290,12 @@ function currentBlockers(graph: KnowledgeGraph, limit: number): any[] {
     .filter(
       (entity) =>
         entity.entityType === "blocker" ||
-        entity.observations.some((obs) =>
-          /block|critical|risk|fail/i.test(obs),
-        ),
+        entity.observations.some((obs) => /block|critical|risk|fail/i.test(obs)),
     )
     .slice(0, limit)
     .map((entity) => ({
       name: entity.name,
-      severity: entity.observations.some((obs) => /critical|fail/i.test(obs))
-        ? "high"
-        : "normal",
+      severity: entity.observations.some((obs) => /critical|fail/i.test(obs)) ? "high" : "normal",
       obs: entity.observations.slice(0, 2),
     }));
 }
@@ -372,14 +304,11 @@ function extractNextSteps(entities: Entity[], limit: number): any[] {
   const steps = [];
   for (const entity of entities) {
     for (const obs of entity.observations) {
-      if (!/\b(next|todo|action|follow.?up|must|need|fix)\b/i.test(obs))
-        continue;
+      if (!/\b(next|todo|action|follow.?up|must|need|fix)\b/i.test(obs)) continue;
       steps.push({
         source: entity.name,
         text: obs,
-        priority: /urgent|critical|block|fail|risk/i.test(obs)
-          ? "high"
-          : "normal",
+        priority: /urgent|critical|block|fail|risk/i.test(obs) ? "high" : "normal",
       });
       if (steps.length >= limit) return steps;
     }
@@ -394,12 +323,7 @@ function groupEntitiesByType(entities: Entity[]): Record<string, number> {
   }, {});
 }
 
-function clampInteger(
-  value: unknown,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
+function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(numeric)));

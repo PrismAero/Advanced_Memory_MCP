@@ -7,10 +7,7 @@ import { IgnorePolicy } from "./ignore-policy.js";
 export class ProjectFileScanner {
   constructor(
     private ignorePolicy: IgnorePolicy,
-    private analyzeFile: (
-      filePath: string,
-      rootPath: string,
-    ) => Promise<FileAnalysis | null>,
+    private analyzeFile: (filePath: string, rootPath: string) => Promise<FileAnalysis | null>,
   ) {}
 
   async scan(rootPath: string): Promise<FileAnalysis[]> {

@@ -77,7 +77,9 @@ export class PythonTreeSitterExtractor implements LanguageInterfaceExtractor {
         continue;
       }
 
-      const fnMatch = line.match(/^(async\s+def|def)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^:]+))?:/);
+      const fnMatch = line.match(
+        /^(async\s+def|def)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^:]+))?:/,
+      );
       if (fnMatch) {
         const isAsync = fnMatch[1].startsWith("async");
         const name = fnMatch[2];
@@ -98,7 +100,8 @@ export class PythonTreeSitterExtractor implements LanguageInterfaceExtractor {
             line: index + 1,
             signature: line,
             definition: this.collectBlock(lines, index),
-            documentation: this.extractDocstring(lines, index) || precedingDocumentation(lines, index),
+            documentation:
+              this.extractDocstring(lines, index) || precedingDocumentation(lines, index),
             parameters: splitCsv(fnMatch[3]).map((param) => parsePythonParameter(param)),
             returnType: fnMatch[4]?.trim(),
             attributes: [...decorators],
@@ -131,7 +134,9 @@ export class PythonTreeSitterExtractor implements LanguageInterfaceExtractor {
       if (!line) continue;
       const indent = raw.length - raw.trimStart().length;
       if (indent <= classIndent) break;
-      const method = line.match(/^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^:]+))?:/);
+      const method = line.match(
+        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^:]+))?:/,
+      );
       if (method) {
         members.push({
           name: method[1],
@@ -189,7 +194,11 @@ function moduleNameFromPath(relativePath: string): string {
     .join(".");
 }
 
-function parsePythonParameter(param: string): { name: string; type?: string; defaultValue?: string } {
+function parsePythonParameter(param: string): {
+  name: string;
+  type?: string;
+  defaultValue?: string;
+} {
   const [withoutDefault, defaultValue] = param.split("=").map((part) => part.trim());
   const [name, type] = withoutDefault.split(":").map((part) => part.trim());
   return { name, type, defaultValue };

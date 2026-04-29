@@ -94,8 +94,5 @@ export interface InterfaceExtractionResult {
 export interface LanguageInterfaceExtractor {
   readonly languages: string[];
   supports(language: string): boolean;
-  extract(
-    content: string,
-    context: InterfaceExtractionContext,
-  ): Promise<InterfaceExtractionResult>;
+  extract(content: string, context: InterfaceExtractionContext): Promise<InterfaceExtractionResult>;
 }

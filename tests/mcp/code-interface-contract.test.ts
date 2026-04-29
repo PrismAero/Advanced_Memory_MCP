@@ -10,7 +10,13 @@ describe("MCP code-interface retrieval contract", () => {
     const ctx = await createInitializedApp();
     try {
       const relativePath = "typescript/api.ts";
-      const filePath = path.join(process.cwd(), "tests", "fixtures", "code-interfaces", relativePath);
+      const filePath = path.join(
+        process.cwd(),
+        "tests",
+        "fixtures",
+        "code-interfaces",
+        relativePath,
+      );
       const content = fs.readFileSync(filePath, "utf8");
       const runner = new InterfaceExtractorRunner();
       const extraction = await runner.extract(content, {
@@ -18,37 +24,35 @@ describe("MCP code-interface retrieval contract", () => {
         filePath,
         relativePath,
       });
-      const fileRecord =
-        await ctx.app.dependencies.projectAnalysisOps.storeOrUpdateProjectFile(
-          {
-            filePath,
-            relativePath,
-            fileType: {
-              extension: ".ts",
-              language: "typescript",
-              category: "source",
-              hasImports: true,
-              hasExports: true,
-              canDefineInterfaces: true,
-            },
-            size: content.length,
-            lastModified: new Date(),
-            imports: [],
-            exports: [],
-            interfaces: extraction.interfaces,
-            dependencies: [],
-            isEntryPoint: false,
-            analysisMetadata: {
-              lineCount: content.split("\n").length,
-              hasTests: false,
-              complexity: "low",
-              documentation: 0.5,
-            },
+      const fileRecord = await ctx.app.dependencies.projectAnalysisOps.storeOrUpdateProjectFile(
+        {
+          filePath,
+          relativePath,
+          fileType: {
+            extension: ".ts",
+            language: "typescript",
+            category: "source",
+            hasImports: true,
+            hasExports: true,
+            canDefineInterfaces: true,
           },
-          1,
-        );
-      const embeddingEngine =
-        ctx.app.dependencies.backgroundProcessor.getProjectEmbeddingEngine()!;
+          size: content.length,
+          lastModified: new Date(),
+          imports: [],
+          exports: [],
+          interfaces: extraction.interfaces,
+          dependencies: [],
+          isEntryPoint: false,
+          analysisMetadata: {
+            lineCount: content.split("\n").length,
+            hasTests: false,
+            complexity: "low",
+            documentation: 0.5,
+          },
+        },
+        1,
+      );
+      const embeddingEngine = ctx.app.dependencies.backgroundProcessor.getProjectEmbeddingEngine()!;
       for (const iface of extraction.interfaces) {
         const embedding = await embeddingEngine.generateProjectEmbedding(
           iface.rankText || iface.definition || iface.name,
@@ -79,12 +83,15 @@ describe("MCP code-interface retrieval contract", () => {
       expect(response.results.length).toBeGreaterThan(0);
       const names = response.results.map((result: any) => result.name);
       expect(names).toContain("CreateUserRequest");
-      expect(new Set(response.results.map((result: any) => result.qualified_name)).size)
-        .toBe(response.results.length);
+      expect(new Set(response.results.map((result: any) => result.qualified_name)).size).toBe(
+        response.results.length,
+      );
       for (const result of response.results) {
         expect(result.language).toBe("typescript");
         expect(result.kind).toBe("interface");
-        expect((result.definition_preview || result.definition || "").length).toBeLessThanOrEqual(183);
+        expect((result.definition_preview || result.definition || "").length).toBeLessThanOrEqual(
+          183,
+        );
         expect(result.members.length).toBeLessThanOrEqual(3);
       }
     } finally {

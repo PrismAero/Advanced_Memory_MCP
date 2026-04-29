@@ -28,10 +28,7 @@ export interface SanitizeOptions {
  * Always strips: embedding, _keywordData, crossReferences (raw JSON),
  * semanticReasoning, textMatch.
  */
-export function sanitizeEntity(
-  entity: Entity,
-  options: SanitizeOptions = {},
-): any {
+export function sanitizeEntity(entity: Entity, options: SanitizeOptions = {}): any {
   if (!entity) return entity;
 
   const {
@@ -67,12 +64,9 @@ export function sanitizeEntity(
 
   if (keepSearchMeta) {
     if (searchType !== undefined) out.searchType = searchType;
-    if (semanticSimilarity !== undefined)
-      out.semanticSimilarity = semanticSimilarity;
-    if (semanticConfidence !== undefined)
-      out.semanticConfidence = semanticConfidence;
-    if (keywordMatchScore !== undefined)
-      out.keywordMatchScore = keywordMatchScore;
+    if (semanticSimilarity !== undefined) out.semanticSimilarity = semanticSimilarity;
+    if (semanticConfidence !== undefined) out.semanticConfidence = semanticConfidence;
+    if (keywordMatchScore !== undefined) out.keywordMatchScore = keywordMatchScore;
     if (Array.isArray(matchedKeywords)) {
       out.matchedKeywords = matchedKeywords.slice(0, 12);
     }
@@ -154,14 +148,11 @@ function compactSearchEntity(input: {
   if (entity.status !== undefined) out.status = entity.status;
 
   const score: any = {};
-  if (entity.relevanceScore !== undefined)
-    score.rel = roundScore(entity.relevanceScore);
+  if (entity.relevanceScore !== undefined) score.rel = roundScore(entity.relevanceScore);
   if (entity.workingContext !== undefined) score.work = Boolean(entity.workingContext);
   if (input.searchType !== undefined) score.match = input.searchType;
-  if (input.keywordMatchScore !== undefined)
-    score.key = roundScore(input.keywordMatchScore);
-  if (input.semanticSimilarity !== undefined)
-    score.sem = roundScore(input.semanticSimilarity);
+  if (input.keywordMatchScore !== undefined) score.key = roundScore(input.keywordMatchScore);
+  if (input.semanticSimilarity !== undefined) score.sem = roundScore(input.semanticSimilarity);
   if (input.keepSearchMeta && input.semanticConfidence !== undefined) {
     score.conf = input.semanticConfidence;
   }

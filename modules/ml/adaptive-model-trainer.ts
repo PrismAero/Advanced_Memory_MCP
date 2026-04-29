@@ -13,11 +13,7 @@ export interface TrainingDataPoint {
   input_text: string;
   target_embedding?: number[];
   context: string;
-  source_type:
-    | "search_success"
-    | "interface_usage"
-    | "relationship_discovery"
-    | "user_feedback";
+  source_type: "search_success" | "interface_usage" | "relationship_discovery" | "user_feedback";
   confidence: number; // 0-1
   timestamp: Date;
   metadata?: {
@@ -99,8 +95,7 @@ export class AdaptiveModelTrainer {
 
   constructor(baseModelManager: TensorFlowModelManager, cacheDir?: string) {
     this.baseModelManager = baseModelManager;
-    this.modelCacheDir =
-      cacheDir || path.join(process.cwd(), ".memory", "trained-models");
+    this.modelCacheDir = cacheDir || path.join(process.cwd(), ".memory", "trained-models");
     this.initializationPromise = this.initializeTrainer().catch((error) => {
       logger.error("Failed to initialize adaptive model trainer:", error);
     });
@@ -150,9 +145,7 @@ export class AdaptiveModelTrainer {
    */
   private async maybeLoadBaselineSeed(): Promise<void> {
     if (process.env.DISABLE_BASELINE_SEED === "1") {
-      logger.info(
-        "[SEED] Baseline seed disabled via DISABLE_BASELINE_SEED env var",
-      );
+      logger.info("[SEED] Baseline seed disabled via DISABLE_BASELINE_SEED env var");
       return;
     }
 
@@ -163,9 +156,7 @@ export class AdaptiveModelTrainer {
     }
 
     if (this.trainingData.size > 0) {
-      logger.debug(
-        "[SEED] Trainer already has data points; skipping baseline seed",
-      );
+      logger.debug("[SEED] Trainer already has data points; skipping baseline seed");
       return;
     }
 
@@ -193,9 +184,7 @@ export class AdaptiveModelTrainer {
         ),
       );
 
-      logger.info(
-        `[SEED] Loaded ${seedPoints.length} baseline knowledge points`,
-      );
+      logger.info(`[SEED] Loaded ${seedPoints.length} baseline knowledge points`);
     } catch (error) {
       // Seeding is best-effort; never fail init because of it.
       logger.warn("[SEED] Failed to load baseline seed:", error);
@@ -241,9 +230,7 @@ export class AdaptiveModelTrainer {
   /**
    * Start training with current data
    */
-  async startTraining(
-    config?: Partial<TrainingConfig>,
-  ): Promise<TrainingSession> {
+  async startTraining(config?: Partial<TrainingConfig>): Promise<TrainingSession> {
     await tensorflowRuntime.initialize();
     if (this.isTraining) {
       throw new Error("Training is already in progress");
@@ -289,13 +276,10 @@ export class AdaptiveModelTrainer {
       session.completed_at = new Date();
       session.status = "completed";
 
-      logger.info(
-        `[SUCCESS] Training session ${session.id} completed successfully`,
-      );
+      logger.info(`[SUCCESS] Training session ${session.id} completed successfully`);
     } catch (error) {
       session.status = "failed";
-      session.error_message =
-        error instanceof Error ? error.message : "Unknown error";
+      session.error_message = error instanceof Error ? error.message : "Unknown error";
       logger.error(`[ERROR] Training session ${session.id} failed:`, error);
       throw error;
     } finally {
@@ -383,16 +367,13 @@ export class AdaptiveModelTrainer {
         targetEmbeddings.push(point.target_embedding);
       } else {
         // Generate target embedding using base model
-        const embedding = await this.baseModelManager.generateEmbeddings([
-          point.input_text,
-        ]);
+        const embedding = await this.baseModelManager.generateEmbeddings([point.input_text]);
         targetEmbeddings.push(embedding[0]);
       }
     }
 
     // Convert to tensors
-    const inputEmbeddings =
-      await this.baseModelManager.generateEmbeddings(inputTexts);
+    const inputEmbeddings = await this.baseModelManager.generateEmbeddings(inputTexts);
 
     const inputs = tf.tensor2d(inputEmbeddings);
     const targets = tf.tensor2d(targetEmbeddings);
@@ -428,9 +409,7 @@ export class AdaptiveModelTrainer {
   /**
    * Create training callbacks (simplified version for compatibility)
    */
-  private createTrainingCallbacks(
-    session: TrainingSession,
-  ): tf.CustomCallback[] {
+  private createTrainingCallbacks(session: TrainingSession): tf.CustomCallback[] {
     const epochEndCallback: tf.CustomCallback = {
       onEpochEnd: async (epoch: number, logs?: tf.Logs) => {
         session.epochs_completed = epoch + 1;
@@ -490,12 +469,8 @@ export class AdaptiveModelTrainer {
     await model.save(`file://${path.join(modelPath, "model")}`);
 
     // Calculate final metrics
-    const finalLoss = history.history.loss[
-      history.history.loss.length - 1
-    ] as number;
-    const finalAccuracy = history.history.accuracy?.[
-      history.history.accuracy.length - 1
-    ] as number;
+    const finalLoss = history.history.loss[history.history.loss.length - 1] as number;
+    const finalAccuracy = history.history.accuracy?.[history.history.accuracy.length - 1] as number;
 
     const modelVersion: ModelVersion = {
       version,
@@ -527,16 +502,12 @@ export class AdaptiveModelTrainer {
   async generateEnhancedEmbedding(text: string): Promise<number[] | null> {
     if (!this.activeModel) {
       // Fallback to base model
-      return this.baseModelManager
-        .generateEmbeddings([text])
-        .then((embeddings) => embeddings[0]);
+      return this.baseModelManager.generateEmbeddings([text]).then((embeddings) => embeddings[0]);
     }
 
     try {
       // Get base embedding
-      const baseEmbeddings = await this.baseModelManager.generateEmbeddings([
-        text,
-      ]);
+      const baseEmbeddings = await this.baseModelManager.generateEmbeddings([text]);
       if (!baseEmbeddings || baseEmbeddings.length === 0) {
         return null;
       }
@@ -544,9 +515,7 @@ export class AdaptiveModelTrainer {
       // Apply fine-tuned adjustments
       const before = tensorflowRuntime.snapshot("adaptive-predict-before");
       const baseEmbedding = tf.tensor2d([baseEmbeddings[0]]);
-      const enhancedEmbedding = this.activeModel.predict(
-        baseEmbedding,
-      ) as tf.Tensor;
+      const enhancedEmbedding = this.activeModel.predict(baseEmbedding) as tf.Tensor;
       const result = await enhancedEmbedding.data();
 
       // Cleanup tensors
@@ -557,13 +526,8 @@ export class AdaptiveModelTrainer {
 
       return Array.from(result);
     } catch (error) {
-      logger.warn(
-        "Failed to generate enhanced embedding, falling back to base:",
-        error,
-      );
-      return this.baseModelManager
-        .generateEmbeddings([text])
-        .then((embeddings) => embeddings[0]);
+      logger.warn("Failed to generate enhanced embedding, falling back to base:", error);
+      return this.baseModelManager.generateEmbeddings([text]).then((embeddings) => embeddings[0]);
     }
   }
 
@@ -576,9 +540,7 @@ export class AdaptiveModelTrainer {
       if (await this.fileExists(manifestPath)) {
         const content = await fs.readFile(manifestPath, "utf-8");
         this.modelVersions = JSON.parse(content);
-        logger.info(
-          `[CLIPBOARD] Loaded ${this.modelVersions.length} existing model versions`,
-        );
+        logger.info(`[CLIPBOARD] Loaded ${this.modelVersions.length} existing model versions`);
       }
     } catch (error) {
       logger.warn("Failed to load existing versions:", error);
@@ -591,10 +553,7 @@ export class AdaptiveModelTrainer {
    */
   private async saveVersionsManifest(): Promise<void> {
     const manifestPath = path.join(this.modelCacheDir, "versions.json");
-    await fs.writeFile(
-      manifestPath,
-      JSON.stringify(this.modelVersions, null, 2),
-    );
+    await fs.writeFile(manifestPath, JSON.stringify(this.modelVersions, null, 2));
   }
 
   /**
@@ -604,20 +563,11 @@ export class AdaptiveModelTrainer {
     const activeVersion = this.modelVersions.find((v) => v.is_active);
     if (activeVersion) {
       try {
-        const modelPath = path.join(
-          activeVersion.file_path,
-          "model",
-          "model.json",
-        );
+        const modelPath = path.join(activeVersion.file_path, "model", "model.json");
         this.activeModel = await tf.loadLayersModel(`file://${modelPath}`);
-        logger.info(
-          `[TARGET] Loaded active model version ${activeVersion.version}`,
-        );
+        logger.info(`[TARGET] Loaded active model version ${activeVersion.version}`);
       } catch (error) {
-        logger.warn(
-          `Failed to load active model ${activeVersion.version}:`,
-          error,
-        );
+        logger.warn(`Failed to load active model ${activeVersion.version}:`, error);
       }
     }
   }
@@ -667,8 +617,7 @@ export class AdaptiveModelTrainer {
 
     const averageConfidence =
       dataPoints.length > 0
-        ? dataPoints.reduce((sum, point) => sum + point.confidence, 0) /
-          dataPoints.length
+        ? dataPoints.reduce((sum, point) => sum + point.confidence, 0) / dataPoints.length
         : 0;
 
     const activeVersion = this.modelVersions.find((v) => v.is_active);
@@ -729,8 +678,7 @@ export class AdaptiveModelTrainer {
     const sorted = Array.from(this.trainingData.values()).sort(
       (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
-    const overflow =
-      this.trainingData.size - this.maxRetainedTrainingDataPoints;
+    const overflow = this.trainingData.size - this.maxRetainedTrainingDataPoints;
     for (const point of sorted.slice(0, overflow)) {
       this.trainingData.delete(point.id);
     }

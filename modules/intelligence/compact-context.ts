@@ -1,9 +1,6 @@
 import type { Entity, Relation } from "../../memory-types.js";
 import { round } from "./context-scorer.js";
-import type {
-  CompactContextEntity,
-  IntelligenceEvidence,
-} from "./evidence-types.js";
+import type { CompactContextEntity, IntelligenceEvidence } from "./evidence-types.js";
 
 export function compactEntityForContext(
   entity: Entity,
@@ -13,13 +10,9 @@ export function compactEntityForContext(
     score?: number;
   },
 ): CompactContextEntity {
-  const observations = Array.isArray(entity.observations)
-    ? entity.observations
-    : [];
+  const observations = Array.isArray(entity.observations) ? entity.observations : [];
   const shown =
-    options.maxObservations > 0
-      ? observations.slice(0, options.maxObservations)
-      : observations;
+    options.maxObservations > 0 ? observations.slice(0, options.maxObservations) : observations;
   const out: CompactContextEntity = {
     name: entity.name,
     type: entity.entityType,

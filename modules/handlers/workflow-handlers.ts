@@ -1,10 +1,6 @@
 import { Entity } from "../../memory-types.js";
 import { logger } from "../logger.js";
-import {
-  jsonResponse,
-  sanitizeEntity,
-  sanitizeEntities,
-} from "./response-utils.js";
+import { jsonResponse, sanitizeEntity, sanitizeEntities } from "./response-utils.js";
 
 /**
  * AI Workflow Management Handlers.
@@ -42,17 +38,13 @@ export class WorkflowHandlers {
       `Timestamp: ${new Date().toISOString()}`,
     ];
     if (args.alternatives_considered?.length) {
-      observations.push(
-        `Alternatives considered: ${args.alternatives_considered.join(", ")}`,
-      );
+      observations.push(`Alternatives considered: ${args.alternatives_considered.join(", ")}`);
     }
     if (args.impact_areas?.length) {
       observations.push(`Impact areas: ${args.impact_areas.join(", ")}`);
     }
     if (args.related_entities?.length) {
-      observations.push(
-        `Related entities: ${args.related_entities.join(", ")}`,
-      );
+      observations.push(`Related entities: ${args.related_entities.join(", ")}`);
     }
 
     const decisionEntity: Entity = {
@@ -64,10 +56,7 @@ export class WorkflowHandlers {
       relevanceScore: 0.8,
     };
 
-    const created = await this.memoryManager.createEntities(
-      [decisionEntity],
-      branchName,
-    );
+    const created = await this.memoryManager.createEntities([decisionEntity], branchName);
 
     let relationshipsCreated = 0;
     if (args.related_entities?.length) {
@@ -113,20 +102,9 @@ export class WorkflowHandlers {
         // private `entityOps` field on the SQLite layer. The legacy
         // `sqliteManager?.entityOps` access resolved to undefined on
         // HybridMemoryManager and made these calls silently throw.
-        await this.memoryManager.updateEntityWorkingContext(
-          entityName,
-          true,
-          branchName,
-        );
-        await this.memoryManager.updateEntityRelevanceScore(
-          entityName,
-          0.9,
-          branchName,
-        );
-        await this.memoryManager.updateEntityLastAccessed(
-          entityName,
-          branchName,
-        );
+        await this.memoryManager.updateEntityWorkingContext(entityName, true, branchName);
+        await this.memoryManager.updateEntityRelevanceScore(entityName, 0.9, branchName);
+        await this.memoryManager.updateEntityLastAccessed(entityName, branchName);
         updateResults.push({ entity: entityName, marked: true });
       } catch (error) {
         updateResults.push({
@@ -166,9 +144,7 @@ export class WorkflowHandlers {
     const mode = args.mode || (args.entity_names ? "archive" : "phase");
     if (mode === "archive") return this.handleArchiveCompletedWork(args);
     if (mode === "phase") return this.handleUpdateProjectStatus(args);
-    throw new Error(
-      `Unknown status mode "${mode}". Expected "phase" or "archive".`,
-    );
+    throw new Error(`Unknown status mode "${mode}". Expected "phase" or "archive".`);
   }
 
   async handleUpdateProjectStatus(args: any): Promise<any> {
@@ -264,9 +240,7 @@ export class WorkflowHandlers {
     if (preserveRelationships) {
       const branchGraph = await this.memoryManager.exportBranch(branchName);
       preservedRelationCount = branchGraph.relations.filter(
-        (rel: any) =>
-          args.entity_names.includes(rel.from) ||
-          args.entity_names.includes(rel.to),
+        (rel: any) => args.entity_names.includes(rel.from) || args.entity_names.includes(rel.to),
       ).length;
     }
 
@@ -279,16 +253,8 @@ export class WorkflowHandlers {
           "Completed work - archived",
           branchName,
         );
-        await this.memoryManager.updateEntityWorkingContext(
-          entityName,
-          false,
-          branchName,
-        );
-        await this.memoryManager.updateEntityRelevanceScore(
-          entityName,
-          0.3,
-          branchName,
-        );
+        await this.memoryManager.updateEntityWorkingContext(entityName, false, branchName);
+        await this.memoryManager.updateEntityRelevanceScore(entityName, 0.3, branchName);
         archiveResults.push({ entity: entityName, archived: true });
       } catch (error) {
         archiveResults.push({
@@ -319,30 +285,20 @@ export class WorkflowHandlers {
     const branchName = args.branch_name || "main";
     let workEntities: string[] = args.entity_names || [];
     if (workEntities.length === 0) {
-      const working = await this.memoryManager.searchEntities(
-        "",
-        branchName,
-        ["active", "draft"],
-        { workingContextOnly: true },
-      );
+      const working = await this.memoryManager.searchEntities("", branchName, ["active", "draft"], {
+        workingContextOnly: true,
+      });
       workEntities = working.entities.map((e: Entity) => e.name);
     }
 
     const dependencies: any[] = [];
     for (const entityName of workEntities) {
       try {
-        const entity = await this.memoryManager.findEntityByName(
-          entityName,
-          branchName,
-        );
+        const entity = await this.memoryManager.findEntityByName(entityName, branchName);
         if (!entity) continue;
         for (const obs of entity.observations) {
           const lower = obs.toLowerCase();
-          if (
-            lower.includes("depends") ||
-            lower.includes("requires") ||
-            lower.includes("needs ")
-          ) {
+          if (lower.includes("depends") || lower.includes("requires") || lower.includes("needs ")) {
             dependencies.push({
               source_entity: entityName,
               dependency_description: obs,
@@ -371,24 +327,14 @@ export class WorkflowHandlers {
   // ---------- helpers ----------
 
   private async clearPreviousWorkingContext(branchName: string): Promise<void> {
-    const working = await this.memoryManager.searchEntities(
-      "",
-      branchName,
-      ["active", "draft"],
-      { workingContextOnly: true },
-    );
+    const working = await this.memoryManager.searchEntities("", branchName, ["active", "draft"], {
+      workingContextOnly: true,
+    });
     for (const entity of working.entities) {
       try {
-        await this.memoryManager.updateEntityWorkingContext(
-          entity.name,
-          false,
-          branchName,
-        );
+        await this.memoryManager.updateEntityWorkingContext(entity.name, false, branchName);
       } catch (error) {
-        logger.warn(
-          `Failed to clear working context for ${entity.name}:`,
-          error,
-        );
+        logger.warn(`Failed to clear working context for ${entity.name}:`, error);
       }
     }
   }
@@ -410,10 +356,7 @@ export class WorkflowHandlers {
         status: "active",
         workingContext: true,
       };
-      const created = await this.memoryManager.createEntities(
-        [focusEntity],
-        branchName,
-      );
+      const created = await this.memoryManager.createEntities([focusEntity], branchName);
       return created[0];
     } catch (error) {
       logger.warn("Failed to create focus session entity:", error);
@@ -438,10 +381,7 @@ export class WorkflowHandlers {
         status: "active",
         relevanceScore: 0.6,
       };
-      const created = await this.memoryManager.createEntities(
-        [summaryEntity],
-        branchName,
-      );
+      const created = await this.memoryManager.createEntities([summaryEntity], branchName);
       return created[0];
     } catch (error) {
       logger.warn("Failed to create completion summary entity:", error);

@@ -116,9 +116,12 @@ export class TrainingDataCollector extends EventEmitter {
     this.collectionStartTime = new Date();
 
     // Periodically clean up old data (keep last 30 days)
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupOldData();
-    }, 24 * 60 * 60 * 1000); // Daily cleanup
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanupOldData();
+      },
+      24 * 60 * 60 * 1000,
+    ); // Daily cleanup
 
     logger.debug("[DATA] Training data collector initialized");
   }
@@ -139,32 +142,28 @@ export class TrainingDataCollector extends EventEmitter {
     }
 
     logger.debug(
-      `[PROGRESS] Recorded search interaction: ${interaction.query} (${trainingPoints.length} training points)`
+      `[PROGRESS] Recorded search interaction: ${interaction.query} (${trainingPoints.length} training points)`,
     );
   }
 
   /**
    * Record relationship discovery
    */
-  async recordRelationshipInteraction(
-    interaction: RelationshipInteraction
-  ): Promise<void> {
+  async recordRelationshipInteraction(interaction: RelationshipInteraction): Promise<void> {
     this.relationshipInteractions.push(interaction);
     this.trimCollection(this.relationshipInteractions);
     this.trackSession(interaction.session_id);
 
     // Generate training data if relationship was confirmed
     if (interaction.user_confirmed || interaction.confidence > 0.7) {
-      const trainingPoint = await this.generateRelationshipTrainingData(
-        interaction
-      );
+      const trainingPoint = await this.generateRelationshipTrainingData(interaction);
       if (trainingPoint) {
         this.emit("trainingDataGenerated", trainingPoint);
       }
     }
 
     logger.debug(
-      `[LINK] Recorded relationship interaction: ${interaction.source_entity} -> ${interaction.target_entity}`
+      `[LINK] Recorded relationship interaction: ${interaction.source_entity} -> ${interaction.target_entity}`,
     );
   }
 
@@ -190,9 +189,7 @@ export class TrainingDataCollector extends EventEmitter {
   /**
    * Record context retrieval feedback
    */
-  async recordContextFeedback(
-    feedback: ContextRetrievalFeedback
-  ): Promise<void> {
+  async recordContextFeedback(feedback: ContextRetrievalFeedback): Promise<void> {
     this.contextFeedback.push(feedback);
     this.trimCollection(this.contextFeedback);
     this.trackSession(feedback.session_id);
@@ -205,7 +202,7 @@ export class TrainingDataCollector extends EventEmitter {
     }
 
     logger.debug(
-      ` Recorded context feedback: rating=${feedback.user_rating} (${trainingPoints.length} training points)`
+      ` Recorded context feedback: rating=${feedback.user_rating} (${trainingPoints.length} training points)`,
     );
   }
 
@@ -217,7 +214,7 @@ export class TrainingDataCollector extends EventEmitter {
     targetEntity: Entity,
     relationshipType: string,
     confidence: number,
-    sessionId: string
+    sessionId: string,
   ): Promise<void> {
     const interaction: RelationshipInteraction = {
       source_entity: sourceEntity.name,
@@ -244,7 +241,7 @@ export class TrainingDataCollector extends EventEmitter {
     searchType: "semantic" | "text" | "hybrid",
     sessionId: string,
     responseTime?: number,
-    userSatisfaction?: number
+    userSatisfaction?: number,
   ): Promise<void> {
     const interaction: SearchInteraction = {
       query,
@@ -283,15 +280,15 @@ export class TrainingDataCollector extends EventEmitter {
 
     // Calculate successful interactions
     const successfulSearches = this.searchInteractions.filter(
-      (s) => s.selected_results.length > 0 && (s.user_satisfaction || 3) >= 3
+      (s) => s.selected_results.length > 0 && (s.user_satisfaction || 3) >= 3,
     ).length;
 
     const successfulRelationships = this.relationshipInteractions.filter(
-      (r) => r.user_confirmed
+      (r) => r.user_confirmed,
     ).length;
 
     const successfulInterfaceUsage = this.interfaceUsagePatterns.filter(
-      (p) => p.success_indicators.compilation_success
+      (p) => p.success_indicators.compilation_success,
     ).length;
 
     const successfulInteractions =
@@ -299,9 +296,7 @@ export class TrainingDataCollector extends EventEmitter {
 
     // Calculate average satisfaction
     const satisfactionRatings = [
-      ...this.searchInteractions
-        .map((s) => s.user_satisfaction)
-        .filter(Boolean),
+      ...this.searchInteractions.map((s) => s.user_satisfaction).filter(Boolean),
       ...this.contextFeedback.map((f) => f.user_rating),
       ...this.interfaceUsagePatterns
         .map((p) => p.success_indicators.user_satisfaction)
@@ -310,15 +305,12 @@ export class TrainingDataCollector extends EventEmitter {
 
     const averageSatisfaction =
       satisfactionRatings.length > 0
-        ? satisfactionRatings.reduce((sum, rating) => sum + rating, 0) /
-          satisfactionRatings.length
+        ? satisfactionRatings.reduce((sum, rating) => sum + rating, 0) / satisfactionRatings.length
         : 0;
 
     // Calculate collection rate
-    const hoursSinceStart =
-      (Date.now() - this.collectionStartTime.getTime()) / (1000 * 60 * 60);
-    const collectionRate =
-      hoursSinceStart > 0 ? totalInteractions / hoursSinceStart : 0;
+    const hoursSinceStart = (Date.now() - this.collectionStartTime.getTime()) / (1000 * 60 * 60);
+    const collectionRate = hoursSinceStart > 0 ? totalInteractions / hoursSinceStart : 0;
 
     // Recent activity (last 24 hours)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -372,9 +364,7 @@ export class TrainingDataCollector extends EventEmitter {
     // Process relationship interactions
     for (const relationship of this.relationshipInteractions) {
       if (relationship.user_confirmed) {
-        const relationshipPoint = await this.generateRelationshipTrainingData(
-          relationship
-        );
+        const relationshipPoint = await this.generateRelationshipTrainingData(relationship);
         if (relationshipPoint) {
           trainingPoints.push(relationshipPoint);
         }
@@ -399,11 +389,11 @@ export class TrainingDataCollector extends EventEmitter {
 
     // Filter by quality
     const qualityTrainingPoints = trainingPoints.filter(
-      (point) => point.confidence >= this.dataQualityThreshold
+      (point) => point.confidence >= this.dataQualityThreshold,
     );
 
     logger.info(
-      ` Generated ${qualityTrainingPoints.length} quality training points from ${trainingPoints.length} total`
+      ` Generated ${qualityTrainingPoints.length} quality training points from ${trainingPoints.length} total`,
     );
 
     return qualityTrainingPoints;
@@ -415,7 +405,7 @@ export class TrainingDataCollector extends EventEmitter {
    * Generate training data from search interactions
    */
   private async generateSearchTrainingData(
-    interaction: SearchInteraction
+    interaction: SearchInteraction,
   ): Promise<TrainingDataPoint[]> {
     const points: TrainingDataPoint[] = [];
 
@@ -447,7 +437,7 @@ export class TrainingDataCollector extends EventEmitter {
    * Generate training data from relationship interactions
    */
   private async generateRelationshipTrainingData(
-    interaction: RelationshipInteraction
+    interaction: RelationshipInteraction,
   ): Promise<TrainingDataPoint | null> {
     if (interaction.confidence < this.dataQualityThreshold) {
       return null;
@@ -470,7 +460,7 @@ export class TrainingDataCollector extends EventEmitter {
    * Generate training data from interface usage patterns
    */
   private async generateInterfaceTrainingData(
-    pattern: InterfaceUsagePattern
+    pattern: InterfaceUsagePattern,
   ): Promise<TrainingDataPoint | null> {
     const confidence = this.calculateInterfaceUsageQuality(pattern);
 
@@ -497,7 +487,7 @@ export class TrainingDataCollector extends EventEmitter {
    * Generate training data from context feedback
    */
   private async generateContextTrainingData(
-    feedback: ContextRetrievalFeedback
+    feedback: ContextRetrievalFeedback,
   ): Promise<TrainingDataPoint[]> {
     const points: TrainingDataPoint[] = [];
 
@@ -505,9 +495,7 @@ export class TrainingDataCollector extends EventEmitter {
     if (feedback.user_rating >= 4) {
       for (const context of feedback.retrieved_context) {
         points.push({
-          id: `context_positive_${
-            feedback.session_id
-          }_${Date.now()}_${Math.random()}`,
+          id: `context_positive_${feedback.session_id}_${Date.now()}_${Math.random()}`,
           input_text: `[CONTEXT] ${feedback.query} -> ${context}`,
           context: "context_success",
           source_type: "user_feedback",
@@ -537,8 +525,7 @@ export class TrainingDataCollector extends EventEmitter {
 
     // Quality from selection rate
     if (interaction.results.length > 0) {
-      const selectionRate =
-        interaction.selected_results.length / interaction.results.length;
+      const selectionRate = interaction.selected_results.length / interaction.results.length;
       quality += Math.min(selectionRate, 0.5) * 0.3; // Cap at 50% selection rate
     }
 
@@ -559,9 +546,7 @@ export class TrainingDataCollector extends EventEmitter {
   /**
    * Calculate quality score for interface usage
    */
-  private calculateInterfaceUsageQuality(
-    pattern: InterfaceUsagePattern
-  ): number {
+  private calculateInterfaceUsageQuality(pattern: InterfaceUsagePattern): number {
     let quality = 0;
 
     // Compilation success is critical
@@ -597,24 +582,17 @@ export class TrainingDataCollector extends EventEmitter {
     // This would be the actual count of training data points sent to the trainer
     // For now, we'll estimate based on successful interactions
     const successfulSearches = this.searchInteractions.filter(
-      (s) => s.selected_results.length > 0
+      (s) => s.selected_results.length > 0,
     ).length;
     const successfulRelationships = this.relationshipInteractions.filter(
-      (r) => r.user_confirmed
+      (r) => r.user_confirmed,
     ).length;
     const successfulUsage = this.interfaceUsagePatterns.filter(
-      (p) => p.success_indicators.compilation_success
+      (p) => p.success_indicators.compilation_success,
     ).length;
-    const goodFeedback = this.contextFeedback.filter(
-      (f) => f.user_rating >= 4
-    ).length;
+    const goodFeedback = this.contextFeedback.filter((f) => f.user_rating >= 4).length;
 
-    return (
-      successfulSearches +
-      successfulRelationships +
-      successfulUsage +
-      goodFeedback
-    );
+    return successfulSearches + successfulRelationships + successfulUsage + goodFeedback;
   }
 
   /**
@@ -629,18 +607,14 @@ export class TrainingDataCollector extends EventEmitter {
       this.interfaceUsagePatterns.length +
       this.contextFeedback.length;
 
-    this.searchInteractions = this.searchInteractions.filter(
-      (s) => s.timestamp > thirtyDaysAgo
-    );
+    this.searchInteractions = this.searchInteractions.filter((s) => s.timestamp > thirtyDaysAgo);
     this.relationshipInteractions = this.relationshipInteractions.filter(
-      (r) => r.timestamp > thirtyDaysAgo
+      (r) => r.timestamp > thirtyDaysAgo,
     );
     this.interfaceUsagePatterns = this.interfaceUsagePatterns.filter(
-      (p) => p.timestamp > thirtyDaysAgo
+      (p) => p.timestamp > thirtyDaysAgo,
     );
-    this.contextFeedback = this.contextFeedback.filter(
-      (f) => f.timestamp > thirtyDaysAgo
-    );
+    this.contextFeedback = this.contextFeedback.filter((f) => f.timestamp > thirtyDaysAgo);
 
     const afterCount =
       this.searchInteractions.length +
@@ -649,9 +623,7 @@ export class TrainingDataCollector extends EventEmitter {
       this.contextFeedback.length;
 
     if (beforeCount > afterCount) {
-      logger.info(
-        ` Cleaned up ${beforeCount - afterCount} old training data points`
-      );
+      logger.info(` Cleaned up ${beforeCount - afterCount} old training data points`);
     }
   }
 

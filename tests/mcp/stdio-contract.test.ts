@@ -3,11 +3,7 @@ import * as path from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { SMART_MEMORY_TOOLS } from "../../modules/smart-memory-tools.js";
-import {
-  createStdioClient,
-  expectJsonError,
-  parseTextResponse,
-} from "../utils/mcp-test-utils.js";
+import { createStdioClient, expectJsonError, parseTextResponse } from "../utils/mcp-test-utils.js";
 
 describe("MCP stdio contract", () => {
   let ctx: Awaited<ReturnType<typeof createStdioClient>>;
@@ -68,9 +64,7 @@ describe("MCP stdio contract", () => {
     });
     const branch = parseTextResponse(branchResult);
     expect(branch.counts.entities).toBeGreaterThanOrEqual(2);
-    expect(branch.entities.map((entity: any) => entity.name)).toContain(
-      "MCPContract_AuthService",
-    );
+    expect(branch.entities.map((entity: any) => entity.name)).toContain("MCPContract_AuthService");
 
     const searchResult = await ctx.client.callTool({
       name: "smart_search",
@@ -82,9 +76,7 @@ describe("MCP stdio contract", () => {
       },
     });
     const search = parseTextResponse(searchResult);
-    expect(search.entities.map((entity: any) => entity.name)).toContain(
-      "MCPContract_AuthService",
-    );
+    expect(search.entities.map((entity: any) => entity.name)).toContain("MCPContract_AuthService");
     expect(search.query).toBe("refresh token revocation");
   });
 

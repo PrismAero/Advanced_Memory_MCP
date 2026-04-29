@@ -3,16 +3,10 @@ import { createTestEntity } from "./entity-tests.js";
 export interface SimilaritySearchTestRunner {
   memoryManager: any;
   similarityEngine: any;
-  runTest(
-    name: string,
-    category: string,
-    testFn: () => Promise<any>,
-  ): Promise<any>;
+  runTest(name: string, category: string, testFn: () => Promise<any>): Promise<any>;
 }
 
-export async function runSimilarityTests(
-  runner: SimilaritySearchTestRunner,
-): Promise<void> {
+export async function runSimilarityTests(runner: SimilaritySearchTestRunner): Promise<void> {
   console.log("\n🧠 SIMILARITY TESTS (TensorFlow.js)\n");
 
   await runner.runTest("Similarity engine health check", "Similarity", async () => {
@@ -28,16 +22,9 @@ export async function runSimilarityTests(
   });
 
   await runner.runTest("Calculate similarity between identical texts", "Similarity", async () => {
-    const entity1 = createTestEntity("Entity1", "test", [
-      "Machine learning model training",
-    ]);
-    const entity2 = createTestEntity("Entity2", "test", [
-      "Machine learning model training",
-    ]);
-    const similarity = await runner.similarityEngine.calculateSimilarity(
-      entity1,
-      entity2,
-    );
+    const entity1 = createTestEntity("Entity1", "test", ["Machine learning model training"]);
+    const entity2 = createTestEntity("Entity2", "test", ["Machine learning model training"]);
+    const similarity = await runner.similarityEngine.calculateSimilarity(entity1, entity2);
     if (similarity < 0.9) throw new Error(`Similarity too low: ${similarity}`);
     return { similarity };
   });
@@ -49,10 +36,7 @@ export async function runSimilarityTests(
     const entity2 = createTestEntity("AuthService", "service", [
       "Service handling user login and registration",
     ]);
-    const similarity = await runner.similarityEngine.calculateSimilarity(
-      entity1,
-      entity2,
-    );
+    const similarity = await runner.similarityEngine.calculateSimilarity(entity1, entity2);
     if (similarity < 0.3) throw new Error(`Similarity too low: ${similarity}`);
     return { similarity };
   });
@@ -64,28 +48,20 @@ export async function runSimilarityTests(
     const entity2 = createTestEntity("UIButton", "component", [
       "Styled button with hover animation",
     ]);
-    const similarity = await runner.similarityEngine.calculateSimilarity(
-      entity1,
-      entity2,
-    );
+    const similarity = await runner.similarityEngine.calculateSimilarity(entity1, entity2);
     if (similarity > 0.7) throw new Error(`Similarity too high: ${similarity}`);
     return { similarity };
   });
 
   await runner.runTest("Detect similar entities", "Similarity", async () => {
-    const target = createTestEntity("Target", "test", [
-      "API endpoint for user management",
-    ]);
+    const target = createTestEntity("Target", "test", ["API endpoint for user management"]);
     const candidates = [
       createTestEntity("Candidate1", "test", ["REST API for managing users"]),
       createTestEntity("Candidate2", "test", ["Database schema for products"]),
       createTestEntity("Candidate3", "test", ["User authentication service"]),
     ];
 
-    const results = await runner.similarityEngine.detectSimilarEntities(
-      target,
-      candidates,
-    );
+    const results = await runner.similarityEngine.detectSimilarEntities(target, candidates);
     for (let i = 0; i < results.length - 1; i++) {
       if (results[i].similarity < results[i + 1].similarity) {
         throw new Error("Results not sorted correctly");
@@ -104,9 +80,7 @@ export async function runSimilarityTests(
     const entity2 = createTestEntity("AuthService", "service", [
       "Service implementing authentication logic",
     ]);
-    const results = await runner.similarityEngine.detectSimilarEntities(entity1, [
-      entity2,
-    ]);
+    const results = await runner.similarityEngine.detectSimilarEntities(entity1, [entity2]);
     if (results.length === 0) throw new Error("No results");
     if (!results[0].suggestedRelationType) {
       throw new Error("Missing suggested relation type");
@@ -124,20 +98,14 @@ export async function runSimilarityTests(
   await runner.runTest("Empty observation handling", "Similarity-Edge", async () => {
     const entity1 = createTestEntity("EmptyObs1", "test", []);
     const entity2 = createTestEntity("EmptyObs2", "test", ["has content"]);
-    const similarity = await runner.similarityEngine.calculateSimilarity(
-      entity1,
-      entity2,
-    );
+    const similarity = await runner.similarityEngine.calculateSimilarity(entity1, entity2);
     return { handled: true, similarity };
   });
 
   await runner.runTest("Very short text similarity", "Similarity-Edge", async () => {
     const entity1 = createTestEntity("Short1", "t", ["a"]);
     const entity2 = createTestEntity("Short2", "t", ["b"]);
-    const similarity = await runner.similarityEngine.calculateSimilarity(
-      entity1,
-      entity2,
-    );
+    const similarity = await runner.similarityEngine.calculateSimilarity(entity1, entity2);
     return { handled: true, similarity };
   });
 
@@ -149,19 +117,14 @@ export async function runSimilarityTests(
   });
 }
 
-export async function runSearchTests(
-  runner: SimilaritySearchTestRunner,
-): Promise<void> {
+export async function runSearchTests(runner: SimilaritySearchTestRunner): Promise<void> {
   console.log("\n🔍 SEARCH TESTS\n");
 
   await runner.memoryManager.createEntities([
     {
       name: "SearchTest_UserAuth",
       entityType: "service",
-      observations: [
-        "Handles user authentication and authorization",
-        "JWT token management",
-      ],
+      observations: ["Handles user authentication and authorization", "JWT token management"],
     },
     {
       name: "SearchTest_DataStore",

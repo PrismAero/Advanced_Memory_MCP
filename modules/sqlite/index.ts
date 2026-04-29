@@ -27,7 +27,7 @@ export class ModularSQLiteOperations implements IMemoryOperations {
 
   constructor(
     basePathOrConnection: string | SQLiteConnection,
-    similarityEngine?: ModernSimilarityEngine
+    similarityEngine?: ModernSimilarityEngine,
   ) {
     this.connection =
       typeof basePathOrConnection === "string"
@@ -40,7 +40,7 @@ export class ModularSQLiteOperations implements IMemoryOperations {
       this.connection,
       this.entityOps,
       this.relationOps,
-      similarityEngine
+      similarityEngine,
     );
   }
 
@@ -53,10 +53,7 @@ export class ModularSQLiteOperations implements IMemoryOperations {
   }
 
   // Entity operations - delegate to EntityOperations
-  async createEntities(
-    entities: Entity[],
-    branchName?: string
-  ): Promise<Entity[]> {
+  async createEntities(entities: Entity[], branchName?: string): Promise<Entity[]> {
     return await this.entityOps.createEntities(entities, branchName);
   }
 
@@ -64,32 +61,20 @@ export class ModularSQLiteOperations implements IMemoryOperations {
     return await this.entityOps.updateEntity(entity, branchName);
   }
 
-  async deleteEntities(
-    entityNames: string[],
-    branchName?: string
-  ): Promise<void> {
+  async deleteEntities(entityNames: string[], branchName?: string): Promise<void> {
     return await this.entityOps.deleteEntities(entityNames, branchName);
   }
 
-  async findEntityByName(
-    name: string,
-    branchName?: string
-  ): Promise<Entity | null> {
+  async findEntityByName(name: string, branchName?: string): Promise<Entity | null> {
     return await this.entityOps.findEntityByName(name, branchName);
   }
 
   // Relation operations - delegate to RelationOperations
-  async createRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<Relation[]> {
+  async createRelations(relations: Relation[], branchName?: string): Promise<Relation[]> {
     return await this.relationOps.createRelations(relations, branchName);
   }
 
-  async deleteRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<void> {
+  async deleteRelations(relations: Relation[], branchName?: string): Promise<void> {
     return await this.relationOps.deleteRelations(relations, branchName);
   }
 
@@ -102,21 +87,13 @@ export class ModularSQLiteOperations implements IMemoryOperations {
       includeContext?: boolean;
       workingContextOnly?: boolean;
       includeConfidenceScores?: boolean;
-    }
+    },
   ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
-    return await this.searchOps.searchEntities(
-      query,
-      branchName,
-      includeStatuses,
-      options
-    );
+    return await this.searchOps.searchEntities(query, branchName, includeStatuses, options);
   }
 
   // Branch operations - delegate to BranchOperations
-  async createBranch(
-    branchName: string,
-    purpose?: string
-  ): Promise<MemoryBranchInfo> {
+  async createBranch(branchName: string, purpose?: string): Promise<MemoryBranchInfo> {
     return await this.branchOps.createBranch(branchName, purpose);
   }
 
@@ -135,14 +112,14 @@ export class ModularSQLiteOperations implements IMemoryOperations {
   // Additional entity operations
   async addObservations(
     observations: { entityName: string; contents: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     return await this.entityOps.addObservations(observations, branchName);
   }
 
   async deleteObservations(
     deletions: { entityName: string; observations: string[] }[],
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.entityOps.deleteObservations(deletions, branchName);
   }
@@ -151,13 +128,13 @@ export class ModularSQLiteOperations implements IMemoryOperations {
     entityName: string,
     targetBranch: string,
     targetEntityNames: string[],
-    sourceBranch?: string
+    sourceBranch?: string,
   ): Promise<void> {
     return await this.entityOps.createCrossReference(
       entityName,
       targetBranch,
       targetEntityNames,
-      sourceBranch
+      sourceBranch,
     );
   }
 
@@ -174,7 +151,7 @@ export class ModularSQLiteOperations implements IMemoryOperations {
       WHERE e.branch_id = ?
       GROUP BY e.id
     `,
-      [branchId]
+      [branchId],
     );
 
     const entities = this.entityOps.convertRowsToEntities(entityRows);
@@ -193,7 +170,7 @@ export class ModularSQLiteOperations implements IMemoryOperations {
     logger.info(
       `Importing data to branch ${branchName || "main"}: ${
         data.entities?.length || 0
-      } entities, ${data.relations?.length || 0} relations`
+      } entities, ${data.relations?.length || 0} relations`,
     );
 
     // Import entities first
@@ -207,44 +184,34 @@ export class ModularSQLiteOperations implements IMemoryOperations {
     }
 
     // Update branch timestamp
-    await this.connection.runQuery(
-      "UPDATE memory_branches SET updated_at = ? WHERE id = ?",
-      [new Date().toISOString(), branchId]
-    );
+    await this.connection.runQuery("UPDATE memory_branches SET updated_at = ? WHERE id = ?", [
+      new Date().toISOString(),
+      branchId,
+    ]);
   }
 
   // AI Enhancement Methods - for background processor and relevance scoring
   async updateEntityRelevanceScore(
     entityName: string,
     score: number,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
-    return await this.entityOps.updateEntityRelevanceScore(
-      entityName,
-      score,
-      branchName
-    );
+    return await this.entityOps.updateEntityRelevanceScore(entityName, score, branchName);
   }
 
   async updateEntityWorkingContext(
     entityName: string,
     isWorkingContext: boolean,
-    branchName?: string
+    branchName?: string,
   ): Promise<void> {
     return await this.entityOps.updateEntityWorkingContext(
       entityName,
       isWorkingContext,
-      branchName
+      branchName,
     );
   }
 
-  async updateEntityLastAccessed(
-    entityName: string,
-    branchName?: string
-  ): Promise<void> {
-    return await this.entityOps.updateEntityLastAccessed(
-      entityName,
-      branchName
-    );
+  async updateEntityLastAccessed(entityName: string, branchName?: string): Promise<void> {
+    return await this.entityOps.updateEntityLastAccessed(entityName, branchName);
   }
 }

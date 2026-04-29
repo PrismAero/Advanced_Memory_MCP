@@ -36,6 +36,7 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
+    "format:all": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "test": "npm run build && vitest run",
     "test:quick": "vitest run tests/mcp tests/handlers",
     "test:legacy": "npm run build && node --experimental-specifier-resolution=node dist/tests/test-runner.js",

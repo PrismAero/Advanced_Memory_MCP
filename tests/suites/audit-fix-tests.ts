@@ -8,11 +8,7 @@ import { SQLiteConnection } from "../../modules/sqlite/sqlite-connection.js";
 export interface AuditFixTestRunner {
   projectAnalysisOps: ProjectAnalysisOperations;
   sqliteConnection: SQLiteConnection;
-  runTest(
-    name: string,
-    category: string,
-    testFn: () => Promise<any>,
-  ): Promise<any>;
+  runTest(name: string, category: string, testFn: () => Promise<any>): Promise<any>;
 }
 
 export async function runAuditFixTests(
@@ -39,9 +35,7 @@ export async function runAuditFixTests(
 
       const indexer = new ProjectIndexer();
       const files = await indexer.scanProjectFiles(fixtureRoot, ["ignored/**"]);
-      const relativePaths = files.map((file) =>
-        file.relativePath.replace(/\\/g, "/"),
-      );
+      const relativePaths = files.map((file) => file.relativePath.replace(/\\/g, "/"));
       const memoryIgnorePath = path.join(fixtureRoot, ".memory", ".memoryignore");
 
       if (!fs.existsSync(memoryIgnorePath)) {
@@ -63,35 +57,34 @@ export async function runAuditFixTests(
     "Audit-Fixes",
     async () => {
       const embedding = Array.from({ length: 512 }, (_, i) => (i % 7) / 10);
-      const retainedFile =
-        await runner.projectAnalysisOps.storeOrUpdateProjectFile(
-          {
-            filePath: path.join(testMemoryPath, "retained.ts"),
-            relativePath: "retained.ts",
-            fileType: {
-              extension: ".ts",
-              language: "typescript",
-              category: "source",
-              hasImports: false,
-              hasExports: true,
-              canDefineInterfaces: true,
-            },
-            size: 10,
-            lastModified: new Date(),
-            imports: [],
-            exports: [],
-            interfaces: [],
-            dependencies: [],
-            isEntryPoint: false,
-            analysisMetadata: {
-              lineCount: 1,
-              hasTests: false,
-              complexity: "low",
-              documentation: 0,
-            },
+      const retainedFile = await runner.projectAnalysisOps.storeOrUpdateProjectFile(
+        {
+          filePath: path.join(testMemoryPath, "retained.ts"),
+          relativePath: "retained.ts",
+          fileType: {
+            extension: ".ts",
+            language: "typescript",
+            category: "source",
+            hasImports: false,
+            hasExports: true,
+            canDefineInterfaces: true,
           },
-          1,
-        );
+          size: 10,
+          lastModified: new Date(),
+          imports: [],
+          exports: [],
+          interfaces: [],
+          dependencies: [],
+          isEntryPoint: false,
+          analysisMetadata: {
+            lineCount: 1,
+            hasTests: false,
+            complexity: "low",
+            documentation: 0,
+          },
+        },
+        1,
+      );
       const staleFile = await runner.projectAnalysisOps.storeOrUpdateProjectFile(
         {
           filePath: path.join(testMemoryPath, "ignored.ts"),

@@ -10,7 +10,13 @@ describe("advanced interface storage", () => {
     const ctx = await createInitializedApp();
     try {
       const relativePath = "cpp/network.hpp";
-      const filePath = path.join(process.cwd(), "tests", "fixtures", "code-interfaces", relativePath);
+      const filePath = path.join(
+        process.cwd(),
+        "tests",
+        "fixtures",
+        "code-interfaces",
+        relativePath,
+      );
       const content = fs.readFileSync(filePath, "utf8");
       const runner = new InterfaceExtractorRunner();
       const extraction = await runner.extract(content, {
@@ -18,47 +24,44 @@ describe("advanced interface storage", () => {
         filePath,
         relativePath,
       });
-      const fileRecord =
-        await ctx.app.dependencies.projectAnalysisOps.storeOrUpdateProjectFile(
-          {
-            filePath,
-            relativePath,
-            fileType: {
-              extension: ".hpp",
-              language: "cpp",
-              category: "source",
-              hasImports: true,
-              hasExports: false,
-              canDefineInterfaces: true,
-            },
-            size: content.length,
-            lastModified: new Date(),
-            imports: [],
-            exports: [],
-            interfaces: extraction.interfaces,
-            dependencies: [],
-            isEntryPoint: false,
-            analysisMetadata: {
-              lineCount: content.split("\n").length,
-              hasTests: false,
-              complexity: "medium",
-              documentation: 0.4,
-            },
+      const fileRecord = await ctx.app.dependencies.projectAnalysisOps.storeOrUpdateProjectFile(
+        {
+          filePath,
+          relativePath,
+          fileType: {
+            extension: ".hpp",
+            language: "cpp",
+            category: "source",
+            hasImports: true,
+            hasExports: false,
+            canDefineInterfaces: true,
           },
-          1,
-        );
+          size: content.length,
+          lastModified: new Date(),
+          imports: [],
+          exports: [],
+          interfaces: extraction.interfaces,
+          dependencies: [],
+          isEntryPoint: false,
+          analysisMetadata: {
+            lineCount: content.split("\n").length,
+            hasTests: false,
+            complexity: "medium",
+            documentation: 0.4,
+          },
+        },
+        1,
+      );
       expect(fileRecord?.id).toEqual(expect.any(Number));
 
-      const firstStore =
-        await ctx.app.dependencies.projectAnalysisOps.storeCodeInterfaces(
-          fileRecord!.id!,
-          extraction.interfaces,
-        );
-      const secondStore =
-        await ctx.app.dependencies.projectAnalysisOps.storeCodeInterfaces(
-          fileRecord!.id!,
-          extraction.interfaces,
-        );
+      const firstStore = await ctx.app.dependencies.projectAnalysisOps.storeCodeInterfaces(
+        fileRecord!.id!,
+        extraction.interfaces,
+      );
+      const secondStore = await ctx.app.dependencies.projectAnalysisOps.storeCodeInterfaces(
+        fileRecord!.id!,
+        extraction.interfaces,
+      );
       expect(secondStore.length).toBe(firstStore.length);
 
       const interfaces = await ctx.app.dependencies.projectAnalysisOps.getCodeInterfaces({

@@ -3,10 +3,7 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { IgnorePolicy } from "../../modules/project-analysis/ignore-policy.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("IgnorePolicy", () => {
   let root: string | undefined;

@@ -5,16 +5,10 @@ export interface MLHandlerTestRunner {
   projectEmbeddingEngine: any;
   similarityEngine: any;
   projectAnalysisOps: any;
-  runTest(
-    name: string,
-    category: string,
-    testFn: () => Promise<any>,
-  ): Promise<any>;
+  runTest(name: string, category: string, testFn: () => Promise<any>): Promise<any>;
 }
 
-export async function runMLHandlerTests(
-  runner: MLHandlerTestRunner,
-): Promise<void> {
+export async function runMLHandlerTests(runner: MLHandlerTestRunner): Promise<void> {
   console.log("\n🧰 ML HANDLER TESTS\n");
 
   const mlHandlers = new MLHandlers(
@@ -39,27 +33,21 @@ export async function runMLHandlerTests(
     }
   };
 
-  await runner.runTest(
-    "embeddings dispatcher rejects unknown action",
-    "ML-Handlers",
-    async () => {
-      let threw = false;
-      try {
-        await mlHandlers.handleEmbeddings({ action: "not_a_real_action" });
-      } catch (err) {
-        threw = true;
-        if (!/Unknown embeddings action/i.test(String(err))) {
-          throw new Error(
-            `Wrong error for unknown action: ${(err as Error).message}`,
-          );
-        }
+  await runner.runTest("embeddings dispatcher rejects unknown action", "ML-Handlers", async () => {
+    let threw = false;
+    try {
+      await mlHandlers.handleEmbeddings({ action: "not_a_real_action" });
+    } catch (err) {
+      threw = true;
+      if (!/Unknown embeddings action/i.test(String(err))) {
+        throw new Error(`Wrong error for unknown action: ${(err as Error).message}`);
       }
-      if (!threw) {
-        throw new Error("Dispatcher accepted an unknown action silently");
-      }
-      return { ok: true };
-    },
-  );
+    }
+    if (!threw) {
+      throw new Error("Dispatcher accepted an unknown action silently");
+    }
+    return { ok: true };
+  });
 
   await runner.runTest(
     "generate_interface_embedding rejects bad input",
@@ -72,9 +60,7 @@ export async function runMLHandlerTests(
         }),
       );
       if (!out.error || !/array/i.test(out.error)) {
-        throw new Error(
-          `Expected error about array, got: ${JSON.stringify(out)}`,
-        );
+        throw new Error(`Expected error about array, got: ${JSON.stringify(out)}`);
       }
       return { error: out.error };
     },
@@ -97,9 +83,7 @@ export async function runMLHandlerTests(
         throw new Error("Expected exactly one result row");
       }
       if (out.results[0].status !== "not_found") {
-        throw new Error(
-          `Expected status=not_found, got ${out.results[0].status}`,
-        );
+        throw new Error(`Expected status=not_found, got ${out.results[0].status}`);
       }
       return { ok: true };
     },
@@ -114,9 +98,7 @@ export async function runMLHandlerTests(
         limit: 1,
       });
       if (!existing[0]) {
-        throw new Error(
-          "MathOperation interface not found - runMLTests must run first",
-        );
+        throw new Error("MathOperation interface not found - runMLTests must run first");
       }
 
       const out = parse(
@@ -130,10 +112,7 @@ export async function runMLHandlerTests(
       if (first.status !== "success") {
         throw new Error(`Status was ${first.status}, expected success`);
       }
-      if (
-        !Array.isArray(first.embedding_preview) ||
-        first.embedding_preview.length !== 5
-      ) {
+      if (!Array.isArray(first.embedding_preview) || first.embedding_preview.length !== 5) {
         throw new Error(
           `embedding_preview should be length 5, got ${first.embedding_preview?.length}`,
         );
@@ -147,21 +126,13 @@ export async function runMLHandlerTests(
     },
   );
 
-  await runner.runTest(
-    "find_similar_code requires code_snippet",
-    "ML-Handlers",
-    async () => {
-      const out = parse(
-        await mlHandlers.handleEmbeddings({ action: "find_similar" }),
-      );
-      if (!out.error || !/code_snippet/i.test(out.error)) {
-        throw new Error(
-          `Expected error about code_snippet, got: ${JSON.stringify(out)}`,
-        );
-      }
-      return { ok: true };
-    },
-  );
+  await runner.runTest("find_similar_code requires code_snippet", "ML-Handlers", async () => {
+    const out = parse(await mlHandlers.handleEmbeddings({ action: "find_similar" }));
+    if (!out.error || !/code_snippet/i.test(out.error)) {
+      throw new Error(`Expected error about code_snippet, got: ${JSON.stringify(out)}`);
+    }
+    return { ok: true };
+  });
 
   await runner.runTest(
     "find_similar_code returns ranked rows for stored embedding",
@@ -170,8 +141,7 @@ export async function runMLHandlerTests(
       const out = parse(
         await mlHandlers.handleEmbeddings({
           action: "find_similar",
-          code_snippet:
-            "interface MathOperation { execute(a: number, b: number): number; }",
+          code_snippet: "interface MathOperation { execute(a: number, b: number): number; }",
           limit: 5,
         }),
       );
@@ -187,10 +157,7 @@ export async function runMLHandlerTests(
       }
       if (out.results.length > 0) {
         const top = out.results[0];
-        if (
-          typeof top.similarity !== "number" ||
-          !Number.isFinite(top.similarity)
-        ) {
+        if (typeof top.similarity !== "number" || !Number.isFinite(top.similarity)) {
           throw new Error("Top similarity is not a finite number");
         }
         if (top.similarity < -1 || top.similarity > 1) {
@@ -251,9 +218,7 @@ export async function runMLHandlerTests(
         return { mode: "graceful_error", error: out.error };
       }
       if (!out.session_id || !out.status) {
-        throw new Error(
-          `Expected session_id+status, got: ${JSON.stringify(out)}`,
-        );
+        throw new Error(`Expected session_id+status, got: ${JSON.stringify(out)}`);
       }
       return {
         mode: "session_started",

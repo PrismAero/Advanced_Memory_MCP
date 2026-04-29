@@ -16,10 +16,7 @@ export class FileAnalyzer {
   private parser = new SourceParser();
   private interfaceRunner = new InterfaceExtractorRunner();
 
-  async analyzeFile(
-    filePath: string,
-    rootPath: string,
-  ): Promise<FileAnalysis | null> {
+  async analyzeFile(filePath: string, rootPath: string): Promise<FileAnalysis | null> {
     try {
       const stats = await fs.stat(filePath);
       const relativePath = path.relative(rootPath, filePath);
@@ -30,8 +27,7 @@ export class FileAnalyzer {
       }
 
       const tooLargeToRead = stats.size > MAX_FILE_BYTES_FOR_ANY_READ;
-      const tooLargeForDetail =
-        !tooLargeToRead && stats.size > MAX_FILE_BYTES_FOR_DETAIL;
+      const tooLargeForDetail = !tooLargeToRead && stats.size > MAX_FILE_BYTES_FOR_DETAIL;
 
       let imports: FileAnalysis["imports"] = [];
       let exports: FileAnalysis["exports"] = [];
@@ -44,8 +40,11 @@ export class FileAnalyzer {
       let isGenerated = false;
 
       if (
-        (fileType.shouldParseContent !== false) &&
-        (fileType.category === "source" || fileType.category === "test" || fileType.category === "schema" || fileType.category === "protocol") &&
+        fileType.shouldParseContent !== false &&
+        (fileType.category === "source" ||
+          fileType.category === "test" ||
+          fileType.category === "schema" ||
+          fileType.category === "protocol") &&
         !tooLargeToRead
       ) {
         try {
@@ -55,9 +54,7 @@ export class FileAnalyzer {
           isGenerated = isLikelyGeneratedSource(content);
 
           const skipDetailedParsing =
-            tooLargeForDetail ||
-            isGenerated ||
-            lineCount > MAX_LINES_FOR_DETAIL;
+            tooLargeForDetail || isGenerated || lineCount > MAX_LINES_FOR_DETAIL;
 
           if (!skipDetailedParsing) {
             if (fileType.hasImports) {
@@ -77,10 +74,7 @@ export class FileAnalyzer {
               interfaces = extraction.interfaces;
             }
             complexity = this.parser.calculateComplexity(content);
-            documentation = this.parser.calculateDocumentation(
-              content,
-              fileType.language,
-            );
+            documentation = this.parser.calculateDocumentation(content, fileType.language);
           } else {
             logger.debug(
               `[INDEX] Skipping detailed parse for ${relativePath} (size=${stats.size}, lines=${lineCount}, generated=${isGenerated})`,
@@ -90,9 +84,7 @@ export class FileAnalyzer {
           logger.warn(`Failed to analyze file content ${filePath}:`, error);
         }
       } else if (tooLargeToRead) {
-        logger.debug(
-          `[INDEX] Recording ${relativePath} as metadata-only (size=${stats.size})`,
-        );
+        logger.debug(`[INDEX] Recording ${relativePath} as metadata-only (size=${stats.size})`);
       }
 
       const skippedReason: FileAnalysis["analysisMetadata"]["skippedReason"] =
@@ -169,8 +161,8 @@ export class FileAnalyzer {
         shouldParseContent: false,
       };
     }
-    const specialMatch = [".test.ts", ".spec.ts", ".test.js", ".spec.js"].find(
-      (suffix) => fileName.endsWith(suffix),
+    const specialMatch = [".test.ts", ".spec.ts", ".test.js", ".spec.js"].find((suffix) =>
+      fileName.endsWith(suffix),
     );
     if (specialMatch) return this.fileTypeMap.get(specialMatch)!;
 

@@ -9,11 +9,7 @@ export type ObservationType =
   | "reference"
   | "next-steps";
 export type ObservationPriority = "critical" | "high" | "normal" | "low";
-export type ProjectPhase =
-  | "planning"
-  | "active-development"
-  | "maintenance"
-  | "reference";
+export type ProjectPhase = "planning" | "active-development" | "maintenance" | "reference";
 export type BranchRelationType = "depends_on" | "blocks" | "related_to";
 
 export interface CrossReference {
@@ -21,9 +17,7 @@ export interface CrossReference {
   entityNames: string[]; // Names of entities to include from the referenced branch
 }
 
-export const OPTIMIZATION_METADATA_SYMBOL = Symbol.for(
-  "@adaptive-reasoning/optimization"
-);
+export const OPTIMIZATION_METADATA_SYMBOL = Symbol.for("@adaptive-reasoning/optimization");
 
 export interface OptimizationMetadata {
   optimizedObservations: string[];

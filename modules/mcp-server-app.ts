@@ -1,17 +1,10 @@
 import { createRequire } from "module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import { EnhancedMemoryManager } from "../enhanced-memory-manager-modular.js";
 import { BackgroundProcessor } from "./background-processor.js";
-import {
-  BranchHandlers,
-  EntityHandlers,
-  SearchHandlers,
-} from "./handlers/index.js";
+import { BranchHandlers, EntityHandlers, SearchHandlers } from "./handlers/index.js";
 import { ContextHandlers } from "./handlers/context-handlers.js";
 import { MLHandlers } from "./handlers/ml-handlers.js";
 import * as qtHandlers from "./handlers/qt-handlers.js";
@@ -20,10 +13,7 @@ import { WorkspaceHandlers } from "./handlers/workspace-handlers.js";
 import { logger } from "./logger.js";
 import { RelationshipIndexer } from "./relationship-indexer.js";
 import { ModernSimilarityEngine } from "./similarity/similarity-engine.js";
-import {
-  QT_TOOLS_REGISTERED,
-  SMART_MEMORY_TOOLS,
-} from "./smart-memory-tools.js";
+import { QT_TOOLS_REGISTERED, SMART_MEMORY_TOOLS } from "./smart-memory-tools.js";
 import { ProjectAnalysisOperations } from "./sqlite/project-analysis-operations.js";
 import { SQLiteConnection } from "./sqlite/sqlite-connection.js";
 
@@ -73,16 +63,9 @@ export function installNetworkMonitor(): void {
 
   const originalConnect = socketPrototype.connect;
   socketPrototype.connect = function (...args: any[]) {
-    logger.warn(
-      "[ALERT] SECURITY WARNING: Unexpected network connection attempt detected!",
-      args,
-    );
-    logger.warn(
-      "[SECURE] This MCP server should operate 100% locally. Blocking connection.",
-    );
-    throw new Error(
-      "Network connections are not allowed in local-only MCP server",
-    );
+    logger.warn("[ALERT] SECURITY WARNING: Unexpected network connection attempt detected!", args);
+    logger.warn("[SECURE] This MCP server should operate 100% locally. Blocking connection.");
+    throw new Error("Network connections are not allowed in local-only MCP server");
   };
   socketPrototype.__advancedMemoryNetworkMonitorInstalled = true;
   socketPrototype.__advancedMemoryOriginalConnect = originalConnect;
@@ -100,9 +83,7 @@ export function getServerVersion(): string {
   }
 }
 
-export function createMcpServerApp(
-  options: McpServerAppOptions = {},
-): McpServerApp {
+export function createMcpServerApp(options: McpServerAppOptions = {}): McpServerApp {
   const projectPath = options.projectPath || process.env.MEMORY_PATH || process.cwd();
   logger.initializeSessionLog(projectPath);
   const startBackgroundProcessor = options.startBackgroundProcessor !== false;
@@ -111,14 +92,8 @@ export function createMcpServerApp(
 
   const modernSimilarity = new ModernSimilarityEngine();
   const sqliteConnection = new SQLiteConnection(projectPath);
-  const memoryManager = new EnhancedMemoryManager(
-    modernSimilarity,
-    sqliteConnection,
-  );
-  const relationshipIndexer = new RelationshipIndexer(
-    memoryManager,
-    modernSimilarity,
-  );
+  const memoryManager = new EnhancedMemoryManager(modernSimilarity, sqliteConnection);
+  const relationshipIndexer = new RelationshipIndexer(memoryManager, modernSimilarity);
   const projectAnalysisOps = new ProjectAnalysisOperations(sqliteConnection);
   const backgroundProcessor = new BackgroundProcessor(
     memoryManager,
@@ -128,15 +103,9 @@ export function createMcpServerApp(
 
   const handlers: McpServerHandlers = {
     branchHandlers: new BranchHandlers(memoryManager),
-    entityHandlers: new EntityHandlers(
-      memoryManager,
-      modernSimilarity,
-      relationshipIndexer,
-    ),
-    searchHandlers: new SearchHandlers(
-      memoryManager,
-      modernSimilarity,
-      (name, coAccessed) => backgroundProcessor.recordEntityAccess(name, coAccessed),
+    entityHandlers: new EntityHandlers(memoryManager, modernSimilarity, relationshipIndexer),
+    searchHandlers: new SearchHandlers(memoryManager, modernSimilarity, (name, coAccessed) =>
+      backgroundProcessor.recordEntityAccess(name, coAccessed),
     ),
     contextHandlers: new ContextHandlers(memoryManager, backgroundProcessor),
     workflowHandlers: new WorkflowHandlers(memoryManager),
@@ -244,8 +213,7 @@ export function createMcpServerApp(
                 {
                   type: "text",
                   text: JSON.stringify({
-                    error:
-                      "Qt/QML tools are disabled. Set ENABLE_QT_TOOLS=1 to enable.",
+                    error: "Qt/QML tools are disabled. Set ENABLE_QT_TOOLS=1 to enable.",
                     tool: name,
                   }),
                 },
@@ -314,9 +282,7 @@ export function createMcpServerApp(
 
     logger.info("Initializing project analysis operations and vector store...");
     await projectAnalysisOps.initialize();
-    logger.info(
-      "Project analysis operations and vector store initialized successfully",
-    );
+    logger.info("Project analysis operations and vector store initialized successfully");
 
     logger.info("Initializing TensorFlow.js similarity engine...");
     await modernSimilarity.initialize();

@@ -22,8 +22,7 @@ export class EntityClassifier {
     component: {
       keywords: ["component", "widget", "element", "ui", "interface"],
       patterns: ["Component", "Widget", "Element", ".tsx", ".jsx", "React"],
-      semanticContext:
-        "User interface component or reusable element in a software system",
+      semanticContext: "User interface component or reusable element in a software system",
       confidence: 0.8,
     },
     service: {
@@ -36,8 +35,7 @@ export class EntityClassifier {
     module: {
       keywords: ["module", "package", "library", "utility", "helper"],
       patterns: ["Module", "Util", "Helper", "Lib", ".mod", "package"],
-      semanticContext:
-        "Modular code organization unit containing related functionality",
+      semanticContext: "Modular code organization unit containing related functionality",
       confidence: 0.7,
     },
     class: {
@@ -50,42 +48,31 @@ export class EntityClassifier {
     interface: {
       keywords: ["interface", "contract", "protocol", "specification"],
       patterns: ["interface ", "Interface", "Protocol", "Contract", "Spec"],
-      semanticContext:
-        "Contract or specification defining expected behavior and structure",
+      semanticContext: "Contract or specification defining expected behavior and structure",
       confidence: 0.8,
     },
     decision: {
       keywords: ["decision", "choice", "option", "alternative", "resolution"],
       patterns: ["decided", "choose", "selected", "resolved", "determined"],
-      semanticContext:
-        "Documented decision or choice made during development or design process",
+      semanticContext: "Documented decision or choice made during development or design process",
       confidence: 0.9,
     },
     blocker: {
       keywords: ["blocker", "issue", "problem", "obstacle", "impediment"],
       patterns: ["blocked", "blocking", "issue", "problem", "stuck", "cannot"],
-      semanticContext:
-        "Obstacle or issue preventing progress on a task or feature",
+      semanticContext: "Obstacle or issue preventing progress on a task or feature",
       confidence: 0.85,
     },
     requirement: {
       keywords: ["requirement", "need", "must", "should", "specification"],
-      patterns: [
-        "required",
-        "must have",
-        "need to",
-        "should be",
-        "requirement",
-      ],
-      semanticContext:
-        "Functional or non-functional requirement for the system",
+      patterns: ["required", "must have", "need to", "should be", "requirement"],
+      semanticContext: "Functional or non-functional requirement for the system",
       confidence: 0.8,
     },
     "current-status": {
       keywords: ["status", "progress", "update", "current", "ongoing"],
       patterns: ["currently", "in progress", "status", "working on", "update"],
-      semanticContext:
-        "Current state or progress information about a task or project",
+      semanticContext: "Current state or progress information about a task or project",
       confidence: 0.75,
     },
   };
@@ -99,9 +86,7 @@ export class EntityClassifier {
    * Initialize type templates for semantic comparison
    */
   private initializeTypeTemplates(): void {
-    for (const [type, rules] of Object.entries(
-      this.TYPE_CLASSIFICATION_RULES
-    )) {
+    for (const [type, rules] of Object.entries(this.TYPE_CLASSIFICATION_RULES)) {
       const templates: Entity[] = [
         {
           name: `Example ${type}`,
@@ -139,10 +124,7 @@ export class EntityClassifier {
         let bestReasoning = "";
 
         for (const template of templates) {
-          const similarity = await this.similarityEngine.calculateSimilarity(
-            entity,
-            template
-          );
+          const similarity = await this.similarityEngine.calculateSimilarity(entity, template);
 
           // Apply rule-based boosting
           const rules = this.TYPE_CLASSIFICATION_RULES[type];
@@ -155,7 +137,7 @@ export class EntityClassifier {
               entity,
               type,
               similarity,
-              ruleBoost
+              ruleBoost,
             );
           }
         }
@@ -207,20 +189,20 @@ export class EntityClassifier {
    */
   private calculateRuleBoost(
     entity: Entity,
-    rules: (typeof this.TYPE_CLASSIFICATION_RULES)[string]
+    rules: (typeof this.TYPE_CLASSIFICATION_RULES)[string],
   ): number {
     let score = 0;
     const entityText = this.entityToText(entity).toLowerCase();
 
     // Keyword matching
     const keywordMatches = rules.keywords.filter((keyword) =>
-      entityText.includes(keyword.toLowerCase())
+      entityText.includes(keyword.toLowerCase()),
     ).length;
     score += (keywordMatches / rules.keywords.length) * 0.4;
 
     // Pattern matching
     const patternMatches = rules.patterns.filter((pattern) =>
-      entityText.includes(pattern.toLowerCase())
+      entityText.includes(pattern.toLowerCase()),
     ).length;
     score += (patternMatches / rules.patterns.length) * 0.4;
 
@@ -237,21 +219,21 @@ export class EntityClassifier {
     entity: Entity,
     suggestedType: string,
     semanticSimilarity: number,
-    ruleBoost: number
+    ruleBoost: number,
   ): string {
     const reasons: string[] = [];
 
     if (semanticSimilarity > 0.7) {
       reasons.push(
         `High semantic similarity (${(semanticSimilarity * 100).toFixed(
-          1
-        )}%) to ${suggestedType} patterns`
+          1,
+        )}%) to ${suggestedType} patterns`,
       );
     } else if (semanticSimilarity > 0.5) {
       reasons.push(
         `Moderate semantic similarity (${(semanticSimilarity * 100).toFixed(
-          1
-        )}%) to ${suggestedType} patterns`
+          1,
+        )}%) to ${suggestedType} patterns`,
       );
     }
 
@@ -264,16 +246,14 @@ export class EntityClassifier {
     const rules = this.TYPE_CLASSIFICATION_RULES[suggestedType];
     const entityText = this.entityToText(entity).toLowerCase();
     const matchedKeywords = rules.keywords.filter((keyword) =>
-      entityText.includes(keyword.toLowerCase())
+      entityText.includes(keyword.toLowerCase()),
     );
 
     if (matchedKeywords.length > 0) {
       reasons.push(`Contains keywords: ${matchedKeywords.join(", ")}`);
     }
 
-    return reasons.length > 0
-      ? reasons.join("; ")
-      : "Based on TensorFlow.js semantic analysis";
+    return reasons.length > 0 ? reasons.join("; ") : "Based on TensorFlow.js semantic analysis";
   }
 
   /**
@@ -298,10 +278,7 @@ export class EntityClassifier {
 
     // Suggest entity type improvement
     const classification = await this.classifyEntityType(entity);
-    if (
-      classification.confidence > 0.6 &&
-      classification.suggestedType !== entity.entityType
-    ) {
+    if (classification.confidence > 0.6 && classification.suggestedType !== entity.entityType) {
       suggestions.push({
         type: "entityType",
         current: entity.entityType,
@@ -319,8 +296,7 @@ export class EntityClassifier {
           type: "content",
           current: entity.content || "",
           suggested: suggestedContent,
-          reasoning:
-            "Generated descriptive content based on entity name and type",
+          reasoning: "Generated descriptive content based on entity name and type",
           confidence: 0.7,
         });
       }
@@ -328,15 +304,12 @@ export class EntityClassifier {
 
     // Suggest observation improvements
     if (!entity.observations || entity.observations.length < 2) {
-      const suggestedObservations = await this.generateObservationSuggestions(
-        entity
-      );
+      const suggestedObservations = await this.generateObservationSuggestions(entity);
       suggestions.push({
         type: "observations",
         current: entity.observations?.join("; ") || "",
         suggested: suggestedObservations.join("; "),
-        reasoning:
-          "Generated observations based on entity type and semantic context",
+        reasoning: "Generated observations based on entity type and semantic context",
         confidence: 0.6,
       });
     }
@@ -347,9 +320,7 @@ export class EntityClassifier {
   /**
    * Generate content suggestion based on entity analysis
    */
-  private async generateContentSuggestion(
-    entity: Entity
-  ): Promise<string | null> {
+  private async generateContentSuggestion(entity: Entity): Promise<string | null> {
     const type = entity.entityType;
     const name = entity.name;
 
@@ -366,17 +337,14 @@ export class EntityClassifier {
     };
 
     return (
-      templates[type] ||
-      `${name} is a ${type} in the system that requires further documentation.`
+      templates[type] || `${name} is a ${type} in the system that requires further documentation.`
     );
   }
 
   /**
    * Generate observation suggestions based on entity context
    */
-  private async generateObservationSuggestions(
-    entity: Entity
-  ): Promise<string[]> {
+  private async generateObservationSuggestions(entity: Entity): Promise<string[]> {
     const type = entity.entityType;
     const name = entity.name;
 
@@ -435,9 +403,7 @@ export class EntityClassifier {
     ];
 
     // Customize observations based on entity name
-    return baseObservations.map((obs) =>
-      obs.replace(/component|entity|item/g, name.toLowerCase())
-    );
+    return baseObservations.map((obs) => obs.replace(/component|entity|item/g, name.toLowerCase()));
   }
 
   /**

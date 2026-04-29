@@ -26,9 +26,7 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
   ): Promise<InterfaceExtractionResult> {
     const processed = await processWithTreeSitter(content, context.language);
     const diagnostics =
-      processed?.diagnostics?.map(
-        (diag) => `${diag.severity}: ${diag.message}`,
-      ) || [];
+      processed?.diagnostics?.map((diag) => `${diag.severity}: ${diag.message}`) || [];
 
     const lines = content.split("\n");
     const interfaces: NormalizedCodeInterface[] = [
@@ -65,9 +63,7 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
         continue;
       }
 
-      const macro = line.match(
-        /^#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)(?:\(([^)]*)\))?\s*(.*)$/,
-      );
+      const macro = line.match(/^#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)(?:\(([^)]*)\))?\s*(.*)$/);
       if (!macro) continue;
 
       const [, name, params, replacement] = macro;
@@ -108,13 +104,9 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
     for (let index = 0; index < lines.length; index++) {
       const raw = lines[index];
       const line = raw.trim();
-      const currentNamespace = namespaceStack
-        .map((entry) => entry.name)
-        .join("::");
+      const currentNamespace = namespaceStack.map((entry) => entry.name).join("::");
 
-      const namespace = line.match(
-        /^namespace\s+([A-Za-z_][A-Za-z0-9_]*)\s*{?/,
-      );
+      const namespace = line.match(/^namespace\s+([A-Za-z_][A-Za-z0-9_]*)\s*{?/);
       if (namespace) {
         namespaceStack.push({
           name: namespace[1],
@@ -123,9 +115,7 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
       }
 
       const template = line.match(/^template\s*<([^>]+)>/);
-      const cTypedefCompound = line.match(
-        /^typedef\s+(struct|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/,
-      );
+      const cTypedefCompound = line.match(/^typedef\s+(struct|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/);
       if (cTypedefCompound) {
         const kind = cTypedefCompound[1] === "struct" ? "struct" : "enum";
         const name = cTypedefCompound[2];
@@ -158,9 +148,7 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
               ? "struct"
               : "class";
         const extendsList = splitCsv(declaration[3])
-          .map((item) =>
-            item.replace(/\b(public|protected|private|virtual)\b/g, "").trim(),
-          )
+          .map((item) => item.replace(/\b(public|protected|private|virtual)\b/g, "").trim())
           .filter(Boolean);
         results.push(
           makeInterface({
@@ -214,8 +202,7 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
         );
       }
 
-      braceDepth +=
-        (raw.match(/{/g) || []).length - (raw.match(/}/g) || []).length;
+      braceDepth += (raw.match(/{/g) || []).length - (raw.match(/}/g) || []).length;
       while (
         namespaceStack.length &&
         braceDepth < namespaceStack[namespaceStack.length - 1].depth
@@ -270,18 +257,11 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
     return results;
   }
 
-  private extractMembers(
-    lines: string[],
-    startIndex: number,
-  ): NormalizedCodeInterface["members"] {
+  private extractMembers(lines: string[], startIndex: number): NormalizedCodeInterface["members"] {
     const members: NonNullable<NormalizedCodeInterface["members"]> = [];
     let depth = 0;
     let visibility: "public" | "protected" | "private" = "private";
-    for (
-      let i = startIndex;
-      i < Math.min(lines.length, startIndex + 250);
-      i++
-    ) {
+    for (let i = startIndex; i < Math.min(lines.length, startIndex + 250); i++) {
       const raw = lines[i];
       const line = raw.trim();
       depth += (raw.match(/{/g) || []).length - (raw.match(/}/g) || []).length;
@@ -308,10 +288,7 @@ export class CppTreeSitterExtractor implements LanguageInterfaceExtractor {
     return members.slice(0, 100);
   }
 
-  private collectDeclarationSnippet(
-    lines: string[],
-    startIndex: number,
-  ): string {
+  private collectDeclarationSnippet(lines: string[], startIndex: number): string {
     const snippet: string[] = [];
     let depth = 0;
     for (let i = startIndex; i < Math.min(lines.length, startIndex + 80); i++) {

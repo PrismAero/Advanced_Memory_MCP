@@ -1,10 +1,6 @@
 import { Entity } from "../../memory-types.js";
 import { logger } from "../logger.js";
-import {
-  CACHE_CONFIG,
-  CONFIDENCE_CONFIG,
-  THRESHOLDS,
-} from "./similarity-config.js";
+import { CACHE_CONFIG, CONFIDENCE_CONFIG, THRESHOLDS } from "./similarity-config.js";
 import { TensorFlowModelManager } from "./tensorflow-model-manager.js";
 
 /**
@@ -88,9 +84,7 @@ export class ModernSimilarityEngine {
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
-      logger.debug(
-        "TensorFlow.js similarity engine already initialized, skipping"
-      );
+      logger.debug("TensorFlow.js similarity engine already initialized, skipping");
       return;
     }
 
@@ -98,14 +92,9 @@ export class ModernSimilarityEngine {
       logger.debug("Initializing TensorFlow.js similarity engine...");
       await this.modelManager.initialize();
       this.initialized = true;
-      logger.info(
-        "[SUCCESS] TensorFlow.js similarity engine ready with semantic embeddings"
-      );
+      logger.info("[SUCCESS] TensorFlow.js similarity engine ready with semantic embeddings");
     } catch (error) {
-      logger.error(
-        "Failed to initialize TensorFlow.js similarity engine:",
-        error
-      );
+      logger.error("Failed to initialize TensorFlow.js similarity engine:", error);
       throw error;
     }
   }
@@ -125,7 +114,7 @@ export class ModernSimilarityEngine {
    */
   async detectSimilarEntities(
     targetEntity: Entity,
-    candidateEntities: Entity[]
+    candidateEntities: Entity[],
   ): Promise<
     Array<{
       entity: Entity;
@@ -136,9 +125,7 @@ export class ModernSimilarityEngine {
     }>
   > {
     if (!this.initialized) {
-      logger.warn(
-        "TensorFlow.js similarity engine not initialized, initializing now..."
-      );
+      logger.warn("TensorFlow.js similarity engine not initialized, initializing now...");
       await this.initialize();
     }
 
@@ -148,25 +135,20 @@ export class ModernSimilarityEngine {
 
     try {
       logger.debug(
-        `TensorFlow.js similarity engine analyzing ${candidateEntities.length} candidates for "${targetEntity.name}"`
+        `TensorFlow.js similarity engine analyzing ${candidateEntities.length} candidates for "${targetEntity.name}"`,
       );
 
       // Get semantic similarity using embeddings
-      const results = await this.calculateSemanticSimilarities(
-        targetEntity,
-        candidateEntities
-      );
+      const results = await this.calculateSemanticSimilarities(targetEntity, candidateEntities);
 
       logger.debug(`Found ${results.length} similar entities above threshold`);
 
       // Log detailed results for debugging
       results.forEach((result, i) => {
         logger.debug(
-          `${i + 1}. "${result.entity.name}" - ${(
-            result.similarity * 100
-          ).toFixed(1)}% similar (${result.confidence}) - ${
-            result.suggestedRelationType
-          }`
+          `${i + 1}. "${result.entity.name}" - ${(result.similarity * 100).toFixed(
+            1,
+          )}% similar (${result.confidence}) - ${result.suggestedRelationType}`,
         );
       });
 
@@ -191,16 +173,10 @@ export class ModernSimilarityEngine {
       const embedding2 = await this.getEntityEmbedding(entity2);
 
       // Calculate cosine similarity
-      const similarity = this.modelManager.calculateCosineSimilarity(
-        embedding1,
-        embedding2
-      );
+      const similarity = this.modelManager.calculateCosineSimilarity(embedding1, embedding2);
 
       // Apply entity type compatibility boost/penalty
-      const typeCompatibility = this.calculateTypeCompatibility(
-        entity1,
-        entity2
-      );
+      const typeCompatibility = this.calculateTypeCompatibility(entity1, entity2);
       const adjustedSimilarity = similarity * 0.8 + typeCompatibility * 0.2;
 
       return Math.min(adjustedSimilarity, 1.0);
@@ -214,16 +190,13 @@ export class ModernSimilarityEngine {
    * Batch similarity calculation using TensorFlow.js embeddings
    */
   async calculateBatchSimilarity(
-    entities: Entity[]
+    entities: Entity[],
   ): Promise<Map<string, Array<{ entity: Entity; similarity: number }>>> {
     if (!this.initialized) {
       await this.initialize();
     }
 
-    const results = new Map<
-      string,
-      Array<{ entity: Entity; similarity: number }>
-    >();
+    const results = new Map<string, Array<{ entity: Entity; similarity: number }>>();
 
     try {
       // Pre-compute embeddings for all entities for efficiency
@@ -243,19 +216,14 @@ export class ModernSimilarityEngine {
           if (entity.name === otherEntity.name) continue;
 
           const otherEmbedding = embeddings.get(otherEntity.name)!;
-          const semanticSimilarity =
-            this.modelManager.calculateCosineSimilarity(
-              entityEmbedding,
-              otherEmbedding
-            );
+          const semanticSimilarity = this.modelManager.calculateCosineSimilarity(
+            entityEmbedding,
+            otherEmbedding,
+          );
 
           // Apply type compatibility
-          const typeCompatibility = this.calculateTypeCompatibility(
-            entity,
-            otherEntity
-          );
-          const finalSimilarity =
-            semanticSimilarity * 0.8 + typeCompatibility * 0.2;
+          const typeCompatibility = this.calculateTypeCompatibility(entity, otherEntity);
+          const finalSimilarity = semanticSimilarity * 0.8 + typeCompatibility * 0.2;
 
           if (finalSimilarity > this.SIMILARITY_THRESHOLD) {
             similarities.push({
@@ -270,9 +238,7 @@ export class ModernSimilarityEngine {
         results.set(entity.name, similarities);
       }
 
-      logger.debug(
-        `Batch similarity calculation completed for ${entities.length} entities`
-      );
+      logger.debug(`Batch similarity calculation completed for ${entities.length} entities`);
       return results;
     } catch (error) {
       logger.error("Error in batch similarity calculation:", error);
@@ -285,7 +251,7 @@ export class ModernSimilarityEngine {
    */
   private async calculateSemanticSimilarities(
     targetEntity: Entity,
-    candidateEntities: Entity[]
+    candidateEntities: Entity[],
   ): Promise<
     Array<{
       entity: Entity;
@@ -315,16 +281,12 @@ export class ModernSimilarityEngine {
       // Calculate semantic similarity
       const semanticSimilarity = this.modelManager.calculateCosineSimilarity(
         targetEmbedding,
-        candidateEmbedding
+        candidateEmbedding,
       );
 
       // Apply type compatibility
-      const typeCompatibility = this.calculateTypeCompatibility(
-        targetEntity,
-        candidate
-      );
-      const finalSimilarity =
-        semanticSimilarity * 0.8 + typeCompatibility * 0.2;
+      const typeCompatibility = this.calculateTypeCompatibility(targetEntity, candidate);
+      const finalSimilarity = semanticSimilarity * 0.8 + typeCompatibility * 0.2;
 
       if (finalSimilarity > this.SIMILARITY_THRESHOLD) {
         const confidence = this.determineConfidence(finalSimilarity);
@@ -332,7 +294,7 @@ export class ModernSimilarityEngine {
           targetEntity,
           candidate,
           finalSimilarity,
-          semanticSimilarity
+          semanticSimilarity,
         );
 
         results.push({
@@ -397,11 +359,7 @@ export class ModernSimilarityEngine {
     const type1 = entity1.entityType.toLowerCase();
     const type2 = entity2.entityType.toLowerCase();
 
-    return (
-      typeCompatibilityMap[type1]?.[type2] ||
-      typeCompatibilityMap[type2]?.[type1] ||
-      0.3
-    ); // Default compatibility for unrelated types
+    return typeCompatibilityMap[type1]?.[type2] || typeCompatibilityMap[type2]?.[type1] || 0.3; // Default compatibility for unrelated types
   }
 
   /**
@@ -461,7 +419,7 @@ export class ModernSimilarityEngine {
     entity1: Entity,
     entity2: Entity,
     finalSimilarity: number,
-    semanticSimilarity: number
+    semanticSimilarity: number,
   ): {
     relationType: string;
     reasoning: string;
@@ -475,9 +433,9 @@ export class ModernSimilarityEngine {
     if (semanticSimilarity > 0.9) {
       return {
         relationType: "semantically_similar",
-        reasoning: `Very high semantic similarity (${(
-          semanticSimilarity * 100
-        ).toFixed(1)}%) detected by TensorFlow.js embeddings`,
+        reasoning: `Very high semantic similarity (${(semanticSimilarity * 100).toFixed(
+          1,
+        )}%) detected by TensorFlow.js embeddings`,
       };
     }
 
@@ -485,9 +443,9 @@ export class ModernSimilarityEngine {
     if (type1 === type2 && finalSimilarity > 0.8) {
       return {
         relationType: "similar_to",
-        reasoning: `High similarity between same-type entities (${(
-          finalSimilarity * 100
-        ).toFixed(1)}%)`,
+        reasoning: `High similarity between same-type entities (${(finalSimilarity * 100).toFixed(
+          1,
+        )}%)`,
       };
     }
 
@@ -613,18 +571,12 @@ export class ModernSimilarityEngine {
         entity1: {
           name: "Dashboard Component Manager",
           entityType: "component",
-          observations: [
-            "Manages dashboard components",
-            "Handles component lifecycle",
-          ],
+          observations: ["Manages dashboard components", "Handles component lifecycle"],
         } as Entity,
         entity2: {
           name: "Dashboard Grid System",
           entityType: "component",
-          observations: [
-            "Grid layout system for dashboard",
-            "Responsive grid components",
-          ],
+          observations: ["Grid layout system for dashboard", "Responsive grid components"],
         } as Entity,
         expectedMinSimilarity: 0.5,
         test: "Dashboard components should be similar",
@@ -638,10 +590,7 @@ export class ModernSimilarityEngine {
         entity2: {
           name: "CSS Button Styling",
           entityType: "component",
-          observations: [
-            "Styled button with hover effects",
-            "Color palette and border radius",
-          ],
+          observations: ["Styled button with hover effects", "Color palette and border radius"],
         } as Entity,
         expectedMinSimilarity: 0.0, // Should be low - truly unrelated concepts
         test: "Unrelated concepts should have low similarity",
@@ -652,10 +601,7 @@ export class ModernSimilarityEngine {
     let allPassed = true;
 
     for (const testCase of testCases) {
-      const similarity = await this.calculateSimilarity(
-        testCase.entity1,
-        testCase.entity2
-      );
+      const similarity = await this.calculateSimilarity(testCase.entity1, testCase.entity2);
 
       const passed = testCase.test.includes("low")
         ? similarity < 0.5
@@ -670,9 +616,9 @@ export class ModernSimilarityEngine {
       });
 
       logger.info(
-        `${passed ? "[SUCCESS]" : "[ERROR]"} [TEST] ${testCase.test}: ${(
-          similarity * 100
-        ).toFixed(1)}%`
+        `${passed ? "[SUCCESS]" : "[ERROR]"} [TEST] ${testCase.test}: ${(similarity * 100).toFixed(
+          1,
+        )}%`,
       );
     }
 
@@ -723,7 +669,7 @@ export class ModernSimilarityEngine {
         return {
           status: "degraded",
           message: `TensorFlow.js model producing unexpected results (self-similarity: ${similarity.toFixed(
-            3
+            3,
           )})`,
           timestamp: new Date().toISOString(),
         };

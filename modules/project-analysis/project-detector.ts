@@ -2,12 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { logger } from "../logger.js";
 import { IgnorePolicy } from "./ignore-policy.js";
-import type {
-  FileAnalysis,
-  PackageManager,
-  ProjectType,
-  WorkspaceInfo,
-} from "./project-types.js";
+import type { FileAnalysis, PackageManager, ProjectType, WorkspaceInfo } from "./project-types.js";
 
 export class ProjectDetector {
   constructor(private ignorePolicy: IgnorePolicy) {}
@@ -117,9 +112,7 @@ export class ProjectDetector {
         for (const dir of workspaceDirs) {
           const workspacePackageJson = path.join(dir, "package.json");
           if (!(await this.fileExists(workspacePackageJson))) continue;
-          const wsPackageJson = JSON.parse(
-            await fs.readFile(workspacePackageJson, "utf-8"),
-          );
+          const wsPackageJson = JSON.parse(await fs.readFile(workspacePackageJson, "utf-8"));
           workspaces.push({
             name: wsPackageJson.name || path.basename(dir),
             path: path.relative(rootPath, dir),
@@ -142,7 +135,10 @@ export class ProjectDetector {
     try {
       if (await this.fileExists(packageJsonPath)) {
         const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
-        const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+        const allDeps = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
         const frameworkMap: Record<string, string> = {
           react: "React",
           vue: "Vue.js",

@@ -10,12 +10,7 @@ import { ProjectIndexer, ProjectInfo } from "./project-indexer.js";
 /**
  * File system change event types
  */
-export type FileChangeType =
-  | "add"
-  | "change"
-  | "unlink"
-  | "addDir"
-  | "unlinkDir";
+export type FileChangeType = "add" | "change" | "unlink" | "addDir" | "unlinkDir";
 
 /**
  * File change event data
@@ -97,10 +92,7 @@ export class FileWatcher extends EventEmitter {
   private pendingChanges = new Map<string, FileChangeEvent>();
   private lastProcessTime = new Date();
 
-  constructor(
-    projectIndexer?: ProjectIndexer,
-    config?: Partial<WatcherConfig>
-  ) {
+  constructor(projectIndexer?: ProjectIndexer, config?: Partial<WatcherConfig>) {
     super();
     this.projectIndexer = projectIndexer || new ProjectIndexer();
 
@@ -358,13 +350,11 @@ export class FileWatcher extends EventEmitter {
     logger.info("[DATA] Performing initial project analysis");
 
     try {
-      this.projectInfo = await this.projectIndexer.analyzeProject(
-        this.rootPath
-      );
+      this.projectInfo = await this.projectIndexer.analyzeProject(this.rootPath);
       logger.info(
         `Project type: ${
           this.projectInfo.projectType
-        }, Languages: ${this.projectInfo.languages.join(", ")}`
+        }, Languages: ${this.projectInfo.languages.join(", ")}`,
       );
     } catch (error) {
       logger.error("Failed to analyze project:", error);
@@ -382,7 +372,7 @@ export class FileWatcher extends EventEmitter {
     await this.scanDirectoryRecursive(this.folderTree);
 
     logger.info(
-      `Folder tree built: ${this.locationMap.files.size} files, ${this.locationMap.directories.size} directories`
+      `Folder tree built: ${this.locationMap.files.size} files, ${this.locationMap.directories.size} directories`,
     );
   }
 
@@ -391,12 +381,10 @@ export class FileWatcher extends EventEmitter {
    */
   private async createFolderNode(
     fullPath: string,
-    parent: FolderTreeNode | null
+    parent: FolderTreeNode | null,
   ): Promise<FolderTreeNode> {
     const stats = await fs.stat(fullPath);
-    const name = parent
-      ? path.basename(fullPath)
-      : path.basename(this.rootPath) || "root";
+    const name = parent ? path.basename(fullPath) : path.basename(this.rootPath) || "root";
     const relativePath = parent ? path.relative(this.rootPath, fullPath) : "";
 
     const node: FolderTreeNode = {
@@ -465,8 +453,7 @@ export class FileWatcher extends EventEmitter {
             // Aggregate child metadata
             if (childNode.metadata) {
               node.metadata!.fileCount += childNode.metadata.fileCount;
-              node.metadata!.directoryCount +=
-                childNode.metadata.directoryCount;
+              node.metadata!.directoryCount += childNode.metadata.directoryCount;
               node.metadata!.totalSize += childNode.metadata.totalSize;
             }
           }
@@ -584,9 +571,7 @@ export class FileWatcher extends EventEmitter {
 
     if (significantChanges.length > 0) {
       this.emit("significantChanges", significantChanges);
-      logger.info(
-        `[LOADING] Processed ${significantChanges.length} significant changes`
-      );
+      logger.info(`[LOADING] Processed ${significantChanges.length} significant changes`);
     }
 
     this.emit("changesProcessed", changes);
@@ -625,11 +610,7 @@ export class FileWatcher extends EventEmitter {
       const parentDir = path.dirname(filePath);
       const parentNode = this.getNodeByPath(parentDir);
 
-      if (
-        parentNode &&
-        parentNode.type === "directory" &&
-        parentNode.children
-      ) {
+      if (parentNode && parentNode.type === "directory" && parentNode.children) {
         const newNode = await this.createFolderNode(filePath, parentNode);
         parentNode.children.set(path.basename(filePath), newNode);
 
@@ -659,8 +640,7 @@ export class FileWatcher extends EventEmitter {
 
         // Update parent metadata
         if (node.parent && node.parent.metadata) {
-          node.parent.metadata.totalSize =
-            node.parent.metadata.totalSize - oldSize + stats.size;
+          node.parent.metadata.totalSize = node.parent.metadata.totalSize - oldSize + stats.size;
         }
       } catch (error) {
         logger.warn(`Failed to update stats for ${filePath}:`, error);
@@ -700,11 +680,7 @@ export class FileWatcher extends EventEmitter {
       const parentDir = path.dirname(dirPath);
       const parentNode = this.getNodeByPath(parentDir);
 
-      if (
-        parentNode &&
-        parentNode.type === "directory" &&
-        parentNode.children
-      ) {
+      if (parentNode && parentNode.type === "directory" && parentNode.children) {
         const newNode = await this.createFolderNode(dirPath, parentNode);
         parentNode.children.set(path.basename(dirPath), newNode);
 
@@ -752,16 +728,7 @@ export class FileWatcher extends EventEmitter {
 
     // Check file extension for source files
     const ext = path.extname(changePath);
-    const significantExtensions = [
-      ".js",
-      ".ts",
-      ".tsx",
-      ".jsx",
-      ".py",
-      ".rs",
-      ".go",
-      ".java",
-    ];
+    const significantExtensions = [".js", ".ts", ".tsx", ".jsx", ".py", ".rs", ".go", ".java"];
 
     if (!significantExtensions.includes(ext)) {
       return false;

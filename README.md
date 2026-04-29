@@ -100,16 +100,16 @@ Point the client at the built entry point:
 
 The server speaks standard MCP over stdio, so it works with any MCP-aware client. Concrete config files for each major client live in [`examples/`](examples/). The most common ones are:
 
-| Client | Config file | Format key |
-|---|---|---|
-| Cursor (project) | `.cursor/mcp.json` | `mcpServers` |
-| Cursor (global) | `~/.cursor/mcp.json` | `mcpServers` |
-| Claude Desktop | `claude_desktop_config.json` | `mcpServers` |
-| VS Code | `.vscode/mcp.json` | `servers` |
-| Cline (VS Code) | `cline_mcp_settings.json` | `mcpServers` |
-| Continue.dev | `~/.continue/config.yaml` | `mcpServers:` (YAML) |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` |
-| Zed | `settings.json` | `context_servers` |
+| Client           | Config file                           | Format key           |
+| ---------------- | ------------------------------------- | -------------------- |
+| Cursor (project) | `.cursor/mcp.json`                    | `mcpServers`         |
+| Cursor (global)  | `~/.cursor/mcp.json`                  | `mcpServers`         |
+| Claude Desktop   | `claude_desktop_config.json`          | `mcpServers`         |
+| VS Code          | `.vscode/mcp.json`                    | `servers`            |
+| Cline (VS Code)  | `cline_mcp_settings.json`             | `mcpServers`         |
+| Continue.dev     | `~/.continue/config.yaml`             | `mcpServers:` (YAML) |
+| Windsurf         | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`         |
+| Zed              | `settings.json`                       | `context_servers`    |
 
 A minimal Cursor / Claude Desktop / Cline / Windsurf entry looks like this:
 
@@ -149,12 +149,12 @@ See [`examples/README.md`](examples/README.md) for client-specific paths, Window
 
 ### Environment variables
 
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `MEMORY_PATH` | yes | - | Absolute path to your project root. The `.memory/` folder is created here. |
-| `LOG_LEVEL` | no | `info` | One of `debug`, `info`, `warn`, `error`. |
-| `DISABLE_BASELINE_SEED` | no | unset | Set to `1` to skip loading the curated baseline knowledge into the trainer on first run. |
-| `ENABLE_QT_TOOLS` | no | unset | Set to `1` to expose the six Qt/QML analysis tools (only useful when entities carry file metadata). |
+| Variable                | Required | Default | Purpose                                                                                             |
+| ----------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `MEMORY_PATH`           | yes      | -       | Absolute path to your project root. The `.memory/` folder is created here.                          |
+| `LOG_LEVEL`             | no       | `info`  | One of `debug`, `info`, `warn`, `error`.                                                            |
+| `DISABLE_BASELINE_SEED` | no       | unset   | Set to `1` to skip loading the curated baseline knowledge into the trainer on first run.            |
+| `ENABLE_QT_TOOLS`       | no       | unset   | Set to `1` to expose the six Qt/QML analysis tools (only useful when entities carry file metadata). |
 
 ## Available Tools
 
@@ -162,57 +162,57 @@ The server exposes a deliberately small surface area. Mode/action-dispatched too
 
 ### Branch management
 
-| Tool | Purpose |
-|---|---|
+| Tool                   | Purpose                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
 | `list_memory_branches` | List branches with name, purpose, entity count, last-updated time. |
-| `create_memory_branch` | Create a new branch when no existing branch fits the topic. |
-| `delete_memory_branch` | Permanently delete a branch (cannot delete `main`). |
+| `create_memory_branch` | Create a new branch when no existing branch fits the topic.        |
+| `delete_memory_branch` | Permanently delete a branch (cannot delete `main`).                |
 
 ### Entity CRUD
 
-| Tool | Purpose |
-|---|---|
-| `create_entities` | Create new knowledge entities (facts, decisions, components, patterns). Auto-suggests a branch and defers relation detection to the background. |
-| `add_observations` | Append observations to an existing entity. |
-| `update_entity_status` | Change one entity's status with an optional reason. |
-| `delete_entities` | Permanently delete entities and their relations. |
+| Tool                   | Purpose                                                                                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_entities`      | Create new knowledge entities (facts, decisions, components, patterns). Auto-suggests a branch and defers relation detection to the background. |
+| `add_observations`     | Append observations to an existing entity.                                                                                                      |
+| `update_entity_status` | Change one entity's status with an optional reason.                                                                                             |
+| `delete_entities`      | Permanently delete entities and their relations.                                                                                                |
 
 ### Search and read
 
-| Tool | Purpose |
-|---|---|
-| `smart_search` | Default lookup. Name + type + content + observations with relevance ranking and optional semantic expansion. Use `branch_name='*'` for cross-branch search. |
-| `read_memory_branch` | Dump every entity and relation in a branch. Heavy - prefer `smart_search` for targeted lookups. |
+| Tool                 | Purpose                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smart_search`       | Default lookup. Name + type + content + observations with relevance ranking and optional semantic expansion. Use `branch_name='*'` for cross-branch search. |
+| `read_memory_branch` | Dump every entity and relation in a branch. Heavy - prefer `smart_search` for targeted lookups.                                                             |
 
 ### Context and project state
 
-| Tool | Modes / purpose |
-|---|---|
-| `get_context` | `working` / `continuation` / `related` / `project` - unified context retrieval. |
-| `get_project_status` | Cross-branch overview at `summary` / `detailed` / `comprehensive` detail levels. |
-| `find_dependencies` | Walk the relations graph outward from target entities. |
-| `trace_decision_chain` | Surface decisions that shaped an entity, or recent decisions branch-wide. |
+| Tool                   | Modes / purpose                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `get_context`          | `working` / `continuation` / `related` / `project` - unified context retrieval.  |
+| `get_project_status`   | Cross-branch overview at `summary` / `detailed` / `comprehensive` detail levels. |
+| `find_dependencies`    | Walk the relations graph outward from target entities.                           |
+| `trace_decision_chain` | Surface decisions that shaped an entity, or recent decisions branch-wide.        |
 
 ### Workflow
 
-| Tool | Purpose |
-|---|---|
-| `capture_decision` | Record a structured decision with rationale, alternatives, and impact. |
-| `mark_current_work` | Flag entities as the active working context. |
-| `update_status` | `phase` (bulk pattern updates + branch project_phase) or `archive` (archive completed work, optionally with a summary entity). |
-| `check_missing_dependencies` | Scan observations for explicit dependency keywords and report unbound mentions. |
+| Tool                         | Purpose                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `capture_decision`           | Record a structured decision with rationale, alternatives, and impact.                                                         |
+| `mark_current_work`          | Flag entities as the active working context.                                                                                   |
+| `update_status`              | `phase` (bulk pattern updates + branch project_phase) or `archive` (archive completed work, optionally with a summary entity). |
+| `check_missing_dependencies` | Scan observations for explicit dependency keywords and report unbound mentions.                                                |
 
 ### Workspace integration
 
-| Tool | Modes / purpose |
-|---|---|
+| Tool                | Modes / purpose                                                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `analyze_workspace` | `sync` (folder/file structure entities) / `bridge` (link open files to memory) / `patterns` (detect architecture and suggest branches) / `structure` (start background monitoring). |
 
 ### Machine learning
 
-| Tool | Purpose |
-|---|---|
-| `embeddings` | `generate` / `find_similar` / `backfill` - all embedding operations. |
+| Tool                  | Purpose                                                                       |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `embeddings`          | `generate` / `find_similar` / `backfill` - all embedding operations.          |
 | `train_project_model` | Trigger an incremental fine-tune over collected interactions + baseline seed. |
 
 ### Qt/QML analysis (opt-in)

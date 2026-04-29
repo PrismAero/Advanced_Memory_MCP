@@ -1,9 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  createInitializedApp,
-  parseTextResponse,
-} from "../utils/mcp-test-utils.js";
+import { createInitializedApp, parseTextResponse } from "../utils/mcp-test-utils.js";
 
 describe("keyword coupling stress", () => {
   let ctx: Awaited<ReturnType<typeof createInitializedApp>>;

@@ -99,18 +99,18 @@ VS Code uses `servers` instead of `mcpServers`, and Zed uses a nested `context_s
 
 ## Client matrix
 
-| Client | Config path | Example file | Format key |
-|---|---|---|---|
-| Cursor (project) | `<workspace>/.cursor/mcp.json` | [`cursor-mcp.json`](cursor-mcp.json) | `mcpServers` |
-| Cursor (global) | `~/.cursor/mcp.json` (Windows: `%USERPROFILE%\.cursor\mcp.json`) | [`cursor-mcp.json`](cursor-mcp.json) | `mcpServers` |
-| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | [`claude-desktop-config.json`](claude-desktop-config.json) | `mcpServers` |
-| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | [`claude-desktop-config.json`](claude-desktop-config.json) | `mcpServers` |
-| Claude Desktop (Linux) | `~/.config/Claude/claude_desktop_config.json` | [`claude-desktop-config.json`](claude-desktop-config.json) | `mcpServers` |
-| VS Code (native MCP) | `<workspace>/.vscode/mcp.json` | [`vscode-mcp.json`](vscode-mcp.json) | `servers` |
-| Cline (VS Code extension) | open the Cline panel -> MCP Servers -> Edit, or `cline_mcp_settings.json` from the extension storage | [`cline-mcp-settings.json`](cline-mcp-settings.json) | `mcpServers` |
-| Windsurf (Codeium) | `~/.codeium/windsurf/mcp_config.json` | [`windsurf-mcp-config.json`](windsurf-mcp-config.json) | `mcpServers` |
-| Continue.dev | `~/.continue/config.yaml` | [`continue-config.yaml`](continue-config.yaml) | `mcpServers:` (YAML) |
-| Zed | `~/.config/zed/settings.json` | [`zed-settings.json`](zed-settings.json) | `context_servers` |
+| Client                    | Config path                                                                                          | Example file                                               | Format key           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------- |
+| Cursor (project)          | `<workspace>/.cursor/mcp.json`                                                                       | [`cursor-mcp.json`](cursor-mcp.json)                       | `mcpServers`         |
+| Cursor (global)           | `~/.cursor/mcp.json` (Windows: `%USERPROFILE%\.cursor\mcp.json`)                                     | [`cursor-mcp.json`](cursor-mcp.json)                       | `mcpServers`         |
+| Claude Desktop (macOS)    | `~/Library/Application Support/Claude/claude_desktop_config.json`                                    | [`claude-desktop-config.json`](claude-desktop-config.json) | `mcpServers`         |
+| Claude Desktop (Windows)  | `%APPDATA%\Claude\claude_desktop_config.json`                                                        | [`claude-desktop-config.json`](claude-desktop-config.json) | `mcpServers`         |
+| Claude Desktop (Linux)    | `~/.config/Claude/claude_desktop_config.json`                                                        | [`claude-desktop-config.json`](claude-desktop-config.json) | `mcpServers`         |
+| VS Code (native MCP)      | `<workspace>/.vscode/mcp.json`                                                                       | [`vscode-mcp.json`](vscode-mcp.json)                       | `servers`            |
+| Cline (VS Code extension) | open the Cline panel -> MCP Servers -> Edit, or `cline_mcp_settings.json` from the extension storage | [`cline-mcp-settings.json`](cline-mcp-settings.json)       | `mcpServers`         |
+| Windsurf (Codeium)        | `~/.codeium/windsurf/mcp_config.json`                                                                | [`windsurf-mcp-config.json`](windsurf-mcp-config.json)     | `mcpServers`         |
+| Continue.dev              | `~/.continue/config.yaml`                                                                            | [`continue-config.yaml`](continue-config.yaml)             | `mcpServers:` (YAML) |
+| Zed                       | `~/.config/zed/settings.json`                                                                        | [`zed-settings.json`](zed-settings.json)                   | `context_servers`    |
 
 If your client speaks MCP but is not listed, copy the shape that matches the JSON keys it expects (`mcpServers`, `servers`, or `context_servers`) and you should be set.
 
@@ -178,20 +178,20 @@ Used by Cursor, Claude Desktop, Cline, Windsurf, and Continue.dev (in YAML).
 
 All configurations support the same set of variables.
 
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `MEMORY_PATH` | yes | - | **Absolute path to your project root.** The `.memory/` folder is created here. Do not point this at an existing `.memory/` folder. |
-| `LOG_LEVEL` | no | `info` | One of `debug`, `info`, `warn`, `error`. |
-| `DISABLE_BASELINE_SEED` | no | unset | Set to `1` to skip loading the curated software-engineering baseline into the trainer on first run. |
-| `ENABLE_QT_TOOLS` | no | unset | Set to `1` to expose the six Qt/QML analysis tools. Off by default to keep the tool surface lean. |
+| Variable                | Required | Default | Purpose                                                                                                                            |
+| ----------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `MEMORY_PATH`           | yes      | -       | **Absolute path to your project root.** The `.memory/` folder is created here. Do not point this at an existing `.memory/` folder. |
+| `LOG_LEVEL`             | no       | `info`  | One of `debug`, `info`, `warn`, `error`.                                                                                           |
+| `DISABLE_BASELINE_SEED` | no       | unset   | Set to `1` to skip loading the curated software-engineering baseline into the trainer on first run.                                |
+| `ENABLE_QT_TOOLS`       | no       | unset   | Set to `1` to expose the six Qt/QML analysis tools. Off by default to keep the tool surface lean.                                  |
 
 ### Path examples
 
-| Platform | Example `MEMORY_PATH` | Created at |
-|---|---|---|
-| macOS / Linux | `/Users/yourusername/projects/your-project` | `/Users/yourusername/projects/your-project/.memory/` |
-| Windows (forward slashes) | `C:/Users/yourusername/projects/your-project` | `C:\Users\yourusername\projects\your-project\.memory\` |
-| Windows (escaped backslashes) | `C:\\Users\\yourusername\\projects\\your-project` | same as above |
+| Platform                      | Example `MEMORY_PATH`                             | Created at                                             |
+| ----------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| macOS / Linux                 | `/Users/yourusername/projects/your-project`       | `/Users/yourusername/projects/your-project/.memory/`   |
+| Windows (forward slashes)     | `C:/Users/yourusername/projects/your-project`     | `C:\Users\yourusername\projects\your-project\.memory\` |
+| Windows (escaped backslashes) | `C:\\Users\\yourusername\\projects\\your-project` | same as above                                          |
 
 A Windows-specific reference is in [`windows-paths.json`](windows-paths.json). On Windows you must either use forward slashes or double every backslash inside JSON strings - JSON does not allow bare `\` escapes.
 

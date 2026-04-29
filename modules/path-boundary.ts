@@ -13,9 +13,7 @@ export function resolveOwnedPath(
   }
 
   const relative = path.relative(resolvedBase, resolvedPath);
-  const isInside =
-    relative === "" ||
-    (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const isInside = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 
   if (!isInside) {
     throw new Error(

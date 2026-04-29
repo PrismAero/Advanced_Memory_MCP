@@ -55,10 +55,7 @@ export class PerformanceOptimizer {
   private monitoringInterval?: NodeJS.Timeout;
   private optimizationRecommendations: string[] = [];
 
-  constructor(
-    similarityEngine: ModernSimilarityEngine,
-    modelManager: TensorFlowModelManager
-  ) {
+  constructor(similarityEngine: ModernSimilarityEngine, modelManager: TensorFlowModelManager) {
     this.similarityEngine = similarityEngine;
     this.modelManager = modelManager;
   }
@@ -100,7 +97,7 @@ export class PerformanceOptimizer {
    */
   async benchmarkEmbeddingGeneration(
     testTexts: string[],
-    iterations: number = 5
+    iterations: number = 5,
   ): Promise<{
     averageTime: number;
     minTime: number;
@@ -111,7 +108,7 @@ export class PerformanceOptimizer {
     const times: number[] = [];
 
     logger.info(
-      `Benchmarking embedding generation with ${testTexts.length} texts, ${iterations} iterations...`
+      `Benchmarking embedding generation with ${testTexts.length} texts, ${iterations} iterations...`,
     );
 
     for (let i = 0; i < iterations; i++) {
@@ -134,8 +131,7 @@ export class PerformanceOptimizer {
       throw new Error("All benchmark iterations failed");
     }
 
-    const averageTime =
-      times.reduce((sum, time) => sum + time, 0) / times.length;
+    const averageTime = times.reduce((sum, time) => sum + time, 0) / times.length;
     const minTime = Math.min(...times);
     const maxTime = Math.max(...times);
     const throughput = (testTexts.length * 1000) / averageTime; // embeddings per second
@@ -163,14 +159,9 @@ export class PerformanceOptimizer {
     recommendations: string[];
   }> {
     const batchSizes = [5, 10, 15, 20, 25, 30, 40, 50];
-    const batchResults = new Map<
-      number,
-      { averageTime: number; throughput: number }
-    >();
+    const batchResults = new Map<number, { averageTime: number; throughput: number }>();
 
-    logger.info(
-      `Benchmarking batch processing with ${entities.length} entities...`
-    );
+    logger.info(`Benchmarking batch processing with ${entities.length} entities...`);
 
     for (const batchSize of batchSizes) {
       if (batchSize > entities.length) continue;
@@ -195,8 +186,7 @@ export class PerformanceOptimizer {
       }
 
       if (times.length > 0) {
-        const averageTime =
-          times.reduce((sum, time) => sum + time, 0) / times.length;
+        const averageTime = times.reduce((sum, time) => sum + time, 0) / times.length;
         const throughput = (batchSize * 1000) / averageTime;
 
         batchResults.set(batchSize, { averageTime, throughput });
@@ -205,9 +195,7 @@ export class PerformanceOptimizer {
         if (!this.performanceMetrics.batchProcessingTimes.has(batchSize)) {
           this.performanceMetrics.batchProcessingTimes.set(batchSize, []);
         }
-        this.performanceMetrics.batchProcessingTimes
-          .get(batchSize)!
-          .push(...times);
+        this.performanceMetrics.batchProcessingTimes.get(batchSize)!.push(...times);
       }
     }
 
@@ -225,10 +213,7 @@ export class PerformanceOptimizer {
       }
     }
 
-    const recommendations = this.generateBatchRecommendations(
-      batchResults,
-      optimalBatchSize
-    );
+    const recommendations = this.generateBatchRecommendations(batchResults, optimalBatchSize);
 
     return { optimalBatchSize, batchResults, recommendations };
   }
@@ -241,16 +226,14 @@ export class PerformanceOptimizer {
       entity1: Entity;
       entity2: Entity;
       expectedSimilarity: "high" | "medium" | "low";
-    }>
+    }>,
   ): Promise<{
     optimizedThresholds: { high: number; medium: number; low: number };
     accuracy: number;
     performance: { averageTime: number; totalTests: number };
     recommendations: string[];
   }> {
-    logger.info(
-      `Optimizing similarity thresholds with ${testData.length} test pairs...`
-    );
+    logger.info(`Optimizing similarity thresholds with ${testData.length} test pairs...`);
 
     const startTime = performance.now();
     const results: Array<{
@@ -264,7 +247,7 @@ export class PerformanceOptimizer {
       try {
         const similarity = await this.similarityEngine.calculateSimilarity(
           test.entity1,
-          test.entity2
+          test.entity2,
         );
         const calcTime = performance.now() - calcStart;
 
@@ -276,10 +259,7 @@ export class PerformanceOptimizer {
 
         this.performanceMetrics.similarityCalculationTimes.push(calcTime);
       } catch (error) {
-        logger.error(
-          "Similarity calculation failed during optimization:",
-          error
-        );
+        logger.error("Similarity calculation failed during optimization:", error);
       }
     }
 
@@ -287,15 +267,11 @@ export class PerformanceOptimizer {
     const averageTime = totalTime / results.length;
 
     // Analyze results to find optimal thresholds
-    const highSimilarities = results
-      .filter((r) => r.expected === "high")
-      .map((r) => r.similarity);
+    const highSimilarities = results.filter((r) => r.expected === "high").map((r) => r.similarity);
     const mediumSimilarities = results
       .filter((r) => r.expected === "medium")
       .map((r) => r.similarity);
-    const lowSimilarities = results
-      .filter((r) => r.expected === "low")
-      .map((r) => r.similarity);
+    const lowSimilarities = results.filter((r) => r.expected === "low").map((r) => r.similarity);
 
     // Calculate thresholds based on distribution analysis
     const optimizedThresholds = {
@@ -307,10 +283,7 @@ export class PerformanceOptimizer {
     // Calculate accuracy with optimized thresholds
     let correct = 0;
     for (const result of results) {
-      const predicted = this.classifySimilarity(
-        result.similarity,
-        optimizedThresholds
-      );
+      const predicted = this.classifySimilarity(result.similarity, optimizedThresholds);
       if (predicted === result.expected) correct++;
     }
     const accuracy = correct / results.length;
@@ -318,7 +291,7 @@ export class PerformanceOptimizer {
     const recommendations = this.generateThresholdRecommendations(
       optimizedThresholds,
       accuracy,
-      averageTime
+      averageTime,
     );
 
     return {
@@ -351,17 +324,13 @@ export class PerformanceOptimizer {
     // Calculate current metrics
     const avgEmbeddingTime =
       metrics.embeddingGenerationTimes.length > 0
-        ? metrics.embeddingGenerationTimes
-            .slice(-10)
-            .reduce((a, b) => a + b, 0) /
+        ? metrics.embeddingGenerationTimes.slice(-10).reduce((a, b) => a + b, 0) /
           Math.min(metrics.embeddingGenerationTimes.length, 10)
         : 0;
 
     const avgSimilarityTime =
       metrics.similarityCalculationTimes.length > 0
-        ? metrics.similarityCalculationTimes
-            .slice(-10)
-            .reduce((a, b) => a + b, 0) /
+        ? metrics.similarityCalculationTimes.slice(-10).reduce((a, b) => a + b, 0) /
           Math.min(metrics.similarityCalculationTimes.length, 10)
         : 0;
 
@@ -373,11 +342,9 @@ export class PerformanceOptimizer {
         : 0;
 
     // Analyze trends
-    const embeddingTimesTrend = this.analyzeTrend(
-      metrics.embeddingGenerationTimes.slice(-20)
-    );
+    const embeddingTimesTrend = this.analyzeTrend(metrics.embeddingGenerationTimes.slice(-20));
     const memoryUsageTrend = this.analyzeTrend(
-      metrics.memoryUsageSnapshots.slice(-10).map((s) => s.usage)
+      metrics.memoryUsageSnapshots.slice(-10).map((s) => s.usage),
     );
 
     return {
@@ -418,15 +385,13 @@ export class PerformanceOptimizer {
 
     // Check if embedding generation is too slow
     if (metrics.embeddingGenerationTimes.length > 5) {
-      const recentAvg =
-        metrics.embeddingGenerationTimes.slice(-5).reduce((a, b) => a + b, 0) /
-        5;
+      const recentAvg = metrics.embeddingGenerationTimes.slice(-5).reduce((a, b) => a + b, 0) / 5;
 
       if (recentAvg > this.config.maxEmbeddingGenerationTime) {
         this.optimizationRecommendations.push(
           `Embedding generation is slow (${recentAvg.toFixed(
-            1
-          )}ms avg). Consider using a smaller model or reducing batch size.`
+            1,
+          )}ms avg). Consider using a smaller model or reducing batch size.`,
         );
       }
     }
@@ -434,13 +399,12 @@ export class PerformanceOptimizer {
     // Check memory usage
     if (metrics.memoryUsageSnapshots.length > 0) {
       const currentUsage =
-        metrics.memoryUsageSnapshots[metrics.memoryUsageSnapshots.length - 1]
-          .usage;
+        metrics.memoryUsageSnapshots[metrics.memoryUsageSnapshots.length - 1].usage;
       if (currentUsage > this.config.maxMemoryUsage) {
         this.optimizationRecommendations.push(
           `High memory usage detected (${currentUsage.toFixed(
-            1
-          )}MB). Consider clearing embedding cache or using a lighter model.`
+            1,
+          )}MB). Consider clearing embedding cache or using a lighter model.`,
         );
       }
     }
@@ -453,37 +417,34 @@ export class PerformanceOptimizer {
     const report = this.getPerformanceReport();
 
     // Performance-based recommendations
-    if (
-      report.currentMetrics.averageEmbeddingTime >
-      this.config.maxEmbeddingGenerationTime
-    ) {
+    if (report.currentMetrics.averageEmbeddingTime > this.config.maxEmbeddingGenerationTime) {
       this.optimizationRecommendations.push(
-        "Consider switching to Universal Sentence Encoder Lite for faster embedding generation"
+        "Consider switching to Universal Sentence Encoder Lite for faster embedding generation",
       );
     }
 
     if (report.currentMetrics.memoryUsage > this.config.maxMemoryUsage) {
       this.optimizationRecommendations.push(
-        "Memory usage is high. Consider reducing embedding cache size or batch processing size"
+        "Memory usage is high. Consider reducing embedding cache size or batch processing size",
       );
     }
 
     if (report.currentMetrics.cacheHitRate < this.config.targetCacheHitRate) {
       this.optimizationRecommendations.push(
-        "Low cache hit rate detected. Consider increasing embedding cache size for better performance"
+        "Low cache hit rate detected. Consider increasing embedding cache size for better performance",
       );
     }
 
     // Trend-based recommendations
     if (report.trends.embeddingTimesTrend === "degrading") {
       this.optimizationRecommendations.push(
-        "Embedding performance is degrading. Consider restarting the model or checking for memory leaks"
+        "Embedding performance is degrading. Consider restarting the model or checking for memory leaks",
       );
     }
 
     if (report.trends.memoryUsageTrend === "degrading") {
       this.optimizationRecommendations.push(
-        "Memory usage is increasing over time. Consider periodic cache cleanup or model reloading"
+        "Memory usage is increasing over time. Consider periodic cache cleanup or model reloading",
       );
     }
   }
@@ -499,19 +460,19 @@ export class PerformanceOptimizer {
 
     if (results.averageTime > this.config.maxEmbeddingGenerationTime) {
       recommendations.push(
-        "Embedding generation is slower than target. Consider using Universal Sentence Encoder Lite instead of the full model."
+        "Embedding generation is slower than target. Consider using Universal Sentence Encoder Lite instead of the full model.",
       );
     }
 
     if (results.throughput < 10) {
       recommendations.push(
-        "Low throughput detected. Consider batch processing or model optimization."
+        "Low throughput detected. Consider batch processing or model optimization.",
       );
     }
 
     if (results.testSize < 10) {
       recommendations.push(
-        "Small test size may not be representative. Consider testing with larger datasets."
+        "Small test size may not be representative. Consider testing with larger datasets.",
       );
     }
 
@@ -520,22 +481,21 @@ export class PerformanceOptimizer {
 
   private generateBatchRecommendations(
     results: Map<number, { averageTime: number; throughput: number }>,
-    optimalBatchSize: number
+    optimalBatchSize: number,
   ): string[] {
     const recommendations: string[] = [];
 
     recommendations.push(
-      `Optimal batch size identified as ${optimalBatchSize} entities for best throughput under latency constraints.`
+      `Optimal batch size identified as ${optimalBatchSize} entities for best throughput under latency constraints.`,
     );
 
-    const maxThroughputEntry = Array.from(results.entries()).reduce(
-      (max, current) =>
-        current[1].throughput > max[1].throughput ? current : max
+    const maxThroughputEntry = Array.from(results.entries()).reduce((max, current) =>
+      current[1].throughput > max[1].throughput ? current : max,
     );
 
     if (maxThroughputEntry[0] !== optimalBatchSize) {
       recommendations.push(
-        `Maximum throughput achieved at batch size ${maxThroughputEntry[0]}, but latency constraints favor ${optimalBatchSize}.`
+        `Maximum throughput achieved at batch size ${maxThroughputEntry[0]}, but latency constraints favor ${optimalBatchSize}.`,
       );
     }
 
@@ -545,41 +505,36 @@ export class PerformanceOptimizer {
   private generateThresholdRecommendations(
     thresholds: { high: number; medium: number; low: number },
     accuracy: number,
-    averageTime: number
+    averageTime: number,
   ): string[] {
     const recommendations: string[] = [];
 
     if (accuracy < 0.8) {
       recommendations.push(
         `Classification accuracy is ${(accuracy * 100).toFixed(
-          1
-        )}%. Consider gathering more training data or adjusting thresholds.`
+          1,
+        )}%. Consider gathering more training data or adjusting thresholds.`,
       );
     }
 
     if (averageTime > this.config.maxSimilarityCalculationTime) {
       recommendations.push(
         `Similarity calculation is slow (${averageTime.toFixed(
-          1
-        )}ms avg). Consider optimizing the model or using caching.`
+          1,
+        )}ms avg). Consider optimizing the model or using caching.`,
       );
     }
 
     recommendations.push(
       `Recommended thresholds: High ≥ ${thresholds.high.toFixed(
-        2
-      )}, Medium ≥ ${thresholds.medium.toFixed(
-        2
-      )}, Low ≥ ${thresholds.low.toFixed(2)}`
+        2,
+      )}, Medium ≥ ${thresholds.medium.toFixed(2)}, Low ≥ ${thresholds.low.toFixed(2)}`,
     );
 
     return recommendations;
   }
 
-  private calculateOptimalThreshold(
-    similarities: number[],
-    defaultThreshold: number
-  ): number {
+  private calculateOptimalThreshold(similarities: number[], defaultThreshold: number): number {
     if (similarities.length === 0) return defaultThreshold;
 
     // Use 75th percentile as threshold
@@ -590,7 +545,7 @@ export class PerformanceOptimizer {
 
   private classifySimilarity(
     similarity: number,
-    thresholds: { high: number; medium: number; low: number }
+    thresholds: { high: number; medium: number; low: number },
   ): "high" | "medium" | "low" {
     if (similarity >= thresholds.high) return "high";
     if (similarity >= thresholds.medium) return "medium";
@@ -640,25 +595,22 @@ export class PerformanceOptimizer {
     return {
       metadata: {
         exportTime: now.toISOString(),
-        totalEmbeddingMeasurements:
-          this.performanceMetrics.embeddingGenerationTimes.length,
-        totalSimilarityMeasurements:
-          this.performanceMetrics.similarityCalculationTimes.length,
+        totalEmbeddingMeasurements: this.performanceMetrics.embeddingGenerationTimes.length,
+        totalSimilarityMeasurements: this.performanceMetrics.similarityCalculationTimes.length,
         monitoringDuration,
       },
       embeddingTimes: [...this.performanceMetrics.embeddingGenerationTimes],
       similarityTimes: [...this.performanceMetrics.similarityCalculationTimes],
       batchResults: Object.fromEntries(
-        Array.from(this.performanceMetrics.batchProcessingTimes.entries()).map(
-          ([size, times]) => [size.toString(), [...times]]
-        )
+        Array.from(this.performanceMetrics.batchProcessingTimes.entries()).map(([size, times]) => [
+          size.toString(),
+          [...times],
+        ]),
       ),
-      memorySnapshots: this.performanceMetrics.memoryUsageSnapshots.map(
-        (s) => ({
-          timestamp: s.timestamp.toISOString(),
-          usage: s.usage,
-        })
-      ),
+      memorySnapshots: this.performanceMetrics.memoryUsageSnapshots.map((s) => ({
+        timestamp: s.timestamp.toISOString(),
+        usage: s.usage,
+      })),
       recommendations: [...this.optimizationRecommendations],
     };
   }

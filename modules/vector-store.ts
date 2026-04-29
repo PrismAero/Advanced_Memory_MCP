@@ -39,7 +39,7 @@ export class VectorStore {
   constructor(
     connection: SQLiteConnection,
     tableName: string = "vectors",
-    dimension: number = 512
+    dimension: number = 512,
   ) {
     this.connection = connection;
     this.tableName = tableName;
@@ -64,7 +64,7 @@ export class VectorStore {
       this.indexLoaded = false;
     }
     logger.info(
-      `[VECTOR] Vector store initialized${options.loadExisting === true ? ` with ${this.vectorCache.size} vectors` : " (lazy index load)"}`
+      `[VECTOR] Vector store initialized${options.loadExisting === true ? ` with ${this.vectorCache.size} vectors` : " (lazy index load)"}`,
     );
   }
 
@@ -73,9 +73,7 @@ export class VectorStore {
    */
   private async loadIndex(): Promise<void> {
     try {
-      const rows = await this.connection.runQuery(
-        `SELECT * FROM ${this.tableName}`
-      );
+      const rows = await this.connection.runQuery(`SELECT * FROM ${this.tableName}`);
 
       this.vectorCache.clear();
       this.metadataCache.clear();
@@ -128,7 +126,7 @@ export class VectorStore {
   async add(record: VectorRecord): Promise<void> {
     if (record.vector.length !== this.dimension) {
       throw new Error(
-        `Vector dimension mismatch. Expected ${this.dimension}, got ${record.vector.length}`
+        `Vector dimension mismatch. Expected ${this.dimension}, got ${record.vector.length}`,
       );
     }
 
@@ -146,18 +144,18 @@ export class VectorStore {
 
     const existing = await this.connection.getQuery(
       `SELECT id FROM ${this.tableName} WHERE id = ?`,
-      [record.id]
+      [record.id],
     );
 
     if (existing) {
       await this.connection.runQuery(
         `UPDATE ${this.tableName} SET vector = ?, metadata = ?, updated_at = ? WHERE id = ?`,
-        [buffer, JSON.stringify(record.metadata || {}), now, record.id]
+        [buffer, JSON.stringify(record.metadata || {}), now, record.id],
       );
     } else {
       await this.connection.runQuery(
         `INSERT INTO ${this.tableName} (id, vector, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-        [record.id, buffer, JSON.stringify(record.metadata || {}), now, now]
+        [record.id, buffer, JSON.stringify(record.metadata || {}), now, now],
       );
     }
 
@@ -184,7 +182,7 @@ export class VectorStore {
   async search(
     queryVector: number[],
     limit: number = 5,
-    minScore: number = 0.0
+    minScore: number = 0.0,
   ): Promise<VectorSearchResult[]> {
     await tensorflowRuntime.initialize();
     if (!this.indexLoaded) {
@@ -209,21 +207,14 @@ export class VectorStore {
       const normalizedQuery = queryTensor.div(queryNorm);
 
       // Normalize index vectors (pre-calculating this would be an optimization)
-      const indexNorm = tf
-        .norm(this.tensorIndex!, "euclidean", 1)
-        .expandDims(1);
+      const indexNorm = tf.norm(this.tensorIndex!, "euclidean", 1).expandDims(1);
       const normalizedIndex = this.tensorIndex!.div(indexNorm);
 
       // Cosine similarity = dot product of normalized vectors
-      const scores = tf
-        .matMul(normalizedQuery, normalizedIndex, false, true)
-        .squeeze();
+      const scores = tf.matMul(normalizedQuery, normalizedIndex, false, true).squeeze();
 
       // Get top k
-      const { values, indices } = tf.topk(
-        scores,
-        Math.min(limit, this.vectorCache.size)
-      );
+      const { values, indices } = tf.topk(scores, Math.min(limit, this.vectorCache.size));
 
       return {
         scoreValues: Array.from(values.dataSync()),
@@ -255,10 +246,7 @@ export class VectorStore {
    * Delete a vector
    */
   async delete(id: string): Promise<void> {
-    await this.connection.execute(
-      `DELETE FROM ${this.tableName} WHERE id = ?`,
-      [id]
-    );
+    await this.connection.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     this.vectorCache.delete(id);
     this.metadataCache.delete(id);
     this.isDirty = true;
@@ -270,7 +258,7 @@ export class VectorStore {
     const placeholders = ids.map(() => "?").join(",");
     await this.connection.execute(
       `DELETE FROM ${this.tableName} WHERE id IN (${placeholders})`,
-      ids
+      ids,
     );
 
     for (const id of ids) {

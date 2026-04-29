@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SQLiteConnection } from "../../modules/sqlite/sqlite-connection.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("SQLite schema migrations", () => {
   let root: string | undefined;
@@ -106,11 +103,7 @@ describe("SQLite schema migrations", () => {
       "external_package",
       "resolution_status",
     ]);
-    await expectColumns("workspace_context", [
-      "languages",
-      "indexing_status",
-      "branch_id",
-    ]);
+    await expectColumns("workspace_context", ["languages", "indexing_status", "branch_id"]);
     await expectColumns("interface_relationships", [
       "confidence_score",
       "semantic_similarity",
@@ -133,15 +126,11 @@ describe("SQLite schema migrations", () => {
 
   async function expectColumns(table: string, expected: string[]): Promise<void> {
     const columns = await connection!.runQuery(`PRAGMA table_info(${table})`);
-    expect(columns.map((column: any) => column.name)).toEqual(
-      expect.arrayContaining(expected),
-    );
+    expect(columns.map((column: any) => column.name)).toEqual(expect.arrayContaining(expected));
   }
 
   async function expectIndexes(table: string, expected: string[]): Promise<void> {
     const indexes = await connection!.runQuery(`PRAGMA index_list(${table})`);
-    expect(indexes.map((index: any) => index.name)).toEqual(
-      expect.arrayContaining(expected),
-    );
+    expect(indexes.map((index: any) => index.name)).toEqual(expect.arrayContaining(expected));
   }
 });

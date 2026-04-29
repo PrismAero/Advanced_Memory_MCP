@@ -213,13 +213,19 @@ export class SourceParser {
         const name = currentNamespace
           ? `${currentNamespace}::${namespaceMatch[1]}`
           : namespaceMatch[1];
-        namespaceStack.push({ name, depth: braceDepth + (line.includes("{") ? 1 : 0) });
+        namespaceStack.push({
+          name,
+          depth: braceDepth + (line.includes("{") ? 1 : 0),
+        });
         currentNamespace = name;
       }
 
       const priorBraceDepth = braceDepth;
       braceDepth += (rawLine.match(/{/g) || []).length - (rawLine.match(/}/g) || []).length;
-      while (namespaceStack.length && braceDepth < namespaceStack[namespaceStack.length - 1].depth) {
+      while (
+        namespaceStack.length &&
+        braceDepth < namespaceStack[namespaceStack.length - 1].depth
+      ) {
         namespaceStack.pop();
       }
       currentNamespace = namespaceStack[namespaceStack.length - 1]?.name || "";
@@ -237,7 +243,9 @@ export class SourceParser {
           name,
           properties: [],
           extends: declaration[3]
-            ? declaration[3].split(",").map((item) => item.trim().replace(/^(public|protected|private)\s+/, ""))
+            ? declaration[3]
+                .split(",")
+                .map((item) => item.trim().replace(/^(public|protected|private)\s+/, ""))
             : [],
           line: i + 1,
           isExported: true,

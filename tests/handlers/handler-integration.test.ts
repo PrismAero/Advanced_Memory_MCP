@@ -3,10 +3,7 @@ import * as path from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ProjectIndexer } from "../../modules/project-analysis/project-indexer.js";
-import {
-  createInitializedApp,
-  parseTextResponse,
-} from "../utils/mcp-test-utils.js";
+import { createInitializedApp, parseTextResponse } from "../utils/mcp-test-utils.js";
 
 describe("MCP handler integration", () => {
   let ctx: Awaited<ReturnType<typeof createInitializedApp>>;
@@ -105,9 +102,7 @@ describe("MCP handler integration", () => {
         include_related: true,
       }),
     );
-    expect(working.entities.map((entity: any) => entity.name)).toContain(
-      "Workflow_AuthTask",
-    );
+    expect(working.entities.map((entity: any) => entity.name)).toContain("Workflow_AuthTask");
 
     const dependencies = parseTextResponse(
       await ctx.app.handleToolCall("check_missing_dependencies", {
@@ -117,9 +112,7 @@ describe("MCP handler integration", () => {
       }),
     );
     expect(dependencies.count).toBe(1);
-    expect(dependencies.dependencies[0].dependency_description).toMatch(
-      /Requires TokenStore/i,
-    );
+    expect(dependencies.dependencies[0].dependency_description).toMatch(/Requires TokenStore/i);
 
     const phase = parseTextResponse(
       await ctx.app.handleToolCall("update_status", {
@@ -138,10 +131,10 @@ describe("MCP handler integration", () => {
     expect(phase.mode).toBe("phase");
     expect(phase.branch_updates[0].entity_updates).toEqual(
       expect.arrayContaining([
-      expect.objectContaining({
-        entity: "Workflow_AuthTask",
-        new_status: "draft",
-      }),
+        expect.objectContaining({
+          entity: "Workflow_AuthTask",
+          new_status: "draft",
+        }),
       ]),
     );
   });
@@ -176,12 +169,8 @@ describe("MCP handler integration", () => {
         branch_name: "search-a",
       }),
     );
-    expect(scoped.entities.map((entity: any) => entity.name)).toContain(
-      "Search_A_Auth",
-    );
-    expect(scoped.entities.map((entity: any) => entity.name)).not.toContain(
-      "Search_B_Billing",
-    );
+    expect(scoped.entities.map((entity: any) => entity.name)).toContain("Search_A_Auth");
+    expect(scoped.entities.map((entity: any) => entity.name)).not.toContain("Search_B_Billing");
 
     const global = parseTextResponse(
       await ctx.app.handleToolCall("smart_search", {
@@ -238,12 +227,7 @@ describe("MCP handler integration", () => {
     expect(result.entities[0].keywordMatchScore).toBeUndefined();
     expect(result.entities[0].entityType).toBeUndefined();
     expect(result.relations).toEqual([]);
-    expect(Object.keys(result).slice(0, 4)).toEqual([
-      "entities",
-      "counts",
-      "query",
-      "branch",
-    ]);
+    expect(Object.keys(result).slice(0, 4)).toEqual(["entities", "counts", "query", "branch"]);
     expect(Object.keys(result.entities[0]).slice(0, 4)).toEqual([
       "name",
       "type",
@@ -295,15 +279,11 @@ describe("MCP handler integration", () => {
       fixturePath,
       "export interface ContractFixture { id: string; token: string }\n",
     );
-    const analyzedFile = await new ProjectIndexer().analyzeFile(
-      fixturePath,
-      ctx.memoryRoot,
-    );
+    const analyzedFile = await new ProjectIndexer().analyzeFile(fixturePath, ctx.memoryRoot);
     expect(analyzedFile).toBeTruthy();
-    const [storedFile] =
-      await ctx.app.dependencies.projectAnalysisOps.storeProjectFiles([
-        analyzedFile!,
-      ]);
+    const [storedFile] = await ctx.app.dependencies.projectAnalysisOps.storeProjectFiles([
+      analyzedFile!,
+    ]);
     await ctx.app.dependencies.projectAnalysisOps.storeCodeInterfaces(
       storedFile.id!,
       analyzedFile!.interfaces,
@@ -317,9 +297,7 @@ describe("MCP handler integration", () => {
         active_interfaces: ["ContractFixture"],
       }),
     );
-    expect(project.evidence.interfaces.map((item: any) => item.name)).toContain(
-      "ContractFixture",
-    );
+    expect(project.evidence.interfaces.map((item: any) => item.name)).toContain("ContractFixture");
     expect(project.suggestions.length).toBeGreaterThan(0);
 
     const status = parseTextResponse(

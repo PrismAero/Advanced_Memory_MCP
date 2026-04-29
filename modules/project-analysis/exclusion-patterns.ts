@@ -162,10 +162,7 @@ export function buildIndexerExcludePatterns(): RegExp[] {
  * Build the chokidar `ignored` glob list used by FileWatcher.
  */
 export function buildWatcherIgnoreGlobs(): string[] {
-  const dirGlobs = EXCLUDED_DIRECTORIES.flatMap((name) => [
-    `**/${name}/**`,
-    `**/${name}`,
-  ]);
+  const dirGlobs = EXCLUDED_DIRECTORIES.flatMap((name) => [`**/${name}/**`, `**/${name}`]);
 
   const fileGlobs: string[] = [
     // Logs and editor scratch

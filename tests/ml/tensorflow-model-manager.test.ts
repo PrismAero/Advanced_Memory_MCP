@@ -36,9 +36,7 @@ describe("TensorFlowModelManager provider contract", () => {
     expect(embeddings).toHaveLength(3);
     expect(embeddings[0]).toEqual((await manager.generateEmbeddings(["one"]))[0]);
     expect(embeddings[1]).toEqual((await manager.generateEmbeddings(["two"]))[0]);
-    expect(embeddings[2]).toEqual(
-      (await manager.generateEmbeddings(["three"]))[0],
-    );
+    expect(embeddings[2]).toEqual((await manager.generateEmbeddings(["three"]))[0]);
     manager.dispose();
   });
 });

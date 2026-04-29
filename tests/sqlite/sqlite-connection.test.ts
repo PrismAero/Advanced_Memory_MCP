@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SQLiteConnection } from "../../modules/sqlite/sqlite-connection.js";
-import {
-  cleanupTempRoot,
-  createTempMemoryRoot,
-} from "../utils/mcp-test-utils.js";
+import { cleanupTempRoot, createTempMemoryRoot } from "../utils/mcp-test-utils.js";
 
 describe("SQLiteConnection transactions", () => {
   let root: string | undefined;
@@ -30,33 +27,24 @@ describe("SQLiteConnection transactions", () => {
     });
 
     const first = connection!.withTransaction(async () => {
-      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-        "first-start",
-      ]);
+      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["first-start"]);
       markFirstStarted();
       await firstCanCommit;
-      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-        "first-end",
-      ]);
+      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["first-end"]);
       return "first";
     });
 
     await firstStarted;
 
     const second = connection!.withTransaction(async () => {
-      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-        "second",
-      ]);
+      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["second"]);
       return "second";
     });
 
     await new Promise((resolve) => setTimeout(resolve, 25));
     releaseFirst();
 
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      "first",
-      "second",
-    ]);
+    await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"]);
     await expectLabels(["first-start", "first-end", "second"]);
   });
 
@@ -64,23 +52,16 @@ describe("SQLiteConnection transactions", () => {
     await initializeEventsTable();
 
     await connection!.withTransaction(async () => {
-      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-        "outer-before",
-      ]);
+      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["outer-before"]);
 
       await expect(
         connection!.withTransaction(async () => {
-          await connection!.execute(
-            "INSERT INTO tx_events (label) VALUES (?)",
-            ["inner"],
-          );
+          await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["inner"]);
           throw new Error("inner failure");
         }),
       ).rejects.toThrow("inner failure");
 
-      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-        "outer-after",
-      ]);
+      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["outer-after"]);
     });
 
     await expectLabels(["outer-before", "outer-after"]);
@@ -91,17 +72,13 @@ describe("SQLiteConnection transactions", () => {
 
     await expect(
       connection!.withTransaction(async () => {
-        await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-          "rolled-back",
-        ]);
+        await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["rolled-back"]);
         throw new Error("rollback requested");
       }),
     ).rejects.toThrow("rollback requested");
 
     await connection!.withTransaction(async () => {
-      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", [
-        "recovered",
-      ]);
+      await connection!.execute("INSERT INTO tx_events (label) VALUES (?)", ["recovered"]);
     });
 
     await expectLabels(["recovered"]);
@@ -117,9 +94,7 @@ describe("SQLiteConnection transactions", () => {
   }
 
   async function expectLabels(expected: string[]): Promise<void> {
-    const rows = await connection!.runQuery(
-      "SELECT label FROM tx_events ORDER BY id ASC",
-    );
+    const rows = await connection!.runQuery("SELECT label FROM tx_events ORDER BY id ASC");
     expect(rows.map((row: any) => row.label)).toEqual(expected);
   }
 });

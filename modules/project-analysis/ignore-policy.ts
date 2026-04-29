@@ -24,10 +24,7 @@ export class IgnorePolicy {
   private ignoreFilter: Ignore | null = null;
   private rootPath: string | null = null;
 
-  async load(
-    rootPath: string,
-    options: IgnorePolicyLoadOptions = {},
-  ): Promise<void> {
+  async load(rootPath: string, options: IgnorePolicyLoadOptions = {}): Promise<void> {
     this.rootPath = path.resolve(rootPath);
     const memoryIgnorePath = await ensureMemoryIgnoreFile(this.rootPath, {
       patterns: options.additionalPatterns,

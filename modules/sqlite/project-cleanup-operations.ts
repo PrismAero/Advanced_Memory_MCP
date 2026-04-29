@@ -9,10 +9,7 @@ export class ProjectCleanupOperations {
     private vectorStore: VectorStore,
   ) {}
 
-  async cleanupDeletedFiles(
-    existingPaths: string[],
-    branchName?: string,
-  ): Promise<number> {
+  async cleanupDeletedFiles(existingPaths: string[], branchName?: string): Promise<number> {
     const branchId = await this.connection.getBranchId(branchName);
     return this.cleanupFilesNotInSet(existingPaths, branchId);
   }
@@ -25,10 +22,7 @@ export class ProjectCleanupOperations {
     return this.cleanupFilesNotInSet(retainedPaths, branchId);
   }
 
-  async cleanupIgnoredFiles(
-    rootPath: string,
-    branchName?: string,
-  ): Promise<number> {
+  async cleanupIgnoredFiles(rootPath: string, branchName?: string): Promise<number> {
     const branchId = await this.connection.getBranchId(branchName);
     const ignorePolicy = new IgnorePolicy();
     await ignorePolicy.load(rootPath);
@@ -46,16 +40,11 @@ export class ProjectCleanupOperations {
 
     if (ignoredIds.length === 0) return 0;
     await this.deleteProjectFilesById(ignoredIds);
-    logger.info(
-      `Cleaned up ${ignoredIds.length} newly ignored files from database`,
-    );
+    logger.info(`Cleaned up ${ignoredIds.length} newly ignored files from database`);
     return ignoredIds.length;
   }
 
-  private async cleanupFilesNotInSet(
-    retainedPaths: string[],
-    branchId: number,
-  ): Promise<number> {
+  private async cleanupFilesNotInSet(retainedPaths: string[], branchId: number): Promise<number> {
     if (retainedPaths.length === 0) return 0;
 
     const placeholders = retainedPaths.map(() => "?").join(",");
@@ -69,9 +58,7 @@ export class ProjectCleanupOperations {
     const fileIds = staleFiles.map((row: any) => row.id);
     await this.deleteProjectFilesById(fileIds);
 
-    logger.info(
-      `Cleaned up ${fileIds.length} ignored/deleted files from database`,
-    );
+    logger.info(`Cleaned up ${fileIds.length} ignored/deleted files from database`);
     return fileIds.length;
   }
 
@@ -91,10 +78,7 @@ export class ProjectCleanupOperations {
     return fileIds.length;
   }
 
-  async deleteProjectFilesByPath(
-    filePaths: string[],
-    branchName?: string,
-  ): Promise<number> {
+  async deleteProjectFilesByPath(filePaths: string[], branchName?: string): Promise<number> {
     if (filePaths.length === 0) return 0;
     const branchId = await this.connection.getBranchId(branchName);
     const placeholders = filePaths.map(() => "?").join(",");
@@ -121,9 +105,7 @@ export class ProjectCleanupOperations {
     const interfaceIds = (interfaceRows || []).map((row: any) => row.id);
 
     await this.vectorStore.deleteMany(fileIds.map((id) => `file_${id}`));
-    await this.vectorStore.deleteMany(
-      interfaceIds.map((id: number) => `interface_${id}`),
-    );
+    await this.vectorStore.deleteMany(interfaceIds.map((id: number) => `interface_${id}`));
 
     await this.connection.execute(
       `DELETE FROM project_dependencies

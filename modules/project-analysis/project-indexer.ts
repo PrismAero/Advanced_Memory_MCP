@@ -36,28 +36,14 @@ export class ProjectIndexer {
     await this.ignorePolicy.load(rootPath);
 
     const projectType = await this.projectDetector.detectProjectType(rootPath);
-    const packageManager =
-      await this.projectDetector.detectPackageManager(rootPath);
-    const workspaces = await this.projectDetector.detectWorkspaces(
-      rootPath,
-      packageManager,
-    );
+    const packageManager = await this.projectDetector.detectPackageManager(rootPath);
+    const workspaces = await this.projectDetector.detectWorkspaces(rootPath, packageManager);
     const files = await this.scanProjectFiles(rootPath);
     const languages = this.fileAnalyzer.extractLanguages(files);
-    const frameworks = await this.projectDetector.detectFrameworks(
-      rootPath,
-      files,
-    );
-    const entryPoints = this.projectDetector.identifyEntryPoints(
-      files,
-      projectType,
-    );
+    const frameworks = await this.projectDetector.detectFrameworks(rootPath, files);
+    const entryPoints = this.projectDetector.identifyEntryPoints(files, projectType);
 
-    logger.info(
-      `[SUCCESS] Project analysis complete: ${projectType} with ${languages.join(
-        ", ",
-      )}`,
-    );
+    logger.info(`[SUCCESS] Project analysis complete: ${projectType} with ${languages.join(", ")}`);
 
     return {
       rootPath,

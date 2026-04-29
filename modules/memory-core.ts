@@ -17,17 +17,14 @@ export interface IMemoryOperations {
   deleteEntities(entityNames: string[], branchName?: string): Promise<void>;
 
   // Relation operations
-  createRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<Relation[]>;
+  createRelations(relations: Relation[], branchName?: string): Promise<Relation[]>;
   deleteRelations(relations: Relation[], branchName?: string): Promise<void>;
 
   // Search operations
   searchEntities(
     query: string,
     branchName?: string,
-    includeStatuses?: EntityStatus[]
+    includeStatuses?: EntityStatus[],
   ): Promise<KnowledgeGraph>;
   findEntityByName(name: string, branchName?: string): Promise<Entity | null>;
 
@@ -127,36 +124,18 @@ export abstract class BaseMemoryManager implements IMemoryOperations {
   }
 
   // Abstract methods to be implemented by concrete classes
-  abstract createEntities(
-    entities: Entity[],
-    branchName?: string
-  ): Promise<Entity[]>;
+  abstract createEntities(entities: Entity[], branchName?: string): Promise<Entity[]>;
   abstract updateEntity(entity: Entity, branchName?: string): Promise<Entity>;
-  abstract deleteEntities(
-    entityNames: string[],
-    branchName?: string
-  ): Promise<void>;
-  abstract createRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<Relation[]>;
-  abstract deleteRelations(
-    relations: Relation[],
-    branchName?: string
-  ): Promise<void>;
+  abstract deleteEntities(entityNames: string[], branchName?: string): Promise<void>;
+  abstract createRelations(relations: Relation[], branchName?: string): Promise<Relation[]>;
+  abstract deleteRelations(relations: Relation[], branchName?: string): Promise<void>;
   abstract searchEntities(
     query: string,
     branchName?: string,
-    includeStatuses?: EntityStatus[]
+    includeStatuses?: EntityStatus[],
   ): Promise<KnowledgeGraph>;
-  abstract findEntityByName(
-    name: string,
-    branchName?: string
-  ): Promise<Entity | null>;
-  abstract createBranch(
-    branchName: string,
-    purpose?: string
-  ): Promise<MemoryBranchInfo>;
+  abstract findEntityByName(name: string, branchName?: string): Promise<Entity | null>;
+  abstract createBranch(branchName: string, purpose?: string): Promise<MemoryBranchInfo>;
   abstract deleteBranch(branchName: string): Promise<void>;
   abstract listBranches(): Promise<MemoryBranchInfo[]>;
   abstract exportBranch(branchName?: string): Promise<KnowledgeGraph>;

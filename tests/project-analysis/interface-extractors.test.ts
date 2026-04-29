@@ -94,9 +94,7 @@ describe("advanced language interface extractors", () => {
       filePath: path.join(fixtureRoot, "cpp/network.hpp"),
       relativePath: "cpp/network.hpp",
     });
-    const macro = result.interfaces.find(
-      (iface) => iface.name === "DECLARE_CONTROLLER",
-    );
+    const macro = result.interfaces.find((iface) => iface.name === "DECLARE_CONTROLLER");
 
     expect(macro?.kind).toBe("macro");
     expect(macro?.macroParameters).toEqual(["name"]);
@@ -190,18 +188,13 @@ describe("advanced language interface extractors", () => {
         expect(symbols).not.toContainEqual(absentSymbol);
       }
 
-      const uniqueStableIds = new Set(
-        result.interfaces.map((iface) => iface.stableId),
-      );
+      const uniqueStableIds = new Set(result.interfaces.map((iface) => iface.stableId));
       expect(uniqueStableIds.size).toBe(result.interfaces.length);
     },
   );
 
   it("captures advanced C++ class inheritance and public override members", async () => {
-    const content = fs.readFileSync(
-      path.join(fixtureRoot, "cpp/engine_advanced_impl.cc"),
-      "utf8",
-    );
+    const content = fs.readFileSync(path.join(fixtureRoot, "cpp/engine_advanced_impl.cc"), "utf8");
     const result = await runner.extract(content, {
       language: "cpp",
       filePath: path.join(fixtureRoot, "cpp/engine_advanced_impl.cc"),

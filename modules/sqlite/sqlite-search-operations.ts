@@ -33,19 +33,12 @@ export class SQLiteSearchOperations {
       maxResults?: number;
     },
   ): Promise<KnowledgeGraph & { confidence_scores?: any[] }> {
-    const entities = await this.performSearch(
-      query,
-      branchName,
-      includeStatuses,
-      options,
-    );
+    const entities = await this.performSearch(query, branchName, includeStatuses, options);
 
     // Get relations for the found entities
     let relations: any[] = [];
     if (entities.length > 0) {
-      const branchId = branchName
-        ? await this.connection.getBranchId(branchName)
-        : undefined;
+      const branchId = branchName ? await this.connection.getBranchId(branchName) : undefined;
 
       // If context expansion is requested, add related entities
       if (options?.includeContext) {
@@ -60,10 +53,7 @@ export class SQLiteSearchOperations {
 
       entities.splice(clampLimit(options?.maxResults, 10, 50));
       const entityNames = entities.map((e) => e.name);
-      relations = await this.relationOps.getRelationsForEntities(
-        entityNames,
-        branchId,
-      );
+      relations = await this.relationOps.getRelationsForEntities(entityNames, branchId);
     }
 
     const result: any = { entities, relations };
@@ -121,27 +111,18 @@ export class SQLiteSearchOperations {
             options,
           );
 
-          return this.combineSearchResults(
-            semanticResults,
-            textResults,
-            keywordResults,
-          ).slice(0, clampLimit(options?.maxResults, 10, 50));
+          return this.combineSearchResults(semanticResults, textResults, keywordResults).slice(
+            0,
+            clampLimit(options?.maxResults, 10, 50),
+          );
         }
       } catch (error) {
-        logger.warn(
-          "Semantic search failed, falling back to text search:",
-          error,
-        );
+        logger.warn("Semantic search failed, falling back to text search:", error);
       }
     }
 
     // Fallback to text-based search
-    const textResults = await this.performTextSearch(
-      query,
-      branchName,
-      includeStatuses,
-      options,
-    );
+    const textResults = await this.performTextSearch(query, branchName, includeStatuses, options);
     return this.combineSearchResults([], textResults, keywordResults).slice(
       0,
       clampLimit(options?.maxResults, 10, 50),
@@ -231,8 +212,7 @@ export class SQLiteSearchOperations {
     // Recent access bonus
     if (entity.lastAccessed) {
       const daysSinceAccess =
-        (Date.now() - new Date(entity.lastAccessed).getTime()) /
-        (1000 * 60 * 60 * 24);
+        (Date.now() - new Date(entity.lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
       if (daysSinceAccess < 1) score += 0.1;
       else if (daysSinceAccess < 7) score += 0.05;
     }
@@ -252,9 +232,7 @@ export class SQLiteSearchOperations {
     includeStatuses?: EntityStatus[],
     workingContextOnly?: boolean,
   ): Promise<Entity[]> {
-    const branchId = branchName
-      ? await this.connection.getBranchId(branchName)
-      : null;
+    const branchId = branchName ? await this.connection.getBranchId(branchName) : null;
 
     let whereClause = "WHERE 1=1";
     let params: any[] = [];
@@ -386,23 +364,15 @@ export class SQLiteSearchOperations {
       maxResults?: number;
     },
   ): Promise<Entity[]> {
-    const branchId = branchName
-      ? await this.connection.getBranchId(branchName)
-      : null;
+    const branchId = branchName ? await this.connection.getBranchId(branchName) : null;
     const summaries = await this.keywordOps.findEntityKeywordMatches(query, {
       branchId,
-      statuses:
-        includeStatuses && includeStatuses.length > 0
-          ? includeStatuses
-          : ["active"],
+      statuses: includeStatuses && includeStatuses.length > 0 ? includeStatuses : ["active"],
       limit: clampLimit(options?.maxResults, 10, 50) * 5,
     });
     if (summaries.size === 0) return [];
 
-    const ids = Array.from(summaries.keys()).slice(
-      0,
-      clampLimit(options?.maxResults, 10, 50) * 2,
-    );
+    const ids = Array.from(summaries.keys()).slice(0, clampLimit(options?.maxResults, 10, 50) * 2);
     let whereClause = `WHERE e.id IN (${ids.map(() => "?").join(",")})`;
     const params: any[] = [...ids];
     if (options?.workingContextOnly) {
@@ -422,9 +392,7 @@ export class SQLiteSearchOperations {
       `,
       params,
     );
-    const entityIdsByName = new Map(
-      (rows || []).map((row: any) => [row.name, row.id] as const),
-    );
+    const entityIdsByName = new Map((rows || []).map((row: any) => [row.name, row.id] as const));
     const entities = this.entityOps.convertRowsToEntities(rows);
     for (const entity of entities as any[]) {
       const summary = summaries.get(entityIdsByName.get(entity.name) as number);
@@ -435,8 +403,7 @@ export class SQLiteSearchOperations {
       entity.keywordCouplings = summary.keywordCouplings;
     }
     return entities.sort(
-      (a: any, b: any) =>
-        (b.keywordMatchScore || 0) - (a.keywordMatchScore || 0),
+      (a: any, b: any) => (b.keywordMatchScore || 0) - (a.keywordMatchScore || 0),
     );
   }
 
@@ -454,9 +421,7 @@ export class SQLiteSearchOperations {
       maxResults?: number;
     },
   ): Promise<Entity[]> {
-    const branchId = branchName
-      ? await this.connection.getBranchId(branchName)
-      : null;
+    const branchId = branchName ? await this.connection.getBranchId(branchName) : null;
 
     const trimmedQuery = (query || "").trim();
     const hasQuery = trimmedQuery.length > 0;
@@ -498,10 +463,7 @@ export class SQLiteSearchOperations {
     }
 
     // Add status filtering
-    const statuses =
-      includeStatuses && includeStatuses.length > 0
-        ? includeStatuses
-        : ["active"];
+    const statuses = includeStatuses && includeStatuses.length > 0 ? includeStatuses : ["active"];
     whereClause += ` AND e.status IN (${statuses.map(() => "?").join(",")})`;
     params.push(...statuses);
 
@@ -542,14 +504,10 @@ export class SQLiteSearchOperations {
   ): Promise<Entity[]> {
     if (foundEntities.length === 0) return [];
 
-    const branchId = branchName
-      ? await this.connection.getBranchId(branchName)
-      : null;
+    const branchId = branchName ? await this.connection.getBranchId(branchName) : null;
 
     const entityNames = foundEntities.map((e) => e.name);
-    let whereClause = `WHERE e.name NOT IN (${entityNames
-      .map(() => "?")
-      .join(",")})`;
+    let whereClause = `WHERE e.name NOT IN (${entityNames.map(() => "?").join(",")})`;
     let params: any[] = [...entityNames];
 
     if (branchId) {
@@ -593,11 +551,7 @@ function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
-function clampLimit(
-  value: number | undefined,
-  fallback: number,
-  max: number,
-): number {
+function clampLimit(value: number | undefined, fallback: number, max: number): number {
   if (!Number.isFinite(value) || !value || value < 1) return fallback;
   return Math.min(Math.floor(value), max);
 }
